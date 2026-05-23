@@ -34,11 +34,17 @@ logs/
 *.tar.gz
 
 # Local integration / spike tests (not part of the product repo)
-tests/
+/tests/
 
 # Runtime workspace generated content
-agent_runtime/_internal/python/
-agent_runtime/_internal/packages/
-agent_runtime/_internal/logs/
-agent_runtime/query_results/
-agent_runtime/workspace/
+agent_runtime/_internal/python/*
+!agent_runtime/_internal/python/.gitkeep
+agent_runtime/_internal/packages/*
+!agent_runtime/_internal/packages/.gitkeep
+agent_runtime/_internal/logs/*
+!agent_runtime/_internal/logs/
+!agent_runtime/_internal/logs/.gitkeep
+agent_runtime/query_results/*
+!agent_runtime/query_results/.gitkeep
+agent_runtime/workspace/*
+!agent_runtime/workspace/.gitkeep

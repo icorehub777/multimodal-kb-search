@@ -1,0 +1,16 @@
+[project]
+name = "kbsearch-cli"
+version = "0.1.0"
+description = "KBSearch command line interface for Agent-driven queries."
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+kbsearch = "kbsearch_cli.__main__:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
