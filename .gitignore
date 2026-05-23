@@ -34,7 +34,7 @@ logs/
 *.tar.gz
 
 # Local integration / spike tests (not part of the product repo)
-KBSearch/tests/
+tests/
 
 # Runtime workspace generated content
 agent_runtime/_internal/python/
