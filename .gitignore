@@ -1,0 +1,44 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+client_secret*.json
+credentials*.json
+token*.json
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+env/
+
+# Local outputs
+.output/
+output/
+logs/
+*.log
+
+# Downloaded binaries and archives
+*.exe
+*.zip
+*.7z
+*.tar
+*.tar.gz
+
+# Local integration / spike tests (not part of the product repo)
+KBSearch/tests/
+
+# Runtime workspace generated content
+agent_runtime/_internal/python/
+agent_runtime/_internal/packages/
+agent_runtime/_internal/logs/
+agent_runtime/query_results/
+agent_runtime/workspace/
