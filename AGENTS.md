@@ -17,7 +17,7 @@ KBSearch 是用來支援 Google Workspace 文件同步，並協助 Codex Agent �
 
 - Python 3.10+
 - Google Workspace / Google Drive API
-- Google Drive API 使用 OAuth 2.0 進行目前使用者授權
+- 使用者 OAuth (Google Drive API)
 - DashScope / Qwen 多模態 embedding
 - Qdrant vector database
 - Python package 與 CLI entry point
