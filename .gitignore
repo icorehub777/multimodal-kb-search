@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+importer/config/google_drive_sources.yaml
 *.pem
 *.key
 *.p12
@@ -13,6 +14,7 @@ token*.json
 # Python
 __pycache__/
 *.py[cod]
+*.egg-info/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
@@ -25,6 +27,7 @@ env/
 output/
 logs/
 *.log
+importer/work/
 
 # Downloaded binaries and archives
 *.exe

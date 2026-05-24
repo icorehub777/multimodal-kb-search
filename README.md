@@ -14,13 +14,20 @@ KBSearch/
 ```
 
 - `docs/`：設計文件。
-- `importer/`：在安全電腦上執行的文件匯入與同步程式，負責掃描 Google Workspace、產生 embedding，並寫入 Qdrant。
-- `query_cli/`：一般使用者電腦上執行的查詢 CLI，負責接受 Agent 指令、使用使用者 OAuth 查詢或下載文件，並整理查詢結果。
-- `secure_backend/`：封裝需要保護 key 的後端能力，例如 DashScope embedding 與 Qdrant 向量查詢。
-- `agent_runtime/`：正式環境中 Agent 的工作區，包含查詢結果、任務工作資料、長期 memory 與內部執行資料。
+- `importer/`：文件匯入與同步子專案。
+- `query_cli/`：使用者查詢 CLI 子專案。
+- `secure_backend/`：受保護後端能力子專案。
+- `agent_runtime/`：正式環境中 Agent 的運作區。
+
+## 文件入口
+
+- Repo 共通開發規範：`AGENTS.md`
+- 設計文件：`docs/`
+- 子專案使用方式：各子專案的 `README.md`
+- 子專案開發規範：各子專案的 `AGENTS.md`
+- Agent 運作區規則：`agent_runtime/AGENTS.md`
 
 ## 補充說明
 
-- Agent 與開發規則請見 `AGENTS.md`。
-- 正式運作區內的 Agent 操作規則請見 `agent_runtime/AGENTS.md`。
-- 根目錄的 `tests/` 是本機驗證用資料夾，不納入 Git 版控。
+- 根目錄 README 只提供專案總覽；子專案細節請看各子專案文件。
+- 根目錄 `tests/` 是本機驗證用資料夾，不納入 Git 版控。
