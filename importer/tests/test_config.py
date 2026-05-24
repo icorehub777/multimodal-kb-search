@@ -83,6 +83,8 @@ class ConfigTests(unittest.TestCase):
                         "QDRANT_API_KEY=secret",
                         "QDRANT_COLLECTION=kbsearch",
                         "QDRANT_VECTOR_SIZE=128",
+                        "LIBREOFFICE_COMMAND=C:\\Program Files\\LibreOffice\\program\\soffice.exe",
+                        "KBSEARCH_CJK_FONT_PATH=C:\\Windows\\Fonts\\msjh.ttc",
                     ]
                 ),
                 encoding="utf-8",
@@ -120,6 +122,8 @@ class ConfigTests(unittest.TestCase):
                         "QDRANT_API_KEY=secret",
                         "QDRANT_COLLECTION=kbsearch",
                         "QDRANT_VECTOR_SIZE=2560",
+                        "LIBREOFFICE_COMMAND=C:\\Program Files\\LibreOffice\\program\\soffice.exe",
+                        "KBSEARCH_CJK_FONT_PATH=C:\\Windows\\Fonts\\msjh.ttc",
                     ]
                 ),
                 encoding="utf-8",
@@ -160,6 +164,8 @@ class ConfigTests(unittest.TestCase):
                         "QDRANT_API_KEY=secret",
                         "QDRANT_COLLECTION=kbsearch",
                         "QDRANT_VECTOR_SIZE=2560",
+                        "LIBREOFFICE_COMMAND=C:\\Program Files\\LibreOffice\\program\\soffice.exe",
+                        "KBSEARCH_CJK_FONT_PATH=C:\\Windows\\Fonts\\msjh.ttc",
                     ]
                 ),
                 encoding="utf-8",
@@ -171,7 +177,127 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config.importer_root, importer_root)
         self.assertEqual(config.google_drive_source_config, source_config)
 
-    def test_load_importer_config_reads_optional_libreoffice_command(self) -> None:
+    def test_load_importer_config_reads_required_absolute_libreoffice_command(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            source_config = temp_path / "google_drive_sources.yaml"
+            source_config.write_text(
+                "\n".join(
+                    [
+                        "sources:",
+                        "  - name: belltaih-shared-drive",
+                        "    type: shared_drive",
+                        "    drive_id: drive-1",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            env_file = temp_path / ".env"
+            env_file.write_text(
+                "\n".join(
+                    [
+                        f"GOOGLE_DRIVE_SOURCE_CONFIG={source_config}",
+                        "GOOGLE_SERVICE_ACCOUNT_EMAIL=svc@example.com",
+                        "GOOGLE_DWD_SUBJECT_EMAIL=user@example.com",
+                        "DASHSCOPE_API_KEY=secret",
+                        "DASHSCOPE_EMBEDDING_MODEL=qwen3-vl-embedding",
+                        "DASHSCOPE_VECTOR_SIZE=2560",
+                        "QDRANT_URL=https://qdrant.example.com",
+                        "QDRANT_API_KEY=secret",
+                        "QDRANT_COLLECTION=kbsearch",
+                        "QDRANT_VECTOR_SIZE=2560",
+                        "LIBREOFFICE_COMMAND=C:\\Program Files\\LibreOffice\\program\\soffice.exe",
+                        "KBSEARCH_CJK_FONT_PATH=C:\\Windows\\Fonts\\msjh.ttc",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            with patch.dict(os.environ, {}, clear=True):
+                config = load_importer_config(env_file)
+
+        self.assertEqual(config.libreoffice_command, "C:\\Program Files\\LibreOffice\\program\\soffice.exe")
+        self.assertEqual(config.cjk_font_path, Path("C:\\Windows\\Fonts\\msjh.ttc"))
+
+    def test_load_importer_config_rejects_missing_libreoffice_command(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            source_config = temp_path / "google_drive_sources.yaml"
+            source_config.write_text(
+                "\n".join(
+                    [
+                        "sources:",
+                        "  - name: belltaih-shared-drive",
+                        "    type: shared_drive",
+                        "    drive_id: drive-1",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            env_file = temp_path / ".env"
+            env_file.write_text(
+                "\n".join(
+                    [
+                        f"GOOGLE_DRIVE_SOURCE_CONFIG={source_config}",
+                        "GOOGLE_SERVICE_ACCOUNT_EMAIL=svc@example.com",
+                        "GOOGLE_DWD_SUBJECT_EMAIL=user@example.com",
+                        "DASHSCOPE_API_KEY=secret",
+                        "DASHSCOPE_EMBEDDING_MODEL=qwen3-vl-embedding",
+                        "DASHSCOPE_VECTOR_SIZE=2560",
+                        "QDRANT_URL=https://qdrant.example.com",
+                        "QDRANT_API_KEY=secret",
+                        "QDRANT_COLLECTION=kbsearch",
+                        "QDRANT_VECTOR_SIZE=2560",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            with patch.dict(os.environ, {}, clear=True):
+                with self.assertRaisesRegex(ConfigError, "LIBREOFFICE_COMMAND"):
+                    load_importer_config(env_file)
+
+    def test_load_importer_config_rejects_relative_libreoffice_command(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            source_config = temp_path / "google_drive_sources.yaml"
+            source_config.write_text(
+                "\n".join(
+                    [
+                        "sources:",
+                        "  - name: belltaih-shared-drive",
+                        "    type: shared_drive",
+                        "    drive_id: drive-1",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            env_file = temp_path / ".env"
+            env_file.write_text(
+                "\n".join(
+                    [
+                        f"GOOGLE_DRIVE_SOURCE_CONFIG={source_config}",
+                        "GOOGLE_SERVICE_ACCOUNT_EMAIL=svc@example.com",
+                        "GOOGLE_DWD_SUBJECT_EMAIL=user@example.com",
+                        "DASHSCOPE_API_KEY=secret",
+                        "DASHSCOPE_EMBEDDING_MODEL=qwen3-vl-embedding",
+                        "DASHSCOPE_VECTOR_SIZE=2560",
+                        "QDRANT_URL=https://qdrant.example.com",
+                        "QDRANT_API_KEY=secret",
+                        "QDRANT_COLLECTION=kbsearch",
+                        "QDRANT_VECTOR_SIZE=2560",
+                        "LIBREOFFICE_COMMAND=soffice",
+                        "KBSEARCH_CJK_FONT_PATH=C:\\Windows\\Fonts\\msjh.ttc",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            with patch.dict(os.environ, {}, clear=True):
+                with self.assertRaisesRegex(ConfigError, "absolute path"):
+                    load_importer_config(env_file)
+
+    def test_load_importer_config_rejects_missing_cjk_font_path(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
             source_config = temp_path / "google_drive_sources.yaml"
@@ -207,9 +333,48 @@ class ConfigTests(unittest.TestCase):
             )
 
             with patch.dict(os.environ, {}, clear=True):
-                config = load_importer_config(env_file)
+                with self.assertRaisesRegex(ConfigError, "KBSEARCH_CJK_FONT_PATH"):
+                    load_importer_config(env_file)
 
-        self.assertEqual(config.libreoffice_command, "C:\\Program Files\\LibreOffice\\program\\soffice.exe")
+    def test_load_importer_config_rejects_relative_cjk_font_path(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            source_config = temp_path / "google_drive_sources.yaml"
+            source_config.write_text(
+                "\n".join(
+                    [
+                        "sources:",
+                        "  - name: belltaih-shared-drive",
+                        "    type: shared_drive",
+                        "    drive_id: drive-1",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            env_file = temp_path / ".env"
+            env_file.write_text(
+                "\n".join(
+                    [
+                        f"GOOGLE_DRIVE_SOURCE_CONFIG={source_config}",
+                        "GOOGLE_SERVICE_ACCOUNT_EMAIL=svc@example.com",
+                        "GOOGLE_DWD_SUBJECT_EMAIL=user@example.com",
+                        "DASHSCOPE_API_KEY=secret",
+                        "DASHSCOPE_EMBEDDING_MODEL=qwen3-vl-embedding",
+                        "DASHSCOPE_VECTOR_SIZE=2560",
+                        "QDRANT_URL=https://qdrant.example.com",
+                        "QDRANT_API_KEY=secret",
+                        "QDRANT_COLLECTION=kbsearch",
+                        "QDRANT_VECTOR_SIZE=2560",
+                        "LIBREOFFICE_COMMAND=C:\\Program Files\\LibreOffice\\program\\soffice.exe",
+                        "KBSEARCH_CJK_FONT_PATH=msjh.ttc",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            with patch.dict(os.environ, {}, clear=True):
+                with self.assertRaisesRegex(ConfigError, "absolute path"):
+                    load_importer_config(env_file)
 
     def test_load_importer_config_reads_work_file_retention_settings(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -240,6 +405,8 @@ class ConfigTests(unittest.TestCase):
                         "QDRANT_API_KEY=secret",
                         "QDRANT_COLLECTION=kbsearch",
                         "QDRANT_VECTOR_SIZE=2560",
+                        "LIBREOFFICE_COMMAND=C:\\Program Files\\LibreOffice\\program\\soffice.exe",
+                        "KBSEARCH_CJK_FONT_PATH=C:\\Windows\\Fonts\\msjh.ttc",
                         "IMPORTER_KEEP_SUCCESS_WORK_FILES=false",
                         "IMPORTER_KEEP_FAILED_WORK_FILES=true",
                     ]
@@ -282,6 +449,8 @@ class ConfigTests(unittest.TestCase):
                         "QDRANT_API_KEY=secret",
                         "QDRANT_COLLECTION=kbsearch",
                         "QDRANT_VECTOR_SIZE=2560",
+                        "LIBREOFFICE_COMMAND=C:\\Program Files\\LibreOffice\\program\\soffice.exe",
+                        "KBSEARCH_CJK_FONT_PATH=C:\\Windows\\Fonts\\msjh.ttc",
                         "IMPORTER_KEEP_SUCCESS_WORK_FILES=maybe",
                     ]
                 ),

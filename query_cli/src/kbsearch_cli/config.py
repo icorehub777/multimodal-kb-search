@@ -16,6 +16,7 @@ class QueryCliConfig:
     google_oauth_token_cache: Path
     query_results_root: Path
     libreoffice_command: str
+    cjk_font_path: Path
 
 
 DEFAULT_ENV_FILE = Path(__file__).resolve().parents[2] / "config" / ".env"
@@ -36,7 +37,8 @@ def load_query_cli_config(env_file: str | Path | None = DEFAULT_ENV_FILE) -> Que
             _optional_str("KBSEARCH_QUERY_RESULTS_ROOT", str(DEFAULT_RESULTS_ROOT)),
             root,
         ),
-        libreoffice_command=_optional_str("LIBREOFFICE_COMMAND", "soffice"),
+        libreoffice_command=_required_absolute_path_str("LIBREOFFICE_COMMAND"),
+        cjk_font_path=_required_absolute_path("KBSEARCH_CJK_FONT_PATH"),
     )
 
 
@@ -58,6 +60,17 @@ def _required_str(name: str) -> str:
     if value is None or value.strip() == "":
         raise ConfigError(f"Missing required config: {name}")
     return value.strip()
+
+
+def _required_absolute_path_str(name: str) -> str:
+    value = _required_str(name)
+    if not Path(value).is_absolute():
+        raise ConfigError(f"Config {name} must be an absolute path.")
+    return value
+
+
+def _required_absolute_path(name: str) -> Path:
+    return Path(_required_absolute_path_str(name))
 
 
 def _optional_str(name: str, default: str) -> str:

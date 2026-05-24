@@ -23,6 +23,8 @@
 - OAuth token cache 若需要落地，必須放在使用者個人環境或明確設定的位置，不得寫入 repo 根目錄。
 - `secure_backend` base URL、OAuth client 設定與輸出位置等 query CLI 設定應集中在設定層讀取。
 - 預設設定檔位置為 `query_cli/config/.env`；新增設定時需同步更新 config model、README 與測試。
+- `LIBREOFFICE_COMMAND` 必須由設定層提供完整絕對路徑，不得依賴 `PATH` 中的 `soffice`。
+- `KBSEARCH_CJK_FONT_PATH` 必須由設定層提供完整絕對路徑；TXT / MD 轉 PDF 只可使用此單一字型設定，不得掃描候選字型或讀取環境 fallback。
 
 ## 檔案與路徑處理
 
@@ -31,7 +33,7 @@
 - 對查詢名稱、檔案名稱、Google file ID 或外部輸入組合路徑時，必須避免路徑穿越與非法檔名問題。
 - 下載交集檔案的資料夾名稱必須含 Google file ID 或等價唯一識別，避免正規化後檔名碰撞。
 - 產生結果清單、下載原始檔與頁面 PNG 時，應維持穩定且可測試的檔案命名規則。
-- 文件轉頁支援規則需與 README 和測試一致；TXT / MD 轉 PDF 若含 CJK 文字，需使用可設定的 `KBSEARCH_CJK_FONT_PATH` 或系統候選字型。
+- 文件轉頁支援規則需與 README 和測試一致；TXT / MD 轉 PDF 若含 CJK 文字，需使用設定提供的 `KBSEARCH_CJK_FONT_PATH`。
 
 ## Error / Logging
 

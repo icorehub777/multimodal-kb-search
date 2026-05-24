@@ -45,6 +45,7 @@ python -m pip install -e secure_backend
 - `QDRANT_VECTOR_SIZE`：Qdrant collection 向量維度，必須與 `DASHSCOPE_VECTOR_SIZE` 相同。
 
 若使用設定檔，預設讀取位置為 `secure_backend/config/.env`。
+可從 `secure_backend/config/.env.example` 複製後填入部署設定；實際 `.env` 與 API key 不得提交 Git。
 
 設定檢查：
 

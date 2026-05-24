@@ -1,4 +1,3 @@
-import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -16,17 +15,16 @@ class RenderingTests(unittest.TestCase):
         except ImportError:
             self.skipTest("PyMuPDF is required for PDF text extraction.")
 
-        renderer = DocumentPageRenderer()
+        cjk_font_path = _available_cjk_font_path()
+        if cjk_font_path is None:
+            self.skipTest("Configured CJK font is not available.")
+
+        renderer = DocumentPageRenderer(cjk_font_path=cjk_font_path)
         with tempfile.TemporaryDirectory() as temp_dir:
             source = Path(temp_dir) / "README.md"
             source.write_text("中文測試\t：文件查詢\n", encoding="utf-8")
 
-            try:
-                output = renderer._convert_text_to_pdf(source, Path(temp_dir))
-            except DocumentRenderError as exc:
-                if "CJK font" in str(exc):
-                    self.skipTest("No CJK font installed.")
-                raise
+            output = renderer._convert_text_to_pdf(source, Path(temp_dir))
 
             with fitz.open(output) as document:
                 text = document[0].get_text("text")
@@ -34,17 +32,50 @@ class RenderingTests(unittest.TestCase):
         self.assertIn("中文測試", text)
         self.assertIn("文件查詢", text)
 
-    def test_cjk_font_path_env_takes_precedence(self):
+    def test_cjk_font_name_uses_only_configured_font_path(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             configured_font = Path(temp_dir) / "custom-cjk.ttf"
             configured_font.write_bytes(b"font")
+            seen_paths = []
 
-            with patch.dict(os.environ, {"KBSEARCH_CJK_FONT_PATH": str(configured_font)}):
-                with patch.object(rendering, "CJK_TEXT_FONT_CANDIDATES", (Path("fallback.ttf"),)):
-                    self.assertEqual(
-                        rendering._cjk_text_font_candidates(),
-                        (configured_font, Path("fallback.ttf")),
-                    )
+            class FakePdfMetrics:
+                @staticmethod
+                def getRegisteredFontNames():
+                    return set()
+
+                @staticmethod
+                def registerFont(_font):
+                    return None
+
+            def fake_tt_font(_font_name, font_path):
+                seen_paths.append(font_path)
+                return object()
+
+            with patch(
+                "reportlab.pdfbase.pdfmetrics.getRegisteredFontNames",
+                side_effect=FakePdfMetrics.getRegisteredFontNames,
+            ), patch(
+                "reportlab.pdfbase.pdfmetrics.registerFont",
+                side_effect=FakePdfMetrics.registerFont,
+            ), patch("reportlab.pdfbase.ttfonts.TTFont", side_effect=fake_tt_font):
+                self.assertEqual(
+                    rendering._text_pdf_font_name("\u4e2d", configured_font),
+                    rendering.CJK_TEXT_FONT_NAME,
+                )
+
+        self.assertEqual(seen_paths, [str(configured_font)])
+
+
+def _available_cjk_font_path() -> Path | None:
+    for font_path in (
+        Path("C:/Windows/Fonts/msjh.ttc"),
+        Path("C:/Windows/Fonts/NotoSansTC-VF.ttf"),
+        Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"),
+        Path("/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc"),
+    ):
+        if font_path.exists():
+            return font_path
+    return None
 
 
 if __name__ == "__main__":

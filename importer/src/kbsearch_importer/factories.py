@@ -58,7 +58,10 @@ def create_sync_orchestrator(config: ImporterConfig) -> SyncOrchestrator:
         qdrant_index=qdrant_index,
         document_importer=PipelineDocumentImporter(
             downloader=GoogleDriveDownloader(drive_service),
-            converter=DocumentConverter(libreoffice_command=config.libreoffice_command),
+            converter=DocumentConverter(
+                libreoffice_command=config.libreoffice_command,
+                cjk_font_path=config.cjk_font_path,
+            ),
             renderer=PdfPageRenderer(),
             embedder=create_page_embedder(config),
             qdrant_index=qdrant_index,

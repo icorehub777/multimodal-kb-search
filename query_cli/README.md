@@ -40,11 +40,12 @@ Query CLI 的設定由使用者環境或明確設定檔提供，至少包含：
 - `GOOGLE_OAUTH_CLIENT_CONFIG`：Google OAuth client JSON 設定檔路徑。
 - `GOOGLE_OAUTH_TOKEN_CACHE`：OAuth token cache 路徑。此路徑應位於使用者個人環境或明確指定的位置，不得放在 repo 根目錄。
 - `KBSEARCH_QUERY_RESULTS_ROOT`：查詢結果輸出根目錄；未設定時使用 `agent_runtime/query_results`。
-- `LIBREOFFICE_COMMAND`：Office 文件轉 PDF 指令；未設定時使用 `soffice`。
-- `KBSEARCH_CJK_FONT_PATH`：選填。TXT / MD 含中文等 CJK 文字時，可指定可讀取的字型檔。
+- `LIBREOFFICE_COMMAND`：Office 文件轉 PDF 指令，必填，需填完整絕對路徑，例如 `C:/Program Files/LibreOffice/program/soffice.exe`。
+- `KBSEARCH_CJK_FONT_PATH`：必填，TXT / MD 轉 PDF 使用的單一 CJK 字型完整絕對路徑，例如 `C:/Windows/Fonts/msjh.ttc`。
 
 OAuth token cache 應放在使用者個人環境或明確設定的位置。
 若使用設定檔，預設讀取位置為 `query_cli/config/.env`。
+可從 `query_cli/config/.env.example` 複製後填入本機設定；實際 `.env`、OAuth client secret 與 token cache 不得提交 Git。
 
 設定檢查：
 

@@ -109,8 +109,8 @@ Copy-Item importer\config\google_drive_sources.example.yaml importer\config\goog
 - `QDRANT_API_KEY`
 - `QDRANT_COLLECTION`
 - `QDRANT_VECTOR_SIZE`
-- `LIBREOFFICE_COMMAND`
-- `KBSEARCH_CJK_FONT_PATH`
+- `LIBREOFFICE_COMMAND`：必填，需填完整絕對路徑，例如 `C:\Program Files\LibreOffice\program\soffice.exe`。
+- `KBSEARCH_CJK_FONT_PATH`：必填，TXT / MD 轉 PDF 使用的單一 CJK 字型完整絕對路徑，例如 `C:\Windows\Fonts\msjh.ttc`。
 - `IMPORTER_KEEP_SUCCESS_WORK_FILES`
 - `IMPORTER_KEEP_FAILED_WORK_FILES`
 
@@ -133,7 +133,15 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 ```
 
-若字型安裝在非預設位置，請在 `config/.env` 指定：
+請在 `config/.env` 指定唯一使用的 CJK 字型檔完整路徑。
+
+Windows 範例：
+
+```text
+KBSEARCH_CJK_FONT_PATH=C:\Windows\Fonts\msjh.ttc
+```
+
+Linux / container 範例：
 
 ```text
 KBSEARCH_CJK_FONT_PATH=/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc

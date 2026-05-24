@@ -36,6 +36,7 @@ class ImporterConfig:
     qdrant_collection: str
     qdrant_vector_size: int
     libreoffice_command: str
+    cjk_font_path: Path
     keep_success_work_files: bool
     keep_failed_work_files: bool
 
@@ -68,7 +69,8 @@ def load_importer_config(env_file: str | Path | None = DEFAULT_ENV_FILE) -> Impo
         qdrant_api_key=_required_str("QDRANT_API_KEY"),
         qdrant_collection=_required_str("QDRANT_COLLECTION"),
         qdrant_vector_size=_required_int("QDRANT_VECTOR_SIZE"),
-        libreoffice_command=_optional_str("LIBREOFFICE_COMMAND", "soffice"),
+        libreoffice_command=_required_absolute_path_str("LIBREOFFICE_COMMAND"),
+        cjk_font_path=_required_absolute_path("KBSEARCH_CJK_FONT_PATH"),
         keep_success_work_files=_optional_bool("IMPORTER_KEEP_SUCCESS_WORK_FILES", True),
         keep_failed_work_files=_optional_bool("IMPORTER_KEEP_FAILED_WORK_FILES", True),
     )
@@ -162,6 +164,18 @@ def _required_str(name: str) -> str:
     if value is None or value.strip() == "":
         raise ConfigError(f"Missing required config: {name}")
     return value.strip()
+
+
+def _required_absolute_path_str(name: str) -> str:
+    value = _required_str(name)
+    if not Path(value).is_absolute():
+        raise ConfigError(f"Config {name} must be an absolute path.")
+    return value
+
+
+def _required_absolute_path(name: str) -> Path:
+    value = Path(_required_absolute_path_str(name))
+    return value
 
 
 def _optional_str(name: str, default: str) -> str:

@@ -1,4 +1,3 @@
-import os
 import sys
 import unittest
 from pathlib import Path
@@ -101,7 +100,11 @@ class ConversionTests(unittest.TestCase):
         except ImportError:
             self.skipTest("PyMuPDF is required for PDF text extraction.")
 
-        converter = DocumentConverter()
+        cjk_font_path = _available_cjk_font_path()
+        if cjk_font_path is None:
+            self.skipTest("Configured CJK font is not available.")
+
+        converter = DocumentConverter(cjk_font_path=cjk_font_path)
         with TemporaryDirectory() as temp_dir:
             source = Path(temp_dir) / "README.md"
             source.write_text(
@@ -109,12 +112,7 @@ class ConversionTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            try:
-                output = converter.convert_to_pdf(source, "text/markdown", Path(temp_dir) / "pdf")
-            except DocumentConversionError as exc:
-                if "CJK font" in str(exc):
-                    self.skipTest("No CJK font installed.")
-                raise
+            output = converter.convert_to_pdf(source, "text/markdown", Path(temp_dir) / "pdf")
 
             with fitz.open(output) as document:
                 text = document[0].get_text("text")
@@ -129,36 +127,23 @@ class ConversionTests(unittest.TestCase):
         except ImportError:
             self.skipTest("PyMuPDF is required for PDF text extraction.")
 
-        converter = DocumentConverter()
+        cjk_font_path = _available_cjk_font_path()
+        if cjk_font_path is None:
+            self.skipTest("Configured CJK font is not available.")
+
+        converter = DocumentConverter(cjk_font_path=cjk_font_path)
         with TemporaryDirectory() as temp_dir:
             source = Path(temp_dir) / "README.md"
             source.write_text("\u4e2d" * 120, encoding="utf-8")
 
-            try:
-                output = converter.convert_to_pdf(source, "text/markdown", Path(temp_dir) / "pdf")
-            except DocumentConversionError as exc:
-                if "CJK font" in str(exc):
-                    self.skipTest("No CJK font installed.")
-                raise
+            output = converter.convert_to_pdf(source, "text/markdown", Path(temp_dir) / "pdf")
 
             with fitz.open(output) as document:
                 text = document[0].get_text("text")
 
         self.assertGreaterEqual(len([line for line in text.splitlines() if line]), 3)
 
-    def test_cjk_font_path_env_takes_precedence(self):
-        with TemporaryDirectory() as temp_dir:
-            configured_font = Path(temp_dir) / "custom-cjk.ttf"
-            configured_font.write_bytes(b"font")
-
-            with patch.dict(os.environ, {"KBSEARCH_CJK_FONT_PATH": str(configured_font)}):
-                with patch.object(conversion, "CJK_TEXT_FONT_CANDIDATES", (Path("fallback.ttf"),)):
-                    self.assertEqual(
-                        conversion._cjk_text_font_candidates(),
-                        (configured_font, Path("fallback.ttf")),
-                    )
-
-    def test_invalid_cjk_font_candidate_tries_next_candidate(self):
+    def test_cjk_font_name_uses_only_configured_font_path(self):
         registered_fonts = set()
 
         class FakePdfMetrics:
@@ -170,29 +155,44 @@ class ConversionTests(unittest.TestCase):
             def registerFont(_font):
                 registered_fonts.add(conversion.CJK_TEXT_FONT_NAME)
 
-        def fake_tt_font(_font_name, font_path):
-            if font_path.endswith("bad.ttf"):
-                raise RuntimeError("bad font")
-            return object()
-
         with TemporaryDirectory() as temp_dir:
-            bad_font = Path(temp_dir) / "bad.ttf"
-            good_font = Path(temp_dir) / "good.ttf"
-            bad_font.write_bytes(b"bad")
-            good_font.write_bytes(b"good")
+            configured_font = Path(temp_dir) / "configured.ttf"
+            configured_font.write_bytes(b"font")
+            seen_paths = []
 
-            with patch.object(conversion, "_cjk_text_font_candidates", return_value=(bad_font, good_font)):
-                with patch.dict(
-                    sys.modules,
-                    {
-                        "reportlab.pdfbase.pdfmetrics": FakePdfMetrics,
-                        "reportlab.pdfbase.ttfonts": type("FakeTtFonts", (), {"TTFont": fake_tt_font}),
-                    },
-                ):
-                    self.assertEqual(
-                        conversion._text_pdf_font_name("\u4e2d"),
-                        conversion.CJK_TEXT_FONT_NAME,
-                    )
+            def fake_tt_font(_font_name, font_path):
+                seen_paths.append(font_path)
+                return object()
+
+            with patch(
+                "reportlab.pdfbase.pdfmetrics.getRegisteredFontNames",
+                side_effect=FakePdfMetrics.getRegisteredFontNames,
+            ), patch(
+                "reportlab.pdfbase.pdfmetrics.registerFont",
+                side_effect=FakePdfMetrics.registerFont,
+            ), patch("reportlab.pdfbase.ttfonts.TTFont", side_effect=fake_tt_font):
+                self.assertEqual(
+                    conversion._text_pdf_font_name("\u4e2d", configured_font),
+                    conversion.CJK_TEXT_FONT_NAME,
+                )
+
+        self.assertEqual(seen_paths, [str(configured_font)])
+
+    def test_cjk_font_name_rejects_missing_configured_font_path(self):
+        with self.assertRaises(DocumentConversionError):
+            conversion._text_pdf_font_name("\u4e2d", Path("C:/missing/font.ttf"))
+
+
+def _available_cjk_font_path() -> Path | None:
+    for font_path in (
+        Path("C:/Windows/Fonts/msjh.ttc"),
+        Path("C:/Windows/Fonts/NotoSansTC-VF.ttf"),
+        Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"),
+        Path("/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc"),
+    ):
+        if font_path.exists():
+            return font_path
+    return None
 
 
 if __name__ == "__main__":

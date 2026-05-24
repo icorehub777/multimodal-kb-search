@@ -1,26 +1,22 @@
 from __future__ import annotations
 
-import os
 import subprocess
 from pathlib import Path
 
 from kbsearch_cli.errors import DocumentRenderError
 
 CJK_TEXT_FONT_NAME = "KBSearchTextCJK"
-CJK_TEXT_FONT_PATH_ENV = "KBSEARCH_CJK_FONT_PATH"
-CJK_TEXT_FONT_CANDIDATES = (
-    Path("C:/Windows/Fonts/NotoSansTC-VF.ttf"),
-    Path("C:/Windows/Fonts/msjh.ttc"),
-    Path("C:/Windows/Fonts/kaiu.ttf"),
-    Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"),
-    Path("/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc"),
-    Path("/usr/share/fonts/truetype/noto/NotoSansTC-Regular.otf"),
-)
 
 
 class DocumentPageRenderer:
-    def __init__(self, libreoffice_command: str = "soffice", dpi: int = 200) -> None:
+    def __init__(
+        self,
+        libreoffice_command: str = "soffice",
+        cjk_font_path: Path | None = None,
+        dpi: int = 200,
+    ) -> None:
         self._libreoffice_command = libreoffice_command
+        self._cjk_font_path = cjk_font_path
         self._dpi = dpi
 
     def render_pages(self, source_path: Path, output_dir: Path) -> list[Path]:
@@ -78,7 +74,7 @@ class DocumentPageRenderer:
 
         output_path = output_dir / f"{source_path.stem}.pdf"
         text = source_path.read_text(encoding="utf-8").expandtabs(4)
-        font_name = _text_pdf_font_name(text)
+        font_name = _text_pdf_font_name(text, self._cjk_font_path)
         pdf = canvas.Canvas(str(output_path), pagesize=A4)
         width, height = A4
         x = 20 * mm
@@ -132,9 +128,12 @@ class DocumentPageRenderer:
         return [output_path]
 
 
-def _text_pdf_font_name(text: str) -> str:
+def _text_pdf_font_name(text: str, cjk_font_path: Path | None) -> str:
     if not _has_cjk_text(text):
         return "Helvetica"
+
+    if cjk_font_path is None:
+        raise DocumentRenderError("CJK TXT/MD conversion requires KBSEARCH_CJK_FONT_PATH.")
 
     try:
         from reportlab.pdfbase import pdfmetrics
@@ -145,25 +144,14 @@ def _text_pdf_font_name(text: str) -> str:
     if CJK_TEXT_FONT_NAME in pdfmetrics.getRegisteredFontNames():
         return CJK_TEXT_FONT_NAME
 
-    for font_path in _cjk_text_font_candidates():
-        if font_path.exists():
-            try:
-                pdfmetrics.registerFont(TTFont(CJK_TEXT_FONT_NAME, str(font_path)))
-                return CJK_TEXT_FONT_NAME
-            except Exception:
-                continue
+    if cjk_font_path.exists():
+        try:
+            pdfmetrics.registerFont(TTFont(CJK_TEXT_FONT_NAME, str(cjk_font_path)))
+            return CJK_TEXT_FONT_NAME
+        except Exception as exc:
+            raise DocumentRenderError(f"Unable to register CJK font: {cjk_font_path}") from exc
 
-    raise DocumentRenderError(
-        "CJK TXT/MD conversion requires an installed CJK font. "
-        f"Set {CJK_TEXT_FONT_PATH_ENV} to a readable font file."
-    )
-
-
-def _cjk_text_font_candidates() -> tuple[Path, ...]:
-    configured_font_path = os.getenv(CJK_TEXT_FONT_PATH_ENV)
-    if configured_font_path and configured_font_path.strip():
-        return (Path(configured_font_path.strip()), *CJK_TEXT_FONT_CANDIDATES)
-    return CJK_TEXT_FONT_CANDIDATES
+    raise DocumentRenderError(f"CJK font file not found: {cjk_font_path}")
 
 
 def _has_cjk_text(text: str) -> bool:

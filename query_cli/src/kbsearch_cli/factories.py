@@ -17,7 +17,10 @@ def create_query_orchestrator(config: QueryCliConfig) -> QueryOrchestrator:
         google_drive=GoogleDriveQueryClient(_create_drive_service(config)),
         backend=SecureBackendClient(config.secure_backend_base_url),
         result_writer=QueryResultWriter(config.query_results_root, clock=_timestamp),
-        page_renderer=DocumentPageRenderer(libreoffice_command=config.libreoffice_command),
+        page_renderer=DocumentPageRenderer(
+            libreoffice_command=config.libreoffice_command,
+            cjk_font_path=config.cjk_font_path,
+        ),
     )
 
 
