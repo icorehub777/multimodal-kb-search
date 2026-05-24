@@ -15,8 +15,8 @@ KBSearch/
 
 - `docs/`：設計文件。
 - `importer/`：文件匯入與同步子專案。
-- `query_cli/`：使用者查詢 CLI 子專案。
-- `secure_backend/`：受保護後端能力子專案。
+- `query_cli/`：使用者查詢 CLI 子專案，並透過 `secure_backend` 存取 embedding model 與 操作 vector store。
+- `secure_backend/`：FastAPI 受保護後端能力子專案，僅封裝阿里雲 embedding model 存取與 Qdrant vector store 操作。
 - `agent_runtime/`：正式環境中 Agent 的運作區。
 
 ## 文件入口

@@ -32,3 +32,8 @@
 - 不提交 `.env`、credential、token、service account key、OAuth secret、venv、cache、binary、zip、測試輸出或 runtime 產物。
 - 不在 log、錯誤訊息、測試輸出或文件範例中揭露 secret。
 - 根目錄 `tests/` 是本機驗證與 spike 測試資料夾，不納入 Git 版控。
+
+## 測試規範
+
+- 單元測試不得依賴真實 Google OAuth token、阿里雲、Qdrant credential 或實際 backend service。
+- 需要真實外部服務的探查測試必須明確命名，與離線單元測試分開，且不得輸出 secret 或個人敏感資料。

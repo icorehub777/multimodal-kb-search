@@ -3,7 +3,16 @@ name = "kbsearch-cli"
 version = "0.1.0"
 description = "KBSearch command line interface for Agent-driven queries."
 requires-python = ">=3.10"
-dependencies = []
+dependencies = [
+    "python-dotenv>=1.0",
+    "requests>=2.31",
+    "google-api-python-client>=2.0",
+    "google-auth>=2.0",
+    "google-auth-oauthlib>=1.0",
+    "PyMuPDF>=1.24",
+    "reportlab>=4.0",
+    "Pillow>=10.0",
+]
 
 [project.scripts]
 kbsearch = "kbsearch_cli.__main__:main"

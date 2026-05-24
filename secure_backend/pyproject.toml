@@ -3,7 +3,17 @@ name = "kbsearch-secure-backend"
 version = "0.1.0"
 description = "Protected backend interfaces for KBSearch embedding and vector search."
 requires-python = ">=3.10"
-dependencies = []
+dependencies = [
+    "python-dotenv>=1.0",
+    "fastapi>=0.100",
+    "uvicorn>=0.23",
+    "qdrant-client>=1.9",
+    "dashscope>=1.20",
+    "Pillow>=10.0",
+]
+
+[project.scripts]
+kbsearch-secure-backend = "kbsearch_secure_backend.__main__:main"
 
 [build-system]
 requires = ["setuptools>=68"]

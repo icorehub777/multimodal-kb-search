@@ -1,0 +1,47 @@
+import base64
+import tempfile
+import unittest
+from pathlib import Path
+from unittest.mock import patch
+
+from kbsearch_cli.backend_client import SecureBackendClient
+
+
+class BackendClientTests(unittest.TestCase):
+    def test_search_sends_image_bytes_instead_of_local_paths(self):
+        captured = {}
+
+        class FakeResponse:
+            status_code = 200
+
+            @staticmethod
+            def json():
+                return {"results": []}
+
+        def fake_post(url, json, timeout):
+            captured["url"] = url
+            captured["json"] = json
+            captured["timeout"] = timeout
+            return FakeResponse()
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            image_path = Path(temp_dir) / "sample.png"
+            image_path.write_bytes(b"png-bytes")
+
+            with patch("requests.post", side_effect=fake_post):
+                SecureBackendClient("http://backend").search(
+                    query="alpha",
+                    image_paths=[image_path],
+                    limit=5,
+                    min_score=0.4,
+                )
+
+        self.assertEqual(captured["url"], "http://backend/search/vector")
+        self.assertNotIn("image_paths", captured["json"])
+        self.assertEqual(captured["json"]["images"][0]["filename"], "sample.png")
+        self.assertEqual(captured["json"]["images"][0]["mime_type"], "image/png")
+        self.assertEqual(base64.b64decode(captured["json"]["images"][0]["base64_data"]), b"png-bytes")
+
+
+if __name__ == "__main__":
+    unittest.main()
