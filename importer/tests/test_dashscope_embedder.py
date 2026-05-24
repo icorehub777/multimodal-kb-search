@@ -1,6 +1,7 @@
 import unittest
 import base64
 import os
+from unittest import mock
 from tempfile import TemporaryDirectory
 from pathlib import Path
 
@@ -11,6 +12,7 @@ from kbsearch_importer.dashscope_embedder import (
     DashScopePageEmbedder,
     _image_data_uri,
 )
+from kbsearch_importer.errors import ExternalServiceError
 
 
 class FakeEmbeddingClient:
@@ -44,6 +46,27 @@ class DashScopePageEmbedderTests(unittest.TestCase):
         payload = base64.b64decode(encoded)
         self.assertEqual(header, "data:image/jpeg;base64")
         self.assertLessEqual(len(payload), MAX_DASHSCOPE_IMAGE_BYTES)
+
+    def test_dashscope_failure_raises_external_service_error(self):
+        class FakeResponse:
+            status_code = 400
+            code = "InvalidParameter"
+            message = "bad image"
+            output = None
+
+        with TemporaryDirectory() as temp_dir:
+            image_path = Path(temp_dir) / "sample.png"
+            Image.new("RGB", (1, 1)).save(image_path, format="PNG")
+
+            with mock.patch(
+                "dashscope.MultiModalEmbedding.call",
+                return_value=FakeResponse(),
+            ):
+                from kbsearch_importer.dashscope_embedder import DashScopeImageEmbeddingClient
+
+                client = DashScopeImageEmbeddingClient(api_key="key", model="model", dimension=3)
+                with self.assertRaises(ExternalServiceError):
+                    client.embed_image(image_path)
 
 
 if __name__ == "__main__":

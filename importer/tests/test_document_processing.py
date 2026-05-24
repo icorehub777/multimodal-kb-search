@@ -28,6 +28,8 @@ class DocumentProcessingTests(unittest.TestCase):
         self.assertEqual(classify_document_type("image/png"), "image")
         self.assertEqual(classify_document_type("image/jpeg"), "image")
         self.assertEqual(classify_document_type("image/webp"), "image")
+        self.assertEqual(classify_document_type("application/vnd.google-apps.document"), "pdf")
+        self.assertEqual(classify_document_type("application/vnd.google-apps.presentation"), "pdf")
 
     def test_classify_document_type_rejects_excel(self) -> None:
         excel_mime_types = [

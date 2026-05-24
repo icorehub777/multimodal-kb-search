@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Protocol
 
 from kbsearch_importer.embedding import validate_embedding_vector
+from kbsearch_importer.errors import ExternalServiceError
 
 MAX_DASHSCOPE_IMAGE_BYTES = 5_070 * 1024
 
@@ -38,16 +39,16 @@ class DashScopeImageEmbeddingClient:
         if response.status_code != HTTPStatus.OK:
             code = getattr(response, "code", "") or ""
             message = getattr(response, "message", "") or str(response)
-            raise RuntimeError(
+            raise ExternalServiceError(
                 f"DashScope embedding failed (HTTP {response.status_code}): {code} {message}".strip()
             )
 
         embeddings = (response.output or {}).get("embeddings") or []
         if not embeddings:
-            raise RuntimeError("DashScope embedding response does not contain embeddings.")
+            raise ExternalServiceError("DashScope embedding response does not contain embeddings.")
         vector = embeddings[0].get("embedding")
         if not vector:
-            raise RuntimeError("DashScope embedding response does not contain a vector.")
+            raise ExternalServiceError("DashScope embedding response does not contain a vector.")
         return list(validate_embedding_vector(list(vector), self._dimension))
 
 

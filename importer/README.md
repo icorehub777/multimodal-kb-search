@@ -28,7 +28,6 @@ Google Workspace
 importer/
   AGENTS.md                         # Agent 開發規範
   README.md                         # 本文件
-  TASKS.md                          # 任務與驗收清單
   pyproject.toml                    # Python package 設定
   config/
     .env.example                    # 設定範例，可提交
@@ -43,7 +42,7 @@ importer/
   work/                             # 下載、轉檔、切頁暫存，不提交
 ```
 
-`work/` 目前執行後會保留檔案，方便驗收與除錯：
+`work/` 的保留策略由 `IMPORTER_KEEP_SUCCESS_WORK_FILES` 與 `IMPORTER_KEEP_FAILED_WORK_FILES` 控制：
 
 ```text
 work/<google_file_id>/
@@ -52,7 +51,7 @@ work/<google_file_id>/
   pages/    # 每頁 PNG，例如 01.png、02.png
 ```
 
-目前尚未實作自動清除策略；正式環境若要節省磁碟，建議後續補成「成功後清除，失敗保留」。
+檔名與資料夾名稱以 Google file ID 與清理後的檔名產生，避免不同文件同名時互相覆蓋。
 
 ## 支援文件類型
 
@@ -63,7 +62,7 @@ work/<google_file_id>/
 - PNG / JPG / JPEG / WEBP：視為單頁文件，頁碼固定為 1，統一整理為頁面圖片後進入 embedding 流程。
 - Excel / Google Sheets：不直接向量化，也不自動 export 匯入；使用者需先手動轉成 A4 PDF，確認格式正確後再納入流程。
 
-Drive scanner 會排除 Google Drive folder、Excel 與 Google Sheets，不會把它們當成文件匯入。
+Drive scanner 會排除 Excel 與 Google Sheets，不會把它們當成文件匯入。掃描來源若是 Google Drive folder，會遞迴掃描子資料夾，並在 `source_location` 中保留來源內的資料夾路徑。
 
 ## 環境需求
 
@@ -111,6 +110,7 @@ Copy-Item importer\config\google_drive_sources.example.yaml importer\config\goog
 - `QDRANT_COLLECTION`
 - `QDRANT_VECTOR_SIZE`
 - `LIBREOFFICE_COMMAND`
+- `KBSEARCH_CJK_FONT_PATH`
 - `IMPORTER_KEEP_SUCCESS_WORK_FILES`
 - `IMPORTER_KEEP_FAILED_WORK_FILES`
 
@@ -120,6 +120,24 @@ Copy-Item importer\config\google_drive_sources.example.yaml importer\config\goog
 - `false`：在該情境結束後刪除該文件的工作資料夾。
 
 `config/google_drive_sources.yaml` 定義掃描來源，例如 shared drive 或指定 folder。此檔案屬於部署環境設定，不提交 Git。
+
+### TXT / MD 中文轉 PDF 字型
+
+TXT / MD 轉 PDF 時若內容包含中文，轉換器需要可讀取的 CJK 字型，否則會停止轉換以避免產生亂碼頁面。
+
+Windows 通常可直接使用系統字型。Container / Linux 建議安裝 Noto CJK，例如 Debian / Ubuntu image：
+
+```dockerfile
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends fonts-noto-cjk \
+    && rm -rf /var/lib/apt/lists/*
+```
+
+若字型安裝在非預設位置，請在 `config/.env` 指定：
+
+```text
+KBSEARCH_CJK_FONT_PATH=/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc
+```
 
 ## Google Workspace 認證
 
@@ -145,6 +163,12 @@ gcloud.cmd auth application-default login --impersonate-service-account="..."
 
 ```powershell
 python -m kbsearch_importer probe-config
+```
+
+檢查設定並實際探查 Google Drive、DashScope 與 Qdrant 連線：
+
+```powershell
+python -m kbsearch_importer probe-services
 ```
 
 執行完整同步：

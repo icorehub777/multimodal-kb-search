@@ -4,20 +4,27 @@ from kbsearch_importer.config import ImporterConfig
 from kbsearch_importer.conversion import DocumentConverter, PdfPageRenderer
 from kbsearch_importer.dashscope_embedder import DashScopeImageEmbeddingClient, DashScopePageEmbedder
 from kbsearch_importer.document_importer import PipelineDocumentImporter
-from kbsearch_importer.google_auth import build_drive_service, get_dwd_access_token
+from kbsearch_importer.google_auth import GoogleDriveServiceProvider
 from kbsearch_importer.google_drive import GoogleDriveDownloader, GoogleDriveScanner
 from kbsearch_importer.orchestrator import SyncOrchestrator
 from kbsearch_importer.qdrant_index import QdrantIndexAdapter
 
 
 def create_drive_scanner(config: ImporterConfig) -> GoogleDriveScanner:
-    service = _create_drive_service(config)
+    service = create_drive_service_provider(config)
     return GoogleDriveScanner(service, config.google_drive_sources)
 
 
 def create_drive_downloader(config: ImporterConfig) -> GoogleDriveDownloader:
-    service = _create_drive_service(config)
+    service = create_drive_service_provider(config)
     return GoogleDriveDownloader(service)
+
+
+def create_drive_service_provider(config: ImporterConfig) -> GoogleDriveServiceProvider:
+    return GoogleDriveServiceProvider(
+        service_account_email=config.google_service_account_email,
+        subject_email=config.google_dwd_subject_email,
+    )
 
 
 def create_qdrant_index(config: ImporterConfig) -> QdrantIndexAdapter:
@@ -45,11 +52,12 @@ def create_page_embedder(config: ImporterConfig) -> DashScopePageEmbedder:
 
 def create_sync_orchestrator(config: ImporterConfig) -> SyncOrchestrator:
     qdrant_index = create_qdrant_index(config)
+    drive_service = create_drive_service_provider(config)
     return SyncOrchestrator(
-        workspace_scanner=create_drive_scanner(config),
+        workspace_scanner=GoogleDriveScanner(drive_service, config.google_drive_sources),
         qdrant_index=qdrant_index,
         document_importer=PipelineDocumentImporter(
-            downloader=create_drive_downloader(config),
+            downloader=GoogleDriveDownloader(drive_service),
             converter=DocumentConverter(libreoffice_command=config.libreoffice_command),
             renderer=PdfPageRenderer(),
             embedder=create_page_embedder(config),
@@ -59,11 +67,3 @@ def create_sync_orchestrator(config: ImporterConfig) -> SyncOrchestrator:
             keep_failed_work_files=config.keep_failed_work_files,
         ),
     )
-
-
-def _create_drive_service(config: ImporterConfig):
-    token = get_dwd_access_token(
-        service_account_email=config.google_service_account_email,
-        subject_email=config.google_dwd_subject_email,
-    )
-    return build_drive_service(token)

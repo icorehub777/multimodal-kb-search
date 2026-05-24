@@ -9,6 +9,8 @@ class UnsupportedDocumentTypeError(ValueError):
 
 _MIME_TYPE_TO_DOCUMENT_TYPE = {
     "application/pdf": "pdf",
+    "application/vnd.google-apps.document": "pdf",
+    "application/vnd.google-apps.presentation": "pdf",
     "application/msword": "word",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "word",
     "application/vnd.ms-powerpoint": "powerpoint",
