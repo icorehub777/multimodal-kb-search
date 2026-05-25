@@ -20,11 +20,11 @@ query_cli/
 - Python 3.10 以上。
 - 可連線的 `secure_backend` FastAPI 服務。
 - Google OAuth client 設定。
-- 可寫入的 `agent_runtime/` 查詢結果目錄。
+- 可寫入的查詢結果目錄。
 
 ## 安裝
 
-在 repo root 執行：
+開發環境可在 repo root 執行：
 
 ```powershell
 python -m pip install -e query_cli
@@ -34,18 +34,45 @@ python -m pip install -e query_cli
 
 ## 設定
 
-Query CLI 的設定由使用者環境或明確設定檔提供，至少包含：
+Query CLI 的設定由使用者環境或目前工作目錄下的 `config/.env` 提供，至少包含：
 
 - `KBSEARCH_SECURE_BACKEND_BASE_URL`：`secure_backend` base URL。
 - `GOOGLE_OAUTH_CLIENT_CONFIG`：Google OAuth client JSON 設定檔路徑。
 - `GOOGLE_OAUTH_TOKEN_CACHE`：OAuth token cache 路徑。此路徑應位於使用者個人環境或明確指定的位置，不得放在 repo 根目錄。
-- `KBSEARCH_QUERY_RESULTS_ROOT`：查詢結果輸出根目錄；未設定時使用 `agent_runtime/query_results`。
+- `KBSEARCH_QUERY_RESULTS_ROOT`：查詢結果輸出根目錄；相對路徑會以目前工作目錄解析。
+- `KBSEARCH_QUERY_LOGS_ROOT`：查詢 CLI log 目錄；相對路徑會以目前工作目錄解析。CLI 會寫入 `kbsearch_cli.log`，並於每天 midnight 切割新檔案。
 - `LIBREOFFICE_COMMAND`：Office 文件轉 PDF 指令，必填，需填完整絕對路徑，例如 `C:/Program Files/LibreOffice/program/soffice.exe`。
 - `KBSEARCH_CJK_FONT_PATH`：必填，TXT / MD 轉 PDF 使用的單一 CJK 字型完整絕對路徑，例如 `C:/Windows/Fonts/msjh.ttc`。
 
 OAuth token cache 應放在使用者個人環境或明確設定的位置。
-若使用設定檔，預設讀取位置為 `query_cli/config/.env`。
-可從 `query_cli/config/.env.example` 複製後填入本機設定；實際 `.env`、OAuth client secret 與 token cache 不得提交 Git。
+執行 `kbsearch` 前應先進入 `query_cli` 目錄；預設設定檔位置為目前工作目錄的 `config/.env`。
+可從 `config/.env.example` 複製後填入本機設定；實際 `.env`、OAuth client secret 與 token cache 不得提交 Git。
+
+在 repo 開發環境中，從 `query_cli/` 執行時可設定：
+
+```env
+KBSEARCH_QUERY_RESULTS_ROOT=query_results
+KBSEARCH_QUERY_LOGS_ROOT=logs
+```
+
+部署到只有 `agent_runtime/` 的環境時，建議結構為：
+
+```text
+agent_runtime/
+  query_results/
+  query_cli/
+    .venv/
+    config/
+      .env
+    logs/
+```
+
+此時先進入 `agent_runtime/query_cli` 再執行 CLI，並設定：
+
+```env
+KBSEARCH_QUERY_RESULTS_ROOT=../query_results
+KBSEARCH_QUERY_LOGS_ROOT=logs
+```
 
 設定檢查：
 
@@ -59,9 +86,18 @@ Query CLI 對 Google Drive API 的使用者身分認證方式是 OAuth 2.0 授�
 
 ## 執行
 
-安裝後可使用 `kbsearch query` 執行查詢：
+安裝後先進入 `query_cli` 目錄，再使用 `kbsearch query` 執行查詢：
 
 ```powershell
+cd C:\path\to\agent_runtime\query_cli
+.\.venv\Scripts\kbsearch.exe probe-config
+.\.venv\Scripts\kbsearch.exe query --name "客戶查詢" --query "產品型號 ABC-123" --limit 10 --min-score 0.5
+```
+
+開發環境若已安裝 editable package，也可以從 repo 的 `query_cli/` 目錄執行：
+
+```powershell
+cd C:\path\to\KBSearch\query_cli
 kbsearch query --name "客戶查詢" --query "產品型號 ABC-123" --limit 10 --min-score 0.5
 ```
 
@@ -74,7 +110,7 @@ kbsearch query --name "圖片查詢" --query "相似版型" --image C:\path\samp
 每次查詢會建立：
 
 ```text
-agent_runtime/query_results/<yyyyMMdd-HHmmss>-<query_name>/
+<KBSEARCH_QUERY_RESULTS_ROOT>/<yyyyMMdd-HHmmss>-<query_name>/
   full_text_results.json
   vector_results.json
   <file_name>-<google_file_id>/

@@ -22,13 +22,14 @@
 - 不使用 service account impersonation、Domain-Wide Delegation、Workload Identity Federation 或 importer 的 Application Default Credentials 代表使用者查詢。
 - OAuth token cache 若需要落地，必須放在使用者個人環境或明確設定的位置，不得寫入 repo 根目錄。
 - `secure_backend` base URL、OAuth client 設定與輸出位置等 query CLI 設定應集中在設定層讀取。
-- 預設設定檔位置為 `query_cli/config/.env`；新增設定時需同步更新 config model、README 與測試。
+- 預設設定檔位置為目前工作目錄的 `config/.env`；新增設定時需同步更新 config model、README 與測試。
 - `LIBREOFFICE_COMMAND` 必須由設定層提供完整絕對路徑，不得依賴 `PATH` 中的 `soffice`。
 - `KBSEARCH_CJK_FONT_PATH` 必須由設定層提供完整絕對路徑；TXT / MD 轉 PDF 只可使用此單一字型設定，不得掃描候選字型或讀取環境 fallback。
 
 ## 檔案與路徑處理
 
 - 使用 `pathlib.Path` 處理本機路徑。
+- `KBSEARCH_QUERY_RESULTS_ROOT` 與 `KBSEARCH_QUERY_LOGS_ROOT` 若為相對路徑，必須相對於 CLI 執行時的目前工作目錄解析。
 - 查詢下載或產生的檔案必須限制在 `agent_runtime/` 約定的查詢結果目錄內。
 - 對查詢名稱、檔案名稱、Google file ID 或外部輸入組合路徑時，必須避免路徑穿越與非法檔名問題。
 - 下載交集檔案的資料夾名稱必須含 Google file ID 或等價唯一識別，避免正規化後檔名碰撞。
@@ -40,6 +41,7 @@
 - library layer 不得呼叫 `sys.exit()`；exit code 只在 CLI 頂層處理。
 - Google Drive 與 `secure_backend` 錯誤應轉成明確 domain error，並保留足夠排錯資訊。
 - logging 應能追蹤查詢名稱、階段、檔案、狀態與錯誤摘要。
+- CLI log 應寫入設定指定的 log 目錄，並以每日切割方式保存。
 
 ## 測試
 

@@ -49,5 +49,7 @@ agent_runtime/_internal/logs/*
 !agent_runtime/_internal/logs/.gitkeep
 agent_runtime/query_results/*
 !agent_runtime/query_results/.gitkeep
+query_cli/query_results/*
+!query_cli/query_results/.gitkeep
 agent_runtime/workspace/*
 !agent_runtime/workspace/.gitkeep

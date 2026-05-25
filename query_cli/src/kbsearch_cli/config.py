@@ -15,15 +15,18 @@ class QueryCliConfig:
     google_oauth_client_config: Path
     google_oauth_token_cache: Path
     query_results_root: Path
+    query_logs_root: Path
     libreoffice_command: str
     cjk_font_path: Path
 
 
-DEFAULT_ENV_FILE = Path(__file__).resolve().parents[2] / "config" / ".env"
-DEFAULT_RESULTS_ROOT = Path(__file__).resolve().parents[3] / "agent_runtime" / "query_results"
+DEFAULT_RESULTS_ROOT = Path("query_results")
+DEFAULT_LOGS_ROOT = Path("logs")
 
 
-def load_query_cli_config(env_file: str | Path | None = DEFAULT_ENV_FILE) -> QueryCliConfig:
+def load_query_cli_config(env_file: str | Path | None = None) -> QueryCliConfig:
+    if env_file is None:
+        env_file = find_query_cli_env_file()
     env_path = Path(env_file) if env_file is not None else None
     if env_path is not None:
         load_dotenv(dotenv_path=env_path, override=False)
@@ -33,13 +36,19 @@ def load_query_cli_config(env_file: str | Path | None = DEFAULT_ENV_FILE) -> Que
         secure_backend_base_url=_required_str("KBSEARCH_SECURE_BACKEND_BASE_URL"),
         google_oauth_client_config=_resolve_path(_required_str("GOOGLE_OAUTH_CLIENT_CONFIG"), root),
         google_oauth_token_cache=_resolve_path(_required_str("GOOGLE_OAUTH_TOKEN_CACHE"), root),
-        query_results_root=_resolve_path(
+        query_results_root=_resolve_cwd_path(
             _optional_str("KBSEARCH_QUERY_RESULTS_ROOT", str(DEFAULT_RESULTS_ROOT)),
-            root,
+        ),
+        query_logs_root=_resolve_cwd_path(
+            _optional_str("KBSEARCH_QUERY_LOGS_ROOT", str(DEFAULT_LOGS_ROOT)),
         ),
         libreoffice_command=_required_absolute_path_str("LIBREOFFICE_COMMAND"),
         cjk_font_path=_required_absolute_path("KBSEARCH_CJK_FONT_PATH"),
     )
+
+
+def find_query_cli_env_file() -> Path:
+    return Path.cwd() / "config" / ".env"
 
 
 def _resolve_query_cli_root(env_path: Path | None) -> Path:
@@ -53,6 +62,13 @@ def _resolve_path(value: str, root: Path) -> Path:
     if path.is_absolute():
         return path
     return root / path
+
+
+def _resolve_cwd_path(value: str) -> Path:
+    path = Path(value)
+    if path.is_absolute():
+        return path
+    return Path.cwd() / path
 
 
 def _required_str(name: str) -> str:
