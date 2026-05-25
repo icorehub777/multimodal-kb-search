@@ -24,13 +24,17 @@ secure_backend/
 
 ## 安裝
 
-在 repo root 執行：
+本機開發時，`secure_backend/` 應使用自己的 Python virtual environment，不安裝到 repo root 或全域 Python 環境：
 
 ```powershell
-python -m pip install -e secure_backend
+cd <repo-root>\secure_backend
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -e .
 ```
 
-正式服務依賴維護在 `pyproject.toml`，包含 FastAPI、ASGI server、阿里雲 SDK 與 Qdrant client。
+正式服務依賴維護在 `pyproject.toml`，包含 FastAPI、ASGI server、阿里雲 SDK 與 Qdrant client。Container build 時也應以 `secure_backend/` 作為 app 專案根目錄，並在 image 內執行等價的 `python -m pip install .`。
 
 ## 設定
 
@@ -51,6 +55,8 @@ python -m pip install -e secure_backend
 設定檢查：
 
 ```powershell
+cd <repo-root>\secure_backend
+.\.venv\Scripts\Activate.ps1
 kbsearch-secure-backend probe-config
 ```
 
@@ -59,6 +65,8 @@ kbsearch-secure-backend probe-config
 FastAPI app 應提供穩定 ASGI 入口。開發環境可用 ASGI server 啟動服務，例如：
 
 ```powershell
+cd <repo-root>\secure_backend
+.\.venv\Scripts\Activate.ps1
 uvicorn kbsearch_secure_backend.app:create_app --factory --host 127.0.0.1 --port 8000
 ```
 
@@ -148,7 +156,9 @@ Qdrant adapter 使用 `qdrant-client` 的 `query_points` API 執行查詢。
 離線單元測試：
 
 ```powershell
-python -m unittest discover -s secure_backend\tests
+cd <repo-root>\secure_backend
+.\.venv\Scripts\Activate.ps1
+python -m unittest discover -s tests
 ```
 
 需要真實阿里雲或 Qdrant 的探查測試應與離線單元測試分開。若探查測試會寫入 Qdrant，需使用受控 probe 資料並在測試結束後清理。
