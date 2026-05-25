@@ -43,9 +43,10 @@ python -m pip install -e secure_backend
 - `QDRANT_API_KEY`：Qdrant API key。
 - `QDRANT_COLLECTION`：Qdrant collection。
 - `QDRANT_VECTOR_SIZE`：Qdrant collection 向量維度，必須與 `DASHSCOPE_VECTOR_SIZE` 相同。
+- `KBSEARCH_SECURE_BACKEND_LOG_FILE`：必填，application log file 路徑；相對路徑以 `secure_backend/` app 根目錄為基準，每日切分新 log 檔。
 
 若使用設定檔，預設讀取位置為 `secure_backend/config/.env`。
-可從 `secure_backend/config/.env.example` 複製後填入部署設定；實際 `.env` 與 API key 不得提交 Git。
+可從 `secure_backend/config/.env.example` 複製後填入部署設定；範例中的 `logs/secure_backend.log` 會解析到 `secure_backend/logs/secure_backend.log`。實際 `.env` 與 API key 不得提交 Git。
 
 設定檢查：
 
