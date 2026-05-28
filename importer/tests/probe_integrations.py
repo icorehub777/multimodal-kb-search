@@ -75,8 +75,6 @@ def probe_qdrant() -> None:
     metadata = build_page_vector_metadata(
         document=probe_document,
         page_number=1,
-        page_image_path=Path("probe/01.png"),
-        source_file_path=Path("probe/kbsearch-importer-probe.pdf"),
     )
     vector = [0.0] * config.qdrant_vector_size
     index.upsert_page_vectors([(vector, metadata)])
@@ -119,14 +117,10 @@ def probe_sync_decisions() -> None:
             mime_type=changed_document.mime_type,
         ),
         page_number=1,
-        page_image_path=Path("probe/stale/01.png"),
-        source_file_path=Path("probe/stale/source.pdf"),
     )
     deleted_metadata = build_page_vector_metadata(
         document=deleted_probe,
         page_number=1,
-        page_image_path=Path("probe/deleted/01.png"),
-        source_file_path=Path("probe/deleted/source.pdf"),
     )
     vector = [0.0] * config.qdrant_vector_size
     index.upsert_page_vectors([(vector, stale_metadata), (vector, deleted_metadata)])

@@ -9,7 +9,7 @@ from kbsearch_cli.output import QueryResultWriter, safe_path_name
 
 
 class GoogleDriveClient(Protocol):
-    def search_full_text(self, query: str, limit: int) -> list[FullTextSearchResult]:
+    def search(self, drive_query: str, limit: int) -> list[FullTextSearchResult]:
         raise NotImplementedError
 
     def can_access(self, file_id: str) -> bool:
@@ -51,17 +51,19 @@ class QueryOrchestrator:
     def run(
         self,
         query_name: str,
-        query: str,
+        vector_query: str,
+        drive_query: str,
         limit: int,
         min_score: float | None,
         image_paths: list[Path] | None = None,
     ) -> QueryResultBundle:
+        resolved_image_paths = image_paths or []
         with ThreadPoolExecutor(max_workers=2) as executor:
-            full_text_future = executor.submit(self._google_drive.search_full_text, query, limit)
+            full_text_future = executor.submit(self._google_drive.search, drive_query, limit)
             vector_future = executor.submit(
                 self._backend.search,
-                query,
-                image_paths or [],
+                vector_query,
+                resolved_image_paths,
                 limit,
                 min_score,
             )
@@ -72,6 +74,13 @@ class QueryOrchestrator:
         vector_results = [result for result in vector_candidates if access_by_file_id[result.google_file_id]]
         bundle = self._result_writer.create_bundle(
             query_name=query_name,
+            query_plan={
+                "vector_query": vector_query,
+                "drive_query": drive_query,
+                "image_paths": [_path_as_posix(path) for path in resolved_image_paths],
+                "limit": limit,
+                "min_score": min_score,
+            },
             full_text_results=full_text_results,
             vector_results=vector_results,
         )
@@ -109,3 +118,9 @@ class QueryOrchestrator:
         with ThreadPoolExecutor(max_workers=min(8, len(file_ids))) as executor:
             checks = executor.map(self._google_drive.can_access, file_ids)
         return dict(zip(file_ids, checks))
+
+
+def _path_as_posix(path: Path | str) -> str:
+    if isinstance(path, Path):
+        return path.as_posix()
+    return str(path).replace("\\", "/")

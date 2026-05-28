@@ -25,19 +25,23 @@ class QueryResultWriter:
     def create_bundle(
         self,
         query_name: str,
+        query_plan: dict[str, object],
         full_text_results: list[FullTextSearchResult],
         vector_results: list[VectorFileSearchResult],
     ) -> QueryResultBundle:
         bundle_dir = self._results_root / f"{self._clock()}-{safe_path_name(query_name)}"
         bundle_dir.mkdir(parents=True, exist_ok=False)
 
+        query_plan_path = bundle_dir / "query_plan.json"
         full_text_path = bundle_dir / "full_text_results.json"
         vector_path = bundle_dir / "vector_results.json"
+        _write_json(query_plan_path, query_plan)
         _write_json(full_text_path, [result.to_dict() for result in full_text_results])
         _write_json(vector_path, [result.to_dict() for result in vector_results])
 
         return QueryResultBundle(
             path=bundle_dir,
+            query_plan_path=query_plan_path,
             full_text_results_path=full_text_path,
             vector_results_path=vector_path,
             full_text_results=full_text_results,

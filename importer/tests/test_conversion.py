@@ -76,7 +76,7 @@ class ConversionTests(unittest.TestCase):
                 pages = renderer.render_pages(Path("Spec.pdf"), Path(temp_dir))
 
         self.assertEqual([page.page_number for page in pages], [1, 2])
-        self.assertEqual([page.path.name for page in pages], ["01.png", "02.png"])
+        self.assertEqual([page.path.name for page in pages], ["0001.png", "0002.png"])
 
     def test_image_page_renderer_normalizes_image_as_single_page_png(self):
         from kbsearch_importer.conversion import PageImageRenderer
@@ -91,7 +91,7 @@ class ConversionTests(unittest.TestCase):
 
             self.assertEqual(len(pages), 1)
             self.assertEqual(pages[0].page_number, 1)
-            self.assertEqual(pages[0].path.name, "01.png")
+            self.assertEqual(pages[0].path.name, "0001.png")
             self.assertTrue(pages[0].path.read_bytes().startswith(b"\x89PNG"))
 
     def test_text_to_pdf_preserves_chinese_text(self):

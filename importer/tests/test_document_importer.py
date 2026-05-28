@@ -26,15 +26,15 @@ class FakeConverter:
 class FakeRenderer:
     def render_pages(self, pdf_path, output_dir):
         return [
-            PageImage(page_number=1, path=output_dir / "01.png"),
-            PageImage(page_number=2, path=output_dir / "02.png"),
+            PageImage(page_number=1, path=output_dir / "0001.png"),
+            PageImage(page_number=2, path=output_dir / "0002.png"),
         ]
 
 
 class RoutingRenderer:
     def render_pages(self, source_path, output_dir):
         output_dir.mkdir(parents=True, exist_ok=True)
-        output_path = output_dir / "01.png"
+        output_path = output_dir / "0001.png"
         output_path.write_text(source_path.suffix, encoding="utf-8")
         return [PageImage(page_number=1, path=output_path)]
 
@@ -46,7 +46,7 @@ class FakeEmbedder:
     def embed_page_image(self, image_path):
         if image_path.name == self.fail_on_page_name:
             raise RuntimeError("embedding failed")
-        return [float(image_path.name[:2]), 0.0]
+        return [float(image_path.stem), 0.0]
 
 
 class FakeQdrantIndex:
@@ -106,7 +106,7 @@ class DocumentImporterTests(unittest.TestCase):
                 downloader=FakeDownloader(),
                 converter=FakeConverter(),
                 renderer=FakeRenderer(),
-                embedder=FakeEmbedder(fail_on_page_name="02.png"),
+                embedder=FakeEmbedder(fail_on_page_name="0002.png"),
                 qdrant_index=qdrant_index,
                 work_dir=Path(temp_dir),
             )
@@ -160,7 +160,7 @@ class DocumentImporterTests(unittest.TestCase):
                 downloader=FakeDownloader(),
                 converter=FakeConverter(),
                 renderer=FakeRenderer(),
-                embedder=FakeEmbedder(fail_on_page_name="02.png"),
+                embedder=FakeEmbedder(fail_on_page_name="0002.png"),
                 qdrant_index=FakeQdrantIndex(),
                 work_dir=work_dir,
                 keep_failed_work_files=True,
@@ -197,7 +197,6 @@ class DocumentImporterTests(unittest.TestCase):
 
         self.assertEqual(imported_pages, 1)
         self.assertEqual(qdrant_index.pages[0][1].page_number, 1)
-        self.assertEqual(str(qdrant_index.pages[0][1].page_image_path).endswith("01.png"), True)
 
 
 if __name__ == "__main__":

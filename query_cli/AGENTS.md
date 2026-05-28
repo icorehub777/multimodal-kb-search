@@ -13,11 +13,13 @@
 - CLI layer 負責解析命令列參數、載入 query CLI 設定、組裝正式依賴與處理 exit code。
 - 查詢流程核心應使用 protocol 或注入物件接收 Google Drive、`secure_backend` client、檔案處理與結果輸出能力。
 - Google Drive OAuth、全文搜尋、檔案可存取性檢查與下載應包在 query CLI 專用 client / adapter 中。
+- Google Drive 搜尋應接收 Agent 產生的 Google Drive API `q` query language 並原樣送出；不得在 CLI 中實作 query builder、語法改寫或 fallback 查詢策略。
 - `secure_backend` 呼叫應包在 client 中，核心流程不得直接依賴 HTTP library 的 response 物件。
 - 傳送圖片查詢至 `secure_backend` 時，HTTP request 必須包含圖片內容本身，例如 base64 payload；不得傳送 CLI 本機路徑並要求 backend 讀取。
 
 ## Config 與認證
 
+- 開發 `query_cli/` 時使用 `query_cli/.venv` 作為本子專案的隔離 Python 環境；文件範例與測試指令應以此環境為準。
 - 使用者 Google Drive 認證只能使用 OAuth 2.0 授權碼流程。
 - 不使用 service account impersonation、Domain-Wide Delegation、Workload Identity Federation 或 importer 的 Application Default Credentials 代表使用者查詢。
 - OAuth token cache 若需要落地，必須放在使用者個人環境或明確設定的位置，不得寫入 repo 根目錄。

@@ -45,4 +45,4 @@ def classify_document_type(mime_type: str) -> str:
 def page_png_path(page_dir: Path, page_number: int) -> Path:
     if page_number < 1:
         raise ValueError("page_number must be >= 1")
-    return page_dir / f"{page_number:02d}.png"
+    return page_dir / f"{page_number:04d}.png"

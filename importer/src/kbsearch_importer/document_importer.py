@@ -99,8 +99,6 @@ class PipelineDocumentImporter:
                     metadata = build_page_vector_metadata(
                         document=document,
                         page_number=page_image.page_number,
-                        page_image_path=page_image.path,
-                        source_file_path=source_file,
                     )
                     pages.append((vector, metadata))
             except Exception as exc:

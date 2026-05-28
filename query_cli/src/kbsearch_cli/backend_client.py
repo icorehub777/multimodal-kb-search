@@ -54,8 +54,6 @@ def _vector_file_from_payload(payload: dict[str, Any]) -> VectorFileSearchResult
         pages=[
             PageSearchResult(
                 page_number=int(page.get("page_number", 0)),
-                page_image_path=str(page.get("page_image_path", "")),
-                source_file_path=str(page.get("source_file_path", "")),
                 score=float(page.get("score", 0)),
             )
             for page in payload.get("pages", [])

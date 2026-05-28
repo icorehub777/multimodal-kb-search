@@ -21,6 +21,13 @@ class QueryOutputTests(unittest.TestCase):
 
             bundle = writer.create_bundle(
                 query_name="../測試查詢",
+                query_plan={
+                    "vector_query": "semantic spec",
+                    "drive_query": "fullText contains 'spec' and trashed = false",
+                    "image_paths": ["sample.png"],
+                    "limit": 5,
+                    "min_score": 0.4,
+                },
                 full_text_results=[
                     FullTextSearchResult(
                         google_file_id="file-1",
@@ -41,8 +48,6 @@ class QueryOutputTests(unittest.TestCase):
                         pages=[
                             PageSearchResult(
                                 page_number=1,
-                                page_image_path="pages/01.png",
-                                source_file_path="source/Spec.pdf",
                                 score=0.9,
                             )
                         ],
@@ -53,9 +58,11 @@ class QueryOutputTests(unittest.TestCase):
             self.assertEqual(bundle.path.name, "20260524-203000-測試查詢")
             full_text_json = json.loads((bundle.path / "full_text_results.json").read_text(encoding="utf-8"))
             vector_json = json.loads((bundle.path / "vector_results.json").read_text(encoding="utf-8"))
+            query_plan_json = json.loads((bundle.path / "query_plan.json").read_text(encoding="utf-8"))
 
         self.assertEqual(full_text_json[0]["google_file_id"], "file-1")
         self.assertEqual(vector_json[0]["pages"][0]["page_number"], 1)
+        self.assertEqual(query_plan_json["drive_query"], "fullText contains 'spec' and trashed = false")
 
 
 if __name__ == "__main__":

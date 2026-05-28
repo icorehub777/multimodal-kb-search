@@ -111,7 +111,7 @@ class DocumentPageRenderer:
         paths: list[Path] = []
         with fitz.open(pdf_path) as document:
             for index, page in enumerate(document, start=1):
-                output_path = output_dir / f"{index:02d}.png"
+                output_path = output_dir / f"{index:04d}.png"
                 page.get_pixmap(dpi=self._dpi).save(output_path)
                 paths.append(output_path)
         return paths
@@ -122,7 +122,7 @@ class DocumentPageRenderer:
         except ImportError as exc:
             raise DocumentRenderError("Pillow is required for image page rendering.") from exc
 
-        output_path = output_dir / "01.png"
+        output_path = output_dir / "0001.png"
         with Image.open(image_path) as image:
             image.convert("RGB").save(output_path, format="PNG")
         return [output_path]

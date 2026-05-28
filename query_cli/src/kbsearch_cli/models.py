@@ -19,8 +19,6 @@ class FullTextSearchResult:
 @dataclass(frozen=True)
 class PageSearchResult:
     page_number: int
-    page_image_path: str
-    source_file_path: str
     score: float
 
     def to_dict(self) -> dict[str, Any]:
@@ -47,6 +45,7 @@ class VectorFileSearchResult:
 @dataclass(frozen=True)
 class QueryResultBundle:
     path: Path
+    query_plan_path: Path
     full_text_results_path: Path
     vector_results_path: Path
     full_text_results: list[FullTextSearchResult]

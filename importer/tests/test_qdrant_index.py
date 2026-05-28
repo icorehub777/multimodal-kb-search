@@ -54,8 +54,6 @@ class QdrantIndexTests(unittest.TestCase):
             google_drive_version="7",
             google_drive_modified_time="2026-05-24T00:00:00Z",
             page_number=1,
-            page_image_path="pages/01.png",
-            source_file_path="Spec.pdf",
         )
 
         index.upsert_page_vectors([([0.1, 0.2], metadata)])

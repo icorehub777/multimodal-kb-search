@@ -65,7 +65,5 @@ def _page_result_from_record(record: Any) -> PageSearchResult:
         google_drive_version=str(payload.get("google_drive_version", "")),
         google_drive_modified_time=str(payload.get("google_drive_modified_time", "")),
         page_number=int(payload.get("page_number", 0)),
-        page_image_path=str(payload.get("page_image_path", "")),
-        source_file_path=str(payload.get("source_file_path", "")),
         score=float(record.score),
     )

@@ -5,6 +5,7 @@ import re
 from pathlib import Path
 from typing import Any
 
+from kbsearch_cli.errors import ExternalServiceError
 from kbsearch_cli.models import FullTextSearchResult
 
 GOOGLE_NATIVE_EXPORT_MIME_TYPES = {
@@ -18,14 +19,17 @@ class GoogleDriveQueryClient:
     def __init__(self, drive_service: Any) -> None:
         self._drive_service = drive_service
 
-    def search_full_text(self, query: str, limit: int) -> list[FullTextSearchResult]:
-        response = self._drive_service.files().list(
-            q=f"fullText contains '{_escape_query_term(query)}' and trashed = false",
-            fields=DRIVE_SEARCH_FIELDS,
-            pageSize=limit,
-            supportsAllDrives=True,
-            includeItemsFromAllDrives=True,
-        ).execute()
+    def search(self, drive_query: str, limit: int) -> list[FullTextSearchResult]:
+        try:
+            response = self._drive_service.files().list(
+                q=drive_query,
+                fields=DRIVE_SEARCH_FIELDS,
+                pageSize=limit,
+                supportsAllDrives=True,
+                includeItemsFromAllDrives=True,
+            ).execute()
+        except Exception as exc:
+            raise ExternalServiceError(f"Google Drive search failed: {exc}") from exc
         return [
             FullTextSearchResult(
                 google_file_id=item["id"],
@@ -74,10 +78,6 @@ def _write_request_bytes(request: Any, output_path: Path) -> None:
         done = False
         while not done:
             _status, done = downloader.next_chunk()
-
-
-def _escape_query_term(term: str) -> str:
-    return term.replace("\\", "\\\\").replace("'", "\\'")
 
 
 def safe_download_name(name: str) -> str:

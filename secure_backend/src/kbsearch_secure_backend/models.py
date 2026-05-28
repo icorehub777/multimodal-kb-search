@@ -11,8 +11,6 @@ class PageSearchResult(BaseModel):
     google_drive_version: str
     google_drive_modified_time: str
     page_number: int
-    page_image_path: str
-    source_file_path: str
     score: float
 
 

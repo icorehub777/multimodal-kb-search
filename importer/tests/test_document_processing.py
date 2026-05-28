@@ -43,9 +43,10 @@ class DocumentProcessingTests(unittest.TestCase):
                 with self.assertRaisesRegex(UnsupportedDocumentTypeError, "Excel"):
                     classify_document_type(mime_type)
 
-    def test_page_png_path_uses_two_digit_numbering_from_one(self) -> None:
-        self.assertEqual(page_png_path(Path("pages"), 1), Path("pages/01.png"))
-        self.assertEqual(page_png_path(Path("pages"), 12), Path("pages/12.png"))
+    def test_page_png_path_uses_four_digit_numbering_from_one(self) -> None:
+        self.assertEqual(page_png_path(Path("pages"), 1), Path("pages/0001.png"))
+        self.assertEqual(page_png_path(Path("pages"), 12), Path("pages/0012.png"))
+        self.assertEqual(page_png_path(Path("pages"), 100), Path("pages/0100.png"))
 
     def test_page_png_path_rejects_zero_page_number(self) -> None:
         with self.assertRaisesRegex(ValueError, "page_number"):

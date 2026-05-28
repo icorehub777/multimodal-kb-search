@@ -41,7 +41,8 @@ def main(argv: list[str] | None = None) -> int:
 
     query_parser = subparsers.add_parser("query")
     query_parser.add_argument("--name", required=True)
-    query_parser.add_argument("--query", required=True)
+    query_parser.add_argument("--vector-query", required=True)
+    query_parser.add_argument("--drive-query", required=True)
     query_parser.add_argument("--image", action="append", default=[])
     query_parser.add_argument("--limit", type=int, default=10)
     query_parser.add_argument("--min-score", type=float, default=None)
@@ -66,7 +67,8 @@ def main(argv: list[str] | None = None) -> int:
             logging.getLogger(__name__).info("query started name=%s", args.name)
             bundle = create_query_orchestrator(config).run(
                 query_name=args.name,
-                query=args.query,
+                vector_query=args.vector_query,
+                drive_query=args.drive_query,
                 image_paths=[Path(path) for path in args.image],
                 limit=args.limit,
                 min_score=args.min_score,

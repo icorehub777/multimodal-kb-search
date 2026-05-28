@@ -20,8 +20,6 @@ class MetadataTests(unittest.TestCase):
         metadata = build_page_vector_metadata(
             document=document,
             page_number=3,
-            page_image_path=Path("work/file-1/03.png"),
-            source_file_path=Path("work/file-1/Spec.pdf"),
         )
 
         self.assertEqual(
@@ -34,8 +32,6 @@ class MetadataTests(unittest.TestCase):
                 "google_drive_version": "7",
                 "google_drive_modified_time": "2026-05-24T00:00:00Z",
                 "page_number": 3,
-                "page_image_path": "work/file-1/03.png",
-                "source_file_path": "work/file-1/Spec.pdf",
             },
         )
 

@@ -24,13 +24,16 @@ query_cli/
 
 ## 安裝
 
-開發環境可在 repo root 執行：
+開發環境使用 `query_cli/.venv` 作為本子專案的隔離 Python 環境。在 `query_cli/` 目錄執行：
 
 ```powershell
-python -m pip install -e query_cli
+cd C:\path\to\KBSearch\query_cli
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install .
 ```
 
-安裝後會提供 `kbsearch` console script。
+安裝後會在 `.venv\Scripts\` 中提供 `kbsearch.exe` console script。
+若程式碼有更新，需在同一個 `.venv` 中重新執行 `.\.venv\Scripts\python.exe -m pip install .`。
 
 ## 設定
 
@@ -47,6 +50,15 @@ Query CLI 的設定由使用者環境或目前工作目錄下的 `config/.env` �
 OAuth token cache 應放在使用者個人環境或明確設定的位置。
 執行 `kbsearch` 前應先進入 `query_cli` 目錄；預設設定檔位置為目前工作目錄的 `config/.env`。
 可從 `config/.env.example` 複製後填入本機設定；實際 `.env`、OAuth client secret 與 token cache 不得提交 Git。
+
+建立本機設定檔：
+
+```powershell
+cd C:\path\to\KBSearch\query_cli
+Copy-Item config\.env.example config\.env
+```
+
+複製後需依環境調整 `config/.env` 內的 backend URL、OAuth client、token cache、LibreOffice 與 CJK font 路徑。
 
 在 repo 開發環境中，從 `query_cli/` 執行時可設定：
 
@@ -69,59 +81,73 @@ agent_runtime/
 
 此時先進入 `agent_runtime/query_cli` 再執行 CLI，並設定：
 
+```powershell
+cd C:\path\to\agent_runtime\query_cli
+Copy-Item config\.env.example config\.env
+```
+
+部署環境的 `config/.env` 需調整為：
+
 ```env
 KBSEARCH_QUERY_RESULTS_ROOT=../query_results
 KBSEARCH_QUERY_LOGS_ROOT=logs
 ```
 
+並填入部署環境實際使用的 backend URL、OAuth client、token cache、LibreOffice 與 CJK font 路徑。
+
 設定檢查：
 
 ```powershell
-kbsearch probe-config
+cd C:\path\to\KBSearch\query_cli
+.\.venv\Scripts\kbsearch.exe probe-config
 ```
 
 ## Google Workspace 認證
 
 Query CLI 對 Google Drive API 的使用者身分認證方式是 OAuth 2.0 授權碼流程。員工執行查詢時，CLI 需以該員工授權取得的 token 查詢與下載 Google Drive 檔案。
 
-## 執行
+## 運作環境執行
 
-安裝後先進入 `query_cli` 目錄，再使用 `kbsearch query` 執行查詢：
+部署到 `agent_runtime/query_cli` 後，先進入該目錄，再使用 `.venv` 內的 `kbsearch.exe` 執行查詢：
 
 ```powershell
 cd C:\path\to\agent_runtime\query_cli
 .\.venv\Scripts\kbsearch.exe probe-config
-.\.venv\Scripts\kbsearch.exe query --name "客戶查詢" --query "產品型號 ABC-123" --limit 10 --min-score 0.5
-```
-
-開發環境若已安裝 editable package，也可以從 repo 的 `query_cli/` 目錄執行：
-
-```powershell
-cd C:\path\to\KBSearch\query_cli
-kbsearch query --name "客戶查詢" --query "產品型號 ABC-123" --limit 10 --min-score 0.5
+.\.venv\Scripts\kbsearch.exe query `
+  --name "客戶查詢" `
+  --vector-query "使用者問題與圖片理解描述" `
+  --drive-query "(fullText contains 'ABC-123' or name contains 'ABC-123') and trashed = false" `
+  --limit 10 `
+  --min-score 0.5
 ```
 
 若有圖片查詢依據，可重複提供 `--image`：
 
 ```powershell
-kbsearch query --name "圖片查詢" --query "相似版型" --image C:\path\sample.png
+.\.venv\Scripts\kbsearch.exe query `
+  --name "圖片查詢" `
+  --vector-query "相似版型，圖片顯示的版面、文字與視覺特徵" `
+  --drive-query "(fullText contains '版型' or name contains '版型') and trashed = false" `
+  --image C:\path\sample.png
 ```
 
 每次查詢會建立：
 
 ```text
 <KBSEARCH_QUERY_RESULTS_ROOT>/<yyyyMMdd-HHmmss>-<query_name>/
+  query_plan.json
   full_text_results.json
   vector_results.json
   <file_name>-<google_file_id>/
     <downloaded original file>
-    01.png
-    02.png
+    0001.png
+    0002.png
 ```
 
 只有同時出現在全文搜尋與向量搜尋清單中的檔案會被下載與轉頁。
 資料夾名稱會附加 Google file ID，避免不同文件在檔名正規化後互相碰撞。
 圖片查詢會由 CLI 讀取本機圖片並以 base64 payload 傳給 `secure_backend`，backend 不需也不應讀取 CLI 主機上的本機路徑。
+`--drive-query` 會原樣傳給 Google Drive API `files().list(q=...)`；CLI 不提供 query builder、不改寫語法，也不做 fallback。若 Drive API 回傳語法錯誤，Agent 應修正 `--drive-query` 後重新查詢。
 
 目前查詢結果轉頁支援 PDF、PNG、JPG、JPEG、WEBP、DOC、DOCX、PPT、PPTX、TXT 與 MD。Google Docs 與 Google Slides 會先透過 Google Drive export 下載為 PDF 後再轉頁。
 
@@ -130,7 +156,8 @@ kbsearch query --name "圖片查詢" --query "相似版型" --image C:\path\samp
 離線單元測試：
 
 ```powershell
-python -m unittest discover -s query_cli\tests
+cd C:\path\to\KBSearch\query_cli
+.\.venv\Scripts\python.exe -m unittest discover -s tests
 ```
 
 需要真實 Google OAuth 或 `secure_backend` 的探查測試應與離線單元測試分開。

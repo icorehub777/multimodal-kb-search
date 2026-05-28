@@ -45,13 +45,29 @@ class CliTests(unittest.TestCase):
             "kbsearch_cli.__main__.setup_logging",
         ) as mock_setup_logging, redirect_stdout(StringIO()) as stdout:
             self.assertEqual(
-                main(["query", "--name", "客戶", "--query", "alpha", "--limit", "3", "--min-score", "0.4"]),
+                main(
+                    [
+                        "query",
+                        "--name",
+                        "客戶",
+                        "--vector-query",
+                        "semantic alpha",
+                        "--drive-query",
+                        "fullText contains 'alpha' and trashed = false",
+                        "--limit",
+                        "3",
+                        "--min-score",
+                        "0.4",
+                    ]
+                ),
                 0,
             )
 
         create_orchestrator.assert_called_once_with(load_config.return_value)
         mock_setup_logging.assert_called_once_with(load_config.return_value.query_logs_root)
         self.assertEqual(fake_orchestrator.kwargs["query_name"], "客戶")
+        self.assertEqual(fake_orchestrator.kwargs["vector_query"], "semantic alpha")
+        self.assertEqual(fake_orchestrator.kwargs["drive_query"], "fullText contains 'alpha' and trashed = false")
         self.assertEqual(fake_orchestrator.kwargs["limit"], 3)
         self.assertIn("C:/tmp/query", stdout.getvalue())
 

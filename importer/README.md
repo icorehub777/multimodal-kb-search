@@ -48,7 +48,7 @@ importer/
 work/<google_file_id>/
   source/   # Google Drive 下載檔或 export PDF
   pdf/      # Office / TXT / MD 轉出的 PDF
-  pages/    # 每頁 PNG，例如 01.png、02.png
+  pages/    # 每頁 PNG，例如 0001.png、0002.png
 ```
 
 檔名與資料夾名稱以 Google file ID 與清理後的檔名產生，避免不同文件同名時互相覆蓋。
