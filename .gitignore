@@ -47,6 +47,7 @@ importer/work/
 *.tar
 *.tar.gz
 query_cli/build/
+query_cli/dist/
 
 # Local integration / spike tests (not part of the product repo)
 /tests/
