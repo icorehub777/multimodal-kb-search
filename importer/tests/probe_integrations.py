@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import argparse
 import base64
@@ -7,17 +7,17 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from zipfile import ZIP_DEFLATED, ZipFile
 
-from kbsearch_importer.config import load_importer_config
-from kbsearch_importer.conversion import DocumentConverter, PdfPageRenderer
-from kbsearch_importer.dashscope_embedder import DashScopeImageEmbeddingClient
-from kbsearch_importer.factories import (
+from app.config import load_importer_config
+from app.conversion import DocumentConverter, PdfPageRenderer
+from app.dashscope_embedder import DashScopeImageEmbeddingClient
+from app.factories import (
     create_drive_downloader,
     create_drive_scanner,
     create_qdrant_index,
     create_sync_orchestrator,
 )
-from kbsearch_importer.metadata import build_page_vector_metadata
-from kbsearch_importer.models import WorkspaceDocument
+from app.metadata import build_page_vector_metadata
+from app.models import WorkspaceDocument
 
 
 TINY_PNG_BASE64 = (

@@ -6,9 +6,10 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from kbsearch_secure_backend.app import create_app
-from kbsearch_secure_backend.logging_config import LOGGER_NAME
-from kbsearch_secure_backend.models import PageSearchResult, VectorFileSearchResult
+from app.factory import _run_startup_probe, create_app
+from app.logging_config import LOGGER_NAME
+from app.models import PageSearchResult, VectorFileSearchResult
+from app.config import BackendConfig
 
 
 class FakeVectorSearchService:
@@ -79,8 +80,10 @@ class AppTests(unittest.TestCase):
         temp_dir = self._create_temp_dir_with_log_cleanup()
         config_log_path = temp_dir / "config" / "secure_backend.log"
         explicit_log_path = temp_dir / "explicit" / "secure_backend.log"
-        with patch("kbsearch_secure_backend.app.load_backend_config") as load_config, patch(
-            "kbsearch_secure_backend.app.create_vector_search_service",
+        with patch("app.factory.load_backend_config") as load_config, patch(
+            "app.factory._run_startup_probe",
+        ), patch(
+            "app.factory.create_vector_search_service",
             return_value=FakeVectorSearchService(),
         ):
             load_config.return_value = SimpleNamespace(log_file_path=config_log_path)
@@ -98,8 +101,10 @@ class AppTests(unittest.TestCase):
 
     def test_create_app_initializes_default_service_once(self):
         temp_dir = self._create_temp_dir_with_log_cleanup()
-        with patch("kbsearch_secure_backend.app.load_backend_config") as load_config, patch(
-            "kbsearch_secure_backend.app.create_vector_search_service",
+        with patch("app.factory.load_backend_config") as load_config, patch(
+            "app.factory._run_startup_probe",
+        ), patch(
+            "app.factory.create_vector_search_service",
             return_value=FakeVectorSearchService(),
         ) as create_service:
             load_config.return_value.log_file_path = temp_dir / "secure_backend.log"
@@ -116,6 +121,82 @@ class AppTests(unittest.TestCase):
         create_service.assert_called_once_with(load_config.return_value)
         self.assertEqual(response_1.status_code, 200)
         self.assertEqual(response_2.status_code, 200)
+
+    def test_run_startup_probe_logs_failure(self):
+        temp_dir = self._create_temp_dir_with_log_cleanup()
+        log_path = temp_dir / "secure_backend.log"
+        configure_backend_logging = __import__(
+            "app.logging_config", fromlist=["configure_backend_logging"]
+        ).configure_backend_logging
+        logger = configure_backend_logging(log_path)
+        config = BackendConfig(
+            dashscope_api_key="dashscope-key",
+            dashscope_embedding_model="qwen3-vl-embedding",
+            dashscope_vector_size=4,
+            qdrant_url="https://qdrant.example.com",
+            qdrant_api_key="qdrant-key",
+            qdrant_collection="kbsearch",
+            qdrant_vector_size=4,
+            log_file_path=log_path,
+        )
+        with patch(
+            "app.factory.probe_startup_environment",
+            side_effect=RuntimeError("qdrant unavailable"),
+        ):
+            with self.assertRaises(RuntimeError):
+                _run_startup_probe(config, logger)
+
+        log_text = log_path.read_text(encoding="utf-8")
+        self.assertIn("startup_probe failed", log_text)
+        self.assertIn("qdrant unavailable", log_text)
+
+    def test_run_startup_probe_logs_success(self):
+        temp_dir = self._create_temp_dir_with_log_cleanup()
+        log_path = temp_dir / "secure_backend.log"
+        configure_backend_logging = __import__(
+            "app.logging_config", fromlist=["configure_backend_logging"]
+        ).configure_backend_logging
+        logger = configure_backend_logging(log_path)
+        config = BackendConfig(
+            dashscope_api_key="dashscope-key",
+            dashscope_embedding_model="qwen3-vl-embedding",
+            dashscope_vector_size=4,
+            qdrant_url="https://qdrant.example.com",
+            qdrant_api_key="qdrant-key",
+            qdrant_collection="kbsearch",
+            qdrant_vector_size=4,
+            log_file_path=log_path,
+        )
+        with patch(
+            "app.factory.probe_startup_environment",
+            return_value=__import__(
+                "app.startup_probe", fromlist=["StartupProbeResult"]
+            ).StartupProbeResult(
+                dashscope_model="qwen3-vl-embedding",
+                dashscope_dimension=4,
+                qdrant_collection="kbsearch",
+                qdrant_host="qdrant.example.com",
+                qdrant_points_count=3,
+                qdrant_vector_size=4,
+            ),
+        ):
+            _run_startup_probe(config, logger)
+
+        log_text = log_path.read_text(encoding="utf-8")
+        self.assertIn("startup_probe succeeded", log_text)
+        self.assertIn("qdrant_points=3", log_text)
+
+    def test_create_app_raises_when_startup_probe_fails(self):
+        temp_dir = self._create_temp_dir_with_log_cleanup()
+        log_path = temp_dir / "secure_backend.log"
+        with patch("app.factory.load_backend_config") as load_config, patch(
+            "app.factory._run_startup_probe",
+            side_effect=RuntimeError("qdrant unavailable"),
+        ):
+            load_config.return_value = SimpleNamespace(log_file_path=log_path)
+
+            with self.assertRaises(RuntimeError):
+                create_app(log_file_path=log_path)
 
     def _create_temp_dir_with_log_cleanup(self):
         temp_dir = TemporaryDirectory()

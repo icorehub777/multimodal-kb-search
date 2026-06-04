@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import shutil
 import subprocess
+import tempfile
+from contextlib import contextmanager
 from pathlib import Path
 
 from kbsearch_cli.errors import DocumentRenderError
 
 CJK_TEXT_FONT_NAME = "KBSearchTextCJK"
+_LIBREOFFICE_MAX_SOURCE_PATH = 240
 
 
 class DocumentPageRenderer:
@@ -37,28 +41,39 @@ class DocumentPageRenderer:
         raise DocumentRenderError(f"Unsupported document extension: {source_path.suffix}")
 
     def _convert_office_to_pdf(self, source_path: Path, output_dir: Path) -> Path:
+        output_path = output_dir / f"{source_path.stem}.pdf"
         try:
-            result = subprocess.run(
-                [
-                    self._libreoffice_command,
-                    "--headless",
-                    "--convert-to",
-                    "pdf",
-                    "--outdir",
-                    str(output_dir),
-                    str(source_path),
-                ],
-                check=False,
-                capture_output=True,
-                text=True,
-            )
+            with _office_conversion_inputs(source_path) as (convert_source, convert_outdir):
+                result = subprocess.run(
+                    [
+                        self._libreoffice_command,
+                        "--headless",
+                        "--convert-to",
+                        "pdf",
+                        "--outdir",
+                        str(convert_outdir),
+                        str(convert_source),
+                    ],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                )
+                if result.returncode != 0:
+                    for partial_pdf in {convert_outdir / f"{convert_source.stem}.pdf", output_path}:
+                        if partial_pdf.exists():
+                            partial_pdf.unlink()
+                    raise DocumentRenderError(
+                        f"Office to PDF conversion failed for {source_path}: {result.stderr.strip()}"
+                    )
+                produced_pdf = convert_outdir / f"{convert_source.stem}.pdf"
+                if produced_pdf != output_path:
+                    if not produced_pdf.exists():
+                        raise DocumentRenderError(
+                            f"Office conversion did not create PDF: {produced_pdf}"
+                        )
+                    shutil.move(str(produced_pdf), str(output_path))
         except OSError as exc:
             raise DocumentRenderError(f"Office to PDF conversion failed: {source_path}") from exc
-        if result.returncode != 0:
-            raise DocumentRenderError(
-                f"Office to PDF conversion failed for {source_path}: {result.stderr.strip()}"
-            )
-        output_path = output_dir / f"{source_path.stem}.pdf"
         if not output_path.exists():
             raise DocumentRenderError(f"Office conversion did not create PDF: {output_path}")
         return output_path
@@ -109,11 +124,15 @@ class DocumentPageRenderer:
             raise DocumentRenderError("PyMuPDF is required for PDF page rendering.") from exc
 
         paths: list[Path] = []
-        with fitz.open(pdf_path) as document:
-            for index, page in enumerate(document, start=1):
-                output_path = output_dir / f"{index:04d}.png"
-                page.get_pixmap(dpi=self._dpi).save(output_path)
-                paths.append(output_path)
+        previous_display_errors = fitz.TOOLS.mupdf_display_errors(False)
+        try:
+            with fitz.open(pdf_path) as document:
+                for index, page in enumerate(document, start=1):
+                    output_path = output_dir / f"{index:04d}.png"
+                    page.get_pixmap(dpi=self._dpi).save(output_path)
+                    paths.append(output_path)
+        finally:
+            fitz.TOOLS.mupdf_display_errors(previous_display_errors)
         return paths
 
     def _render_image(self, image_path: Path, output_dir: Path) -> list[Path]:
@@ -159,6 +178,19 @@ def _has_cjk_text(text: str) -> bool:
         "\u3400" <= character <= "\u9fff" or "\uf900" <= character <= "\ufaff"
         for character in text
     )
+
+
+@contextmanager
+def _office_conversion_inputs(source_path: Path):
+    if len(str(source_path.resolve())) <= _LIBREOFFICE_MAX_SOURCE_PATH:
+        yield source_path, source_path.parent
+        return
+
+    with tempfile.TemporaryDirectory(prefix="kbsearch-lo-") as temp_dir:
+        temp_root = Path(temp_dir)
+        temp_source = temp_root / f"source{source_path.suffix.lower()}"
+        shutil.copy2(source_path, temp_source)
+        yield temp_source, temp_root
 
 
 def _wrap_text_line(

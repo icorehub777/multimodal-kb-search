@@ -1,7 +1,7 @@
-import unittest
+﻿import unittest
 
-from kbsearch_secure_backend.models import PageSearchResult
-from kbsearch_secure_backend.qdrant_search import QdrantSearchAdapter, group_page_results_by_file
+from app.models import PageSearchResult
+from app.qdrant_search import QdrantSearchAdapter, group_page_results_by_file
 
 
 class FakeQdrantClient:

@@ -5,7 +5,7 @@ import mimetypes
 from pathlib import Path
 from typing import Any
 
-from kbsearch_cli.errors import ExternalServiceError
+from kbsearch_cli.errors import ExternalServiceError, QueryCliError
 from kbsearch_cli.models import PageSearchResult, VectorFileSearchResult
 
 
@@ -26,18 +26,31 @@ class SecureBackendClient:
         except ImportError as exc:
             raise RuntimeError("requests is required for secure backend calls.") from exc
 
-        response = requests.post(
-            f"{self._base_url}/search/vector",
-            json={
-                "query": query,
-                "images": [_query_image_payload(path) for path in image_paths],
-                "limit": limit,
-                "min_score": min_score,
-            },
-            timeout=self._timeout_seconds,
-        )
+        search_url = f"{self._base_url}/search/vector"
+        try:
+            response = requests.post(
+                search_url,
+                json={
+                    "query": query,
+                    "images": [_query_image_payload(path) for path in image_paths],
+                    "limit": limit,
+                    "min_score": min_score,
+                },
+                timeout=self._timeout_seconds,
+            )
+        except requests.RequestException as exc:
+            raise ExternalServiceError(
+                f"Secure backend unreachable ({search_url}): {exc}"
+            ) from exc
         if response.status_code >= 400:
-            raise ExternalServiceError(f"Secure backend search failed: HTTP {response.status_code}")
+            detail = response.text.strip().replace("\n", " ")[:200]
+            if detail:
+                raise ExternalServiceError(
+                    f"Secure backend search failed ({search_url}): HTTP {response.status_code} {detail}"
+                )
+            raise ExternalServiceError(
+                f"Secure backend search failed ({search_url}): HTTP {response.status_code}"
+            )
         payload = response.json()
         return [_vector_file_from_payload(item) for item in payload.get("results", [])]
 
@@ -62,6 +75,8 @@ def _vector_file_from_payload(payload: dict[str, Any]) -> VectorFileSearchResult
 
 
 def _query_image_payload(path: Path) -> dict[str, str]:
+    if not path.is_file():
+        raise QueryCliError(f"Query image not found: {path}")
     mime_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
     return {
         "filename": path.name,

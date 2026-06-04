@@ -1,8 +1,8 @@
-import unittest
+﻿import unittest
 from pathlib import Path
 
-from kbsearch_importer.metadata import build_page_vector_metadata
-from kbsearch_importer.models import WorkspaceDocument
+from app.metadata import build_page_vector_metadata
+from app.models import WorkspaceDocument
 
 
 class MetadataTests(unittest.TestCase):

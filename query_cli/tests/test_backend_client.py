@@ -5,6 +5,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from kbsearch_cli.backend_client import SecureBackendClient
+from kbsearch_cli.errors import ExternalServiceError, QueryCliError
 
 
 class BackendClientTests(unittest.TestCase):
@@ -41,6 +42,33 @@ class BackendClientTests(unittest.TestCase):
         self.assertEqual(captured["json"]["images"][0]["filename"], "sample.png")
         self.assertEqual(captured["json"]["images"][0]["mime_type"], "image/png")
         self.assertEqual(base64.b64decode(captured["json"]["images"][0]["base64_data"]), b"png-bytes")
+
+    def test_search_wraps_unreachable_backend_errors(self):
+        import requests
+
+        with patch(
+            "requests.post",
+            side_effect=requests.RequestException("connection refused"),
+        ):
+            with self.assertRaisesRegex(
+                ExternalServiceError,
+                "Secure backend unreachable \\(http://backend/search/vector\\)",
+            ):
+                SecureBackendClient("http://backend").search(
+                    query="alpha",
+                    image_paths=[],
+                    limit=5,
+                    min_score=0.4,
+                )
+
+    def test_search_rejects_missing_image_paths(self):
+        with self.assertRaisesRegex(QueryCliError, "Query image not found"):
+            SecureBackendClient("http://backend").search(
+                query="alpha",
+                image_paths=[Path("C:/missing/sample.png")],
+                limit=5,
+                min_score=0.4,
+            )
 
 
 if __name__ == "__main__":

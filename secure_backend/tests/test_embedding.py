@@ -1,9 +1,9 @@
-import base64
+﻿import base64
 import unittest
 from unittest.mock import patch
 
-from kbsearch_secure_backend.embedding import _image_data_uri_from_payload
-from kbsearch_secure_backend.models import QueryImage
+from app.embedding import _image_data_uri_from_payload
+from app.models import QueryImage
 
 
 class EmbeddingTests(unittest.TestCase):
@@ -23,7 +23,7 @@ class EmbeddingTests(unittest.TestCase):
             base64_data=" cG5nLWJ5dGVz ",
         )
 
-        with patch("kbsearch_secure_backend.embedding.base64.b64encode") as encode:
+        with patch("app.embedding.base64.b64encode") as encode:
             self.assertEqual(_image_data_uri_from_payload(image), "data:image/png;base64,cG5nLWJ5dGVz")
 
         encode.assert_not_called()
@@ -35,8 +35,8 @@ class EmbeddingTests(unittest.TestCase):
             base64_data=base64.b64encode(b"x" * 10).decode("ascii"),
         )
 
-        with patch("kbsearch_secure_backend.embedding.MAX_DASHSCOPE_IMAGE_BYTES", 1), patch(
-            "kbsearch_secure_backend.embedding._compress_image_bytes_for_dashscope",
+        with patch("app.embedding.MAX_DASHSCOPE_IMAGE_BYTES", 1), patch(
+            "app.embedding._compress_image_bytes_for_dashscope",
             return_value=b"jpg",
         ):
             self.assertEqual(_image_data_uri_from_payload(image), "data:image/jpeg;base64,anBn")

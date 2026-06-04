@@ -4,6 +4,7 @@
 
 ## 子專案邊界
 
+- 需要理解 repo 總覽、本機開發環境、正式部署分工或 `agent_runtime` 運作假設時，先閱讀根目錄 `README.md`。
 - 修改程式前先確認變更屬於哪個子專案，不要把子專案責任混在一起。
 - 子專案之間應透過明確介面、CLI、client 或資料契約銜接，不直接跨層依賴內部實作。
 - 核心邏輯不應依賴 CLI `print`、`argparse`、terminal output 或 Agent 文字格式。

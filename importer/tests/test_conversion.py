@@ -1,12 +1,12 @@
-import sys
+﻿import sys
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
-import kbsearch_importer.conversion as conversion
-from kbsearch_importer.conversion import DocumentConverter, PdfPageRenderer
-from kbsearch_importer.errors import DocumentConversionError
+import app.conversion as conversion
+from app.conversion import DocumentConverter, PdfPageRenderer
+from app.errors import DocumentConversionError
 
 
 class ConversionTests(unittest.TestCase):
@@ -79,7 +79,7 @@ class ConversionTests(unittest.TestCase):
         self.assertEqual([page.path.name for page in pages], ["0001.png", "0002.png"])
 
     def test_image_page_renderer_normalizes_image_as_single_page_png(self):
-        from kbsearch_importer.conversion import PageImageRenderer
+        from app.conversion import PageImageRenderer
         from PIL import Image
 
         renderer = PageImageRenderer()

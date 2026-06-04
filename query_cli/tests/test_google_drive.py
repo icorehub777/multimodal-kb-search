@@ -1,4 +1,6 @@
 import unittest
+from pathlib import Path
+from unittest.mock import patch
 
 from kbsearch_cli.errors import ExternalServiceError
 from kbsearch_cli.google_drive import GoogleDriveQueryClient
@@ -66,6 +68,148 @@ class GoogleDriveQueryClientTests(unittest.TestCase):
                 drive_query="invalid query",
                 limit=7,
             )
+
+    def test_download_wraps_google_drive_errors(self):
+        class FakeDownloadFilesResource:
+            def get_media(self, fileId, **kwargs):
+                return object()
+
+        client = GoogleDriveQueryClient(
+            type("Service", (), {"files": lambda self: FakeDownloadFilesResource()})()
+        )
+
+        with patch(
+            "kbsearch_cli.google_drive._write_request_bytes",
+            side_effect=RuntimeError("download denied"),
+        ), self.assertRaisesRegex(
+            ExternalServiceError,
+            "Google Drive download failed \\(file_id=file-1, name=Spec.pdf\\): download denied",
+        ):
+            client.download("file-1", "Spec.pdf", "application/pdf", Path("C:/tmp/out"))
+
+
+class FakeGetRequest:
+    def __init__(self, failure=None, payload=None):
+        self.failure = failure
+        self.payload = payload or {"id": "file-1"}
+
+    def execute(self):
+        if self.failure is not None:
+            raise self.failure
+        return self.payload
+
+
+class FakeAccessFilesResource(FakeFilesResource):
+    def __init__(self, failure=None):
+        super().__init__(failure=failure)
+        self.get_kwargs = None
+
+    def get(self, **kwargs):
+        self.get_kwargs = kwargs
+        return FakeGetRequest(self.failure)
+
+
+class FakeBatchGetRequest:
+    def __init__(self, file_id: str, *, failure: Exception | None = None):
+        self.file_id = file_id
+        self.failure = failure
+        self.get_kwargs: dict[str, object] | None = None
+        self.payload = {
+            "id": file_id,
+            "name": "Spec.pdf",
+            "mimeType": "application/pdf",
+            "webViewLink": f"https://drive/{file_id}",
+        }
+
+
+class FakeBatchHttpRequest:
+    def __init__(self, callback):
+        self.callback = callback
+        self.requests: list[tuple[str | None, FakeBatchGetRequest]] = []
+
+    def add(self, request, request_id=None):
+        self.requests.append((request_id, request))
+
+    def execute(self):
+        for request_id, request in self.requests:
+            if request.failure is not None:
+                self.callback(request_id, None, request.failure)
+            else:
+                self.callback(request_id, request.payload, None)
+
+
+class FakeBatchFilesResource:
+    def __init__(self, inaccessible_file_ids: set[str] | None = None):
+        self.inaccessible_file_ids = inaccessible_file_ids or set()
+        self.get_calls: list[dict[str, object]] = []
+
+    def get(self, **kwargs):
+        self.get_calls.append(kwargs)
+        file_id = kwargs["fileId"]
+        failure = RuntimeError("not found") if file_id in self.inaccessible_file_ids else None
+        request = FakeBatchGetRequest(file_id, failure=failure)
+        request.get_kwargs = kwargs
+        return request
+
+
+class FakeBatchDriveService:
+    def __init__(self, inaccessible_file_ids: set[str] | None = None):
+        self.files_resource = FakeBatchFilesResource(inaccessible_file_ids)
+
+    def files(self):
+        return self.files_resource
+
+    def new_batch_http_request(self, callback=None):
+        return FakeBatchHttpRequest(callback)
+
+
+class GoogleDriveAccessTests(unittest.TestCase):
+    def test_get_file_metadata_returns_drive_fields(self):
+        files_resource = FakeAccessFilesResource()
+        files_resource.get = lambda **kwargs: FakeGetRequest(
+            payload={
+                "id": "file-9",
+                "name": "Z.pdf",
+                "mimeType": "application/pdf",
+                "webViewLink": "https://drive/file-9",
+            }
+        )
+        client = GoogleDriveQueryClient(type("Service", (), {"files": lambda self: files_resource})())
+
+        metadata = client.get_file_metadata("file-9")
+
+        self.assertEqual(metadata.google_file_id, "file-9")
+        self.assertEqual(metadata.name, "Z.pdf")
+        self.assertEqual(metadata.mime_type, "application/pdf")
+
+    def test_get_file_metadata_wraps_google_drive_errors(self):
+        files_resource = FakeAccessFilesResource(failure=RuntimeError("missing"))
+        client = GoogleDriveQueryClient(type("Service", (), {"files": lambda self: files_resource})())
+
+        with self.assertRaisesRegex(
+            ExternalServiceError,
+            "Google Drive metadata lookup failed \\(file_id=file-1\\): missing",
+        ):
+            client.get_file_metadata("file-1")
+
+    def test_resolve_accessible_metadata_uses_batch_files_get(self):
+        drive_service = FakeBatchDriveService()
+        client = GoogleDriveQueryClient(drive_service)
+
+        resolved = client.resolve_accessible_metadata(["file-1", "file-2"])
+
+        self.assertEqual(len(drive_service.files_resource.get_calls), 2)
+        self.assertTrue(all(call["supportsAllDrives"] for call in drive_service.files_resource.get_calls))
+        self.assertEqual(resolved["file-1"].name, "Spec.pdf")
+        self.assertEqual(resolved["file-2"].google_file_id, "file-2")
+
+    def test_resolve_accessible_metadata_logs_inaccessible_files(self):
+        drive_service = FakeBatchDriveService(inaccessible_file_ids={"file-missing"})
+        client = GoogleDriveQueryClient(drive_service)
+
+        resolved = client.resolve_accessible_metadata(["file-1", "file-missing"])
+
+        self.assertEqual(set(resolved.keys()), {"file-1"})
 
 
 if __name__ == "__main__":

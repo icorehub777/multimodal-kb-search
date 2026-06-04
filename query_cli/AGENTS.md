@@ -1,49 +1,42 @@
 # AGENTS.md
 
-本文件記錄開發 `query_cli/` 子專案時必須遵守的工程規範。共通規則仍以 repo 根目錄 `AGENTS.md` 為準。
+本文件記錄 `query_cli/` 子專案（`kbsearch` CLI）的**跨指令共通**工程規範。共通規則仍以 repo 根目錄 `AGENTS.md` 為準；子指令的安裝、設定、參數、terminal 輸出與產物結構見 [`README.md`](README.md)。
 
 ## 子專案邊界
 
-- `query_cli/` 是給終端人類員工與 Agent 使用的查詢 CLI，負責使用者查詢流程與查詢結果檔案處理流程。
+- `query_cli/` 提供 `kbsearch` 指令給終端人類員工與 Agent 使用；目前含 `query` 等子指令，後續可擴充，但本文件規範的是**所有子指令共用**的邊界與分層。
 - 阿里雲 embedding model 存取與 Qdrant vector store 操作必須透過 `secure_backend` FastAPI 服務。
 - 不在 `query_cli/` 中實作後端 indexing、Qdrant 寫入、DashScope SDK 呼叫或高權限 Google Workspace indexing credential 流程。
 
 ## 分層與依賴方向
 
-- CLI layer 負責解析命令列參數、載入 query CLI 設定、組裝正式依賴與處理 exit code。
-- 查詢流程核心應使用 protocol 或注入物件接收 Google Drive、`secure_backend` client、檔案處理與結果輸出能力。
-- Google Drive OAuth、全文搜尋、檔案可存取性檢查與下載應包在 query CLI 專用 client / adapter 中。
-- Google Drive 搜尋應接收 Agent 產生的 Google Drive API `q` query language 並原樣送出；不得在 CLI 中實作 query builder、語法改寫或 fallback 查詢策略。
-- `secure_backend` 呼叫應包在 client 中，核心流程不得直接依賴 HTTP library 的 response 物件。
-- 傳送圖片查詢至 `secure_backend` 時，HTTP request 必須包含圖片內容本身，例如 base64 payload；不得傳送 CLI 本機路徑並要求 backend 讀取。
+- CLI layer 負責解析命令列、載入設定、組裝依賴、處理 exit code 與 terminal 輸出；library layer 不得呼叫 `sys.exit()`。
+- 各子指令的核心流程應以 protocol 或注入物件接收外部能力（Google Drive、`secure_backend`、檔案處理、結果輸出等），核心邏輯不得依賴 argparse、terminal 格式或 Agent 文字格式。
+- 外部服務呼叫應包在 client / adapter 中；核心流程不得直接依賴 HTTP library 的 response 物件。
+- Google Drive OAuth、Drive API 操作應集中在 query CLI 專用 client；使用者 Drive 認證只能使用 OAuth 2.0 授權碼流程。
+- `secure_backend` base URL、OAuth 路徑、log 與各指令輸出位置等設定應集中在設定層讀取；預設為目前工作目錄的 `config/.env`。新增或變更設定時需同步更新 config model、README 與測試。
 
-## Config 與認證
+## 檔案與路徑
 
-- 開發 `query_cli/` 時使用 `query_cli/.venv` 作為本子專案的隔離 Python 環境；文件範例與測試指令應以此環境為準。
-- 使用者 Google Drive 認證只能使用 OAuth 2.0 授權碼流程。
-- 不使用 service account impersonation、Domain-Wide Delegation、Workload Identity Federation 或 importer 的 Application Default Credentials 代表使用者查詢。
-- OAuth token cache 若需要落地，必須放在使用者個人環境或明確設定的位置，不得寫入 repo 根目錄。
-- `secure_backend` base URL、OAuth client 設定與輸出位置等 query CLI 設定應集中在設定層讀取。
-- 預設設定檔位置為目前工作目錄的 `config/.env`；新增設定時需同步更新 config model、README 與測試。
-- `LIBREOFFICE_COMMAND` 必須由設定層提供完整絕對路徑，不得依賴 `PATH` 中的 `soffice`。
-- `KBSEARCH_CJK_FONT_PATH` 必須由設定層提供完整絕對路徑；TXT / MD 轉 PDF 只可使用此單一字型設定，不得掃描候選字型或讀取環境 fallback。
+- 使用 `pathlib.Path`；設定中的相對路徑相對於 CLI 執行時的目前工作目錄解析。
+- 由外部輸入（指令參數、檔名、Google file ID 等）組合本機路徑時，必須避免路徑穿越與非法檔名。
+- 各子指令的產物目錄、命名規則與允許寫入範圍，依 README 與 `agent_runtime/` 約定；共通要求是產物不得寫出約定目錄之外。
 
-## 檔案與路徑處理
+## CLI 輸出
 
-- 使用 `pathlib.Path` 處理本機路徑。
-- `KBSEARCH_QUERY_RESULTS_ROOT` 與 `KBSEARCH_QUERY_LOGS_ROOT` 若為相對路徑，必須相對於 CLI 執行時的目前工作目錄解析。
-- 查詢下載或產生的檔案必須限制在 `agent_runtime/` 約定的查詢結果目錄內。
-- 對查詢名稱、檔案名稱、Google file ID 或外部輸入組合路徑時，必須避免路徑穿越與非法檔名問題。
-- 下載交集檔案的資料夾名稱必須含 Google file ID 或等價唯一識別，避免正規化後檔名碰撞。
-- 產生結果清單、下載原始檔與頁面 PNG 時，應維持穩定且可測試的檔案命名規則。
-- 文件轉頁支援規則需與 README 和測試一致；TXT / MD 轉 PDF 若含 CJK 文字，需使用設定提供的 `KBSEARCH_CJK_FONT_PATH`。
+- **stderr**：錯誤訊息與長時間操作的即時進度；訊息須說明哪個設定、路徑或服務出問題，供 Agent 與人類判斷原因。
+- `query` 子指令的進度 `phase` 須與 log 一致（`search`、`access_check`、`download`、`complete`）。單檔 `phase=download` 涵蓋 Drive 下載與分頁渲染；與 union 層 `download` 以欄位（如 `file_id`、`index`）區分。
+- **stdout**：成功時輸出該子指令的**可解析結果**（格式由各指令文件定義）；失敗時 exit code 為 `1`。
+- 可預期失敗須轉成明確 domain error（`ConfigError`、`ExternalServiceError`、`DocumentRenderError`、`QueryCliError` 等），保留排錯資訊；不得讓第三方 library 原始 exception 直接外洩到 terminal。
+- 若 logging 已初始化，失敗訊息應附 log 檔絕對路徑；設定尚未載入成功、無法得知 log 根目錄時，僅 stderr 輸出，不得改用其他預設 log 路徑。
 
-## Error / Logging
+## Logging
 
-- library layer 不得呼叫 `sys.exit()`；exit code 只在 CLI 頂層處理。
-- Google Drive 與 `secure_backend` 錯誤應轉成明確 domain error，並保留足夠排錯資訊。
-- logging 應能追蹤查詢名稱、階段、檔案、狀態與錯誤摘要。
-- CLI log 應寫入設定指定的 log 目錄，並以每日切割方式保存。
+- log 僅在設定載入成功後初始化；寫入 `KBSEARCH_QUERY_LOGS_ROOT`，並以每日切割保留。
+- library 與 CLI 共用同一 logger；各子指令在 library 內分階段寫 log，不另建 ad hoc logger。
+- log 應覆蓋**該次指令**自開始到結束的生命週期（含前置檢查、主要階段、完成或失敗），各階段須有足以追蹤進度與結果的計數或摘要。
+- 步驟被跳過、權限或存取不足、外部服務或檔案處理失敗時，log 須說明原因與定位問題所需的識別資訊，不得 silent。
+- 失敗路徑須保留 exception 與 traceback；摘要可含設定路徑、服務 URL 等排錯資訊，但不得輸出 token、credential 或個人敏感資料。
 
 ## 測試
 
@@ -53,4 +46,4 @@
 
 ## 文件維護
 
-- 修改 CLI 參數、設定方式、OAuth 流程、`secure_backend` client contract、輸出目錄結構或檔案命名規則時，必須同步更新相關 README、設計文件與測試。
+- 新增或修改子指令、CLI 參數、設定、OAuth 流程、client contract、輸出目錄或 terminal 契約時，須同步更新 README、設計文件與測試；**子指令專屬細節不寫入本 AGENTS.md**。

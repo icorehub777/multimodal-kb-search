@@ -1,6 +1,6 @@
-import unittest
+﻿import unittest
 
-from kbsearch_importer.google_auth import GoogleDriveServiceProvider
+from app.google_auth import GoogleDriveServiceProvider
 
 
 class GoogleDriveServiceProviderTests(unittest.TestCase):

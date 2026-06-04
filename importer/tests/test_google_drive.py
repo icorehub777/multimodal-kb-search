@@ -1,10 +1,10 @@
-import unittest
+﻿import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from kbsearch_importer.config import GoogleDriveSource
-from kbsearch_importer.document_processing import UnsupportedDocumentTypeError
-from kbsearch_importer.google_drive import GoogleDriveDownloader, GoogleDriveScanner
+from app.config import GoogleDriveSource
+from app.document_processing import UnsupportedDocumentTypeError
+from app.google_drive import GoogleDriveDownloader, GoogleDriveScanner
 
 
 class FakeExecute:

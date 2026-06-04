@@ -43,6 +43,27 @@ class VectorFileSearchResult:
 
 
 @dataclass(frozen=True)
+class DownloadedFileResult:
+    google_file_id: str
+    name: str
+    directory: Path
+    source_path: Path
+    page_paths: list[Path]
+
+
+@dataclass(frozen=True)
+class QueryRunResult:
+    query_name: str
+    bundle: QueryResultBundle
+    full_text_count: int
+    vector_count: int
+    vector_accessible_count: int
+    union_count: int
+    download_count: int
+    downloaded_files: list[DownloadedFileResult]
+
+
+@dataclass(frozen=True)
 class QueryResultBundle:
     path: Path
     query_plan_path: Path

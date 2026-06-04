@@ -1,7 +1,7 @@
-import unittest
+﻿import unittest
 
-from kbsearch_importer.models import QdrantDocument, WorkspaceDocument
-from kbsearch_importer.sync_plan import SyncAction, plan_sync
+from app.models import QdrantDocument, WorkspaceDocument
+from app.sync_plan import SyncAction, plan_sync
 
 
 def workspace_doc(file_id: str, version: str) -> WorkspaceDocument:

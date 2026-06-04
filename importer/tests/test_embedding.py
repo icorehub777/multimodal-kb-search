@@ -1,6 +1,6 @@
-import unittest
+﻿import unittest
 
-from kbsearch_importer.embedding import EmbeddingDimensionError, validate_embedding_vector
+from app.embedding import EmbeddingDimensionError, validate_embedding_vector
 
 
 class EmbeddingTests(unittest.TestCase):

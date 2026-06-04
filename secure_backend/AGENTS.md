@@ -16,7 +16,7 @@
 
 ## Config 與 Secret
 
-- 所有設定讀取集中在 `kbsearch_secure_backend.config`，其他模組不得直接讀取環境變數。
+- 所有設定讀取集中在 `app.config`，其他模組不得直接讀取環境變數。
 - 缺少必要設定時必須明確失敗。
 - 新增設定時同步更新設定範例、config model 與測試。
 - 阿里雲 API key、Qdrant API key、Qdrant URL 與 collection 等執行環境設定只應透過設定層提供給 service / adapter。
@@ -33,6 +33,7 @@
 ## Error / Logging
 
 - 不得吞掉外部服務錯誤。
+- 服務啟動時必須執行完整環境檢查（設定、DashScope embedding、Qdrant collection 存在與 vector size）；檢查失敗時記錄完整錯誤摘要後讓程序退出。
 - logging 應能追蹤 request、階段、外部服務、狀態與錯誤摘要。
 - 改變 Qdrant 狀態的操作應保留可追蹤 log。
 

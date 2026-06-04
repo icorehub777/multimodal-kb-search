@@ -1,7 +1,7 @@
-import unittest
+﻿import unittest
 from pathlib import Path
 
-from kbsearch_importer.document_processing import (
+from app.document_processing import (
     UnsupportedDocumentTypeError,
     classify_document_type,
     page_png_path,

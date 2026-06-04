@@ -1,0 +1,12 @@
+services:
+  secure-backend:
+    image: kbsearch-secure-backend
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./config/.env:/app/config/.env:ro
+      - ./logs:/app/logs
+    restart: unless-stopped

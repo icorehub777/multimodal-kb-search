@@ -1,4 +1,4 @@
-import unittest
+﻿import unittest
 import base64
 import os
 from unittest import mock
@@ -7,12 +7,12 @@ from pathlib import Path
 
 from PIL import Image
 
-from kbsearch_importer.dashscope_embedder import (
+from app.dashscope_embedder import (
     MAX_DASHSCOPE_IMAGE_BYTES,
     DashScopePageEmbedder,
     _image_data_uri,
 )
-from kbsearch_importer.errors import ExternalServiceError
+from app.errors import ExternalServiceError
 
 
 class FakeEmbeddingClient:
@@ -62,7 +62,7 @@ class DashScopePageEmbedderTests(unittest.TestCase):
                 "dashscope.MultiModalEmbedding.call",
                 return_value=FakeResponse(),
             ):
-                from kbsearch_importer.dashscope_embedder import DashScopeImageEmbeddingClient
+                from app.dashscope_embedder import DashScopeImageEmbeddingClient
 
                 client = DashScopeImageEmbeddingClient(api_key="key", model="model", dimension=3)
                 with self.assertRaises(ExternalServiceError):

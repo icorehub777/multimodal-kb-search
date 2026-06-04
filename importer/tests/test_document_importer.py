@@ -1,10 +1,10 @@
-import unittest
+﻿import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from kbsearch_importer.document_importer import PageImage, PipelineDocumentImporter
-from kbsearch_importer.errors import DocumentImportError
-from kbsearch_importer.models import WorkspaceDocument
+from app.document_importer import PageImage, PipelineDocumentImporter
+from app.errors import DocumentImportError
+from app.models import WorkspaceDocument
 
 
 class FakeDownloader:

@@ -10,16 +10,16 @@ from kbsearch_cli.config import ConfigError, find_query_cli_env_file, load_query
 class QueryCliConfigTests(unittest.TestCase):
     def test_load_query_cli_config_reads_required_values(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir) / "query_cli"
-            config_dir = root / "config"
+            internal_root = Path(temp_dir) / "agent_runtime" / "_internal"
+            config_dir = internal_root / "config"
             config_dir.mkdir(parents=True)
             env_file = config_dir / ".env"
             env_file.write_text(
                 "\n".join(
                     [
                         "KBSEARCH_SECURE_BACKEND_BASE_URL=http://127.0.0.1:8000",
-                        "GOOGLE_OAUTH_CLIENT_CONFIG=client.json",
-                        "GOOGLE_OAUTH_TOKEN_CACHE=C:/Users/Marco/.kbsearch/token.json",
+                        "GOOGLE_OAUTH_CLIENT_CONFIG=config/oauth_client.json",
+                        "GOOGLE_OAUTH_TOKEN_CACHE=config/token_cache.json",
                         "KBSEARCH_QUERY_RESULTS_ROOT=../query_results",
                         "KBSEARCH_QUERY_LOGS_ROOT=logs",
                         "LIBREOFFICE_COMMAND=C:/Program Files/LibreOffice/program/soffice.exe",
@@ -29,16 +29,22 @@ class QueryCliConfigTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            cwd = Path(temp_dir) / "agent_runtime" / "query_cli"
-            cwd.mkdir(parents=True)
-            with patch.dict(os.environ, {}, clear=True), patch("pathlib.Path.cwd", return_value=cwd):
+            with patch.dict(os.environ, {}, clear=True), patch(
+                "pathlib.Path.cwd", return_value=internal_root
+            ):
                 config = load_query_cli_config(env_file)
 
         self.assertEqual(config.secure_backend_base_url, "http://127.0.0.1:8000")
-        self.assertEqual(config.google_oauth_client_config, root / "client.json")
-        self.assertEqual(config.google_oauth_token_cache, Path("C:/Users/Marco/.kbsearch/token.json"))
-        self.assertEqual(config.query_results_root, cwd / "../query_results")
-        self.assertEqual(config.query_logs_root, cwd / "logs")
+        self.assertEqual(
+            config.google_oauth_client_config,
+            internal_root / "config" / "oauth_client.json",
+        )
+        self.assertEqual(
+            config.google_oauth_token_cache,
+            internal_root / "config" / "token_cache.json",
+        )
+        self.assertEqual(config.query_results_root, internal_root / "../query_results")
+        self.assertEqual(config.query_logs_root, internal_root / "logs")
         self.assertEqual(config.libreoffice_command, "C:/Program Files/LibreOffice/program/soffice.exe")
         self.assertEqual(config.cjk_font_path, Path("C:/Windows/Fonts/msjh.ttc"))
 
@@ -68,7 +74,7 @@ class QueryCliConfigTests(unittest.TestCase):
 
     def test_find_query_cli_env_file_uses_current_working_directory_config(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            cwd = Path(temp_dir) / "agent_runtime" / "query_cli"
+            cwd = Path(temp_dir) / "agent_runtime" / "_internal"
             env_file = cwd / "config" / ".env"
             env_file.parent.mkdir(parents=True)
             env_file.write_text("", encoding="utf-8")

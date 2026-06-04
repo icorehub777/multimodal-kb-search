@@ -1,9 +1,9 @@
 import tempfile
-import threading
 import unittest
 from pathlib import Path
 
 from kbsearch_cli.models import FullTextSearchResult, PageSearchResult, VectorFileSearchResult
+from kbsearch_cli.errors import QueryCliError
 from kbsearch_cli.orchestrator import QueryOrchestrator
 from kbsearch_cli.output import QueryResultWriter
 from kbsearch_cli.google_drive import safe_download_name
@@ -12,7 +12,7 @@ from kbsearch_cli.google_drive import safe_download_name
 class FakeGoogleDriveClient:
     def __init__(self):
         self.downloads = []
-        self.access_checks = []
+        self.metadata_resolves = []
         self.drive_queries = []
 
     def search(self, drive_query, limit):
@@ -32,9 +32,25 @@ class FakeGoogleDriveClient:
             ),
         ]
 
-    def can_access(self, file_id):
-        self.access_checks.append(file_id)
-        return file_id != "file-3"
+    def resolve_accessible_metadata(self, file_ids):
+        self.metadata_resolves.append(list(file_ids))
+        return {
+            file_id: self.get_file_metadata(file_id)
+            for file_id in file_ids
+            if file_id != "file-3"
+        }
+
+    def get_file_metadata(self, file_id):
+        names = {
+            "file-3": "Gamma.pdf",
+            "file-9": "Z.pdf",
+        }
+        return FullTextSearchResult(
+            google_file_id=file_id,
+            name=names.get(file_id, f"{file_id}.pdf"),
+            mime_type="application/pdf",
+            web_url=f"https://drive/{file_id}",
+        )
 
     def download(self, file_id, name, mime_type, output_dir):
         self.downloads.append((file_id, output_dir.name))
@@ -90,7 +106,7 @@ class FakePageRenderer:
 
 
 class QueryOrchestratorTests(unittest.TestCase):
-    def test_run_downloads_and_renders_only_intersection_files(self):
+    def test_run_downloads_and_renders_union_of_full_text_and_vector_files(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             google_drive = FakeGoogleDriveClient()
             backend = FakeBackendClient()
@@ -102,25 +118,32 @@ class QueryOrchestratorTests(unittest.TestCase):
                 page_renderer=renderer,
             )
 
-            image_paths = [Path("C:/query images/sample.png")]
-            bundle = orchestrator.run(
+            image_path = Path(temp_dir) / "sample.png"
+            image_path.write_bytes(b"png")
+            result = orchestrator.run(
                 query_name="客戶查詢",
                 vector_query="semantic alpha",
                 drive_query="fullText contains 'alpha' and trashed = false",
                 limit=10,
                 min_score=0.5,
-                image_paths=image_paths,
+                image_paths=[image_path],
             )
+            bundle = result.bundle
 
             file_dir = bundle.path / "Alpha.pdf-file-1"
+            beta_dir = bundle.path / "Beta.pdf-file-2"
             self.assertTrue((file_dir / "Alpha.pdf").exists())
             self.assertTrue((file_dir / "0001.png").exists())
-            self.assertFalse((bundle.path / "Beta.pdf").exists())
-            self.assertEqual(google_drive.downloads, [("file-1", "Alpha.pdf-file-1")])
+            self.assertTrue((beta_dir / "Beta.pdf").exists())
+            self.assertFalse((bundle.path / "Gamma.pdf-file-3").exists())
+            self.assertEqual(
+                google_drive.downloads,
+                [("file-1", "Alpha.pdf-file-1"), ("file-2", "Beta.pdf-file-2")],
+            )
             self.assertEqual(google_drive.drive_queries, ["fullText contains 'alpha' and trashed = false"])
-            self.assertEqual(backend.calls, [("semantic alpha", image_paths, 10, 0.5)])
-            self.assertEqual(bundle.query_plan_path.read_text(encoding="utf-8").count("C:/query images/sample.png"), 1)
-            self.assertEqual(renderer.rendered, ["Alpha.pdf"])
+            self.assertEqual(backend.calls, [("semantic alpha", [image_path], 10, 0.5)])
+            self.assertEqual(bundle.query_plan_path.read_text(encoding="utf-8").count(image_path.as_posix()), 1)
+            self.assertEqual(renderer.rendered, ["Alpha.pdf", "Beta.pdf"])
 
     def test_run_uses_file_id_suffix_when_normalized_file_names_collide(self):
         class CollidingGoogleDriveClient(FakeGoogleDriveClient):
@@ -146,45 +169,20 @@ class QueryOrchestratorTests(unittest.TestCase):
                 page_renderer=FakePageRenderer(),
             )
 
-            bundle = orchestrator.run(
+            result = orchestrator.run(
                 query_name="碰撞",
                 vector_query="alpha",
                 drive_query="fullText contains 'alpha' and trashed = false",
                 limit=10,
                 min_score=0.5,
             )
+            bundle = result.bundle
 
             self.assertTrue((bundle.path / "A_.pdf-file-1").exists())
             self.assertTrue((bundle.path / "A_.pdf-file-2").exists())
             self.assertEqual([download[1] for download in google_drive.downloads], ["A_.pdf-file-1", "A_.pdf-file-2"])
 
-    def test_run_checks_vector_access_in_parallel(self):
-        class ConcurrentGoogleDriveClient(FakeGoogleDriveClient):
-            def __init__(self):
-                super().__init__()
-                self._barrier = threading.Barrier(3, timeout=2)
-                self._lock = threading.Lock()
-                self._active = 0
-                self.max_active = 0
-
-            def search(self, drive_query, limit):
-                return [
-                    FullTextSearchResult("file-1", "A.pdf", "application/pdf", "https://drive/file-1"),
-                    FullTextSearchResult("file-2", "B.pdf", "application/pdf", "https://drive/file-2"),
-                    FullTextSearchResult("file-3", "C.pdf", "application/pdf", "https://drive/file-3"),
-                ]
-
-            def can_access(self, file_id):
-                with self._lock:
-                    self._active += 1
-                    self.max_active = max(self.max_active, self._active)
-                try:
-                    self._barrier.wait()
-                    return True
-                finally:
-                    with self._lock:
-                        self._active -= 1
-
+    def test_run_resolves_vector_metadata_in_one_batch(self):
         class ThreeResultBackendClient:
             def search(self, query, image_paths, limit, min_score):
                 return [
@@ -194,7 +192,7 @@ class QueryOrchestratorTests(unittest.TestCase):
                 ]
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            google_drive = ConcurrentGoogleDriveClient()
+            google_drive = FakeGoogleDriveClient()
             orchestrator = QueryOrchestrator(
                 google_drive=google_drive,
                 backend=ThreeResultBackendClient(),
@@ -203,14 +201,92 @@ class QueryOrchestratorTests(unittest.TestCase):
             )
 
             orchestrator.run(
-                query_name="並行",
+                query_name="存取檢查",
                 vector_query="alpha",
                 drive_query="fullText contains 'alpha' and trashed = false",
                 limit=10,
                 min_score=0.5,
             )
 
-        self.assertGreater(google_drive.max_active, 1)
+        self.assertEqual(google_drive.metadata_resolves, [["file-1", "file-2", "file-3"]])
+
+    def test_run_still_downloads_full_text_when_all_vector_results_inaccessible(self):
+        class InaccessibleGoogleDriveClient(FakeGoogleDriveClient):
+            def resolve_accessible_metadata(self, file_ids):
+                self.metadata_resolves.append(list(file_ids))
+                return {}
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            google_drive = InaccessibleGoogleDriveClient()
+            orchestrator = QueryOrchestrator(
+                google_drive=google_drive,
+                backend=FakeBackendClient(),
+                result_writer=QueryResultWriter(Path(temp_dir), clock=lambda: "20260524-203000"),
+                page_renderer=FakePageRenderer(),
+            )
+
+            bundle = orchestrator.run(
+                query_name="無存取",
+                vector_query="alpha",
+                drive_query="fullText contains 'alpha' and trashed = false",
+                limit=10,
+                min_score=0.5,
+            ).bundle
+
+            self.assertTrue((bundle.path / "Alpha.pdf-file-1").exists())
+            self.assertTrue((bundle.path / "Beta.pdf-file-2").exists())
+            self.assertEqual(
+                google_drive.downloads,
+                [("file-1", "Alpha.pdf-file-1"), ("file-2", "Beta.pdf-file-2")],
+            )
+
+    def test_run_downloads_vector_only_files_not_in_full_text_results(self):
+        class AccessibleOnlyBackendClient:
+            def search(self, query, image_paths, limit, min_score):
+                return [
+                    VectorFileSearchResult("file-9", "Z.pdf", "", "", "1", "", 0.9, []),
+                ]
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            google_drive = FakeGoogleDriveClient()
+            orchestrator = QueryOrchestrator(
+                google_drive=google_drive,
+                backend=AccessibleOnlyBackendClient(),
+                result_writer=QueryResultWriter(Path(temp_dir), clock=lambda: "20260524-203000"),
+                page_renderer=FakePageRenderer(),
+            )
+
+            bundle = orchestrator.run(
+                query_name="向量聯集",
+                vector_query="alpha",
+                drive_query="fullText contains 'alpha' and trashed = false",
+                limit=10,
+                min_score=0.5,
+            ).bundle
+
+            self.assertTrue((bundle.path / "Alpha.pdf-file-1").exists())
+            self.assertTrue((bundle.path / "Beta.pdf-file-2").exists())
+            self.assertTrue((bundle.path / "Z.pdf-file-9").exists())
+            self.assertEqual(len(google_drive.downloads), 3)
+
+    def test_run_rejects_missing_image_paths(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            orchestrator = QueryOrchestrator(
+                google_drive=FakeGoogleDriveClient(),
+                backend=FakeBackendClient(),
+                result_writer=QueryResultWriter(Path(temp_dir), clock=lambda: "20260524-203000"),
+                page_renderer=FakePageRenderer(),
+            )
+
+            with self.assertRaisesRegex(QueryCliError, "Query image not found"):
+                orchestrator.run(
+                    query_name="缺圖",
+                    vector_query="alpha",
+                    drive_query="fullText contains 'alpha' and trashed = false",
+                    limit=10,
+                    min_score=0.5,
+                    image_paths=[Path("C:/missing/sample.png")],
+                )
 
 
 if __name__ == "__main__":

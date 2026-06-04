@@ -2,9 +2,9 @@ import unittest
 from io import StringIO
 import logging
 
-from kbsearch_importer.errors import DocumentImportError
-from kbsearch_importer.models import QdrantDocument, WorkspaceDocument
-from kbsearch_importer.orchestrator import SyncOrchestrator
+from app.errors import DocumentImportError
+from app.models import QdrantDocument, WorkspaceDocument
+from app.orchestrator import SyncOrchestrator
 
 
 def workspace_doc(file_id: str, version: str) -> WorkspaceDocument:
@@ -81,7 +81,7 @@ class OrchestratorTests(unittest.TestCase):
 
     def test_run_logs_batch_and_document_status(self) -> None:
         stream = StringIO()
-        logger = logging.getLogger("kbsearch_importer.tests.orchestrator")
+        logger = logging.getLogger("app.tests.orchestrator")
         logger.handlers = [logging.StreamHandler(stream)]
         logger.setLevel(logging.INFO)
         logger.propagate = False
@@ -97,11 +97,12 @@ class OrchestratorTests(unittest.TestCase):
 
         logs = stream.getvalue()
         self.assertIn("sync batch started", logs)
-        self.assertIn("file_id=added action=import status=success", logs)
+        self.assertIn("workspace_documents=", logs)
+        self.assertIn("file_id=added name=added.pdf action=import status=success", logs)
         self.assertIn("sync batch finished", logs)
 
     def test_run_does_not_mark_failed_import_as_success(self) -> None:
-        logger = logging.getLogger("kbsearch_importer.tests.orchestrator.silent")
+        logger = logging.getLogger("app.tests.orchestrator.silent")
         logger.handlers = [logging.NullHandler()]
         logger.propagate = False
         orchestrator = SyncOrchestrator(

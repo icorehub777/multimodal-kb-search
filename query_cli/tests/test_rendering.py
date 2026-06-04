@@ -1,6 +1,7 @@
 import tempfile
 import unittest
 from pathlib import Path
+from subprocess import CompletedProcess
 from unittest.mock import patch
 
 import kbsearch_cli.rendering as rendering
@@ -64,6 +65,52 @@ class RenderingTests(unittest.TestCase):
                 )
 
         self.assertEqual(seen_paths, [str(configured_font)])
+
+    def test_convert_office_to_pdf_uses_short_temp_path_when_source_path_is_too_long(self):
+        renderer = DocumentPageRenderer(libreoffice_command="soffice")
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            long_name = "內部_" + ("Bell Taih US CA Unshipped Order Status - 20260522" * 3) + ".pptx"
+            source_dir = root / "bundle" / long_name.replace(".pptx", "-file-id")
+            source_dir.mkdir(parents=True)
+            source_path = source_dir / long_name
+            source_path.write_bytes(b"pptx")
+
+            def fake_run(command, **_kwargs):
+                convert_source = Path(command[-1])
+                convert_outdir = Path(command[-2])
+                self.assertEqual(convert_source.name, "source.pptx")
+                self.assertTrue(str(convert_source).startswith(str(Path(tempfile.gettempdir()))))
+                (convert_outdir / "source.pdf").write_bytes(b"pdf")
+                return CompletedProcess(command, 0, "", "")
+
+            with patch("kbsearch_cli.rendering.subprocess.run", side_effect=fake_run):
+                output_path = renderer._convert_office_to_pdf(source_path, source_dir)
+
+            self.assertEqual(output_path, source_dir / f"{source_path.stem}.pdf")
+            self.assertTrue(output_path.exists())
+
+    def test_convert_office_to_pdf_does_not_leave_pdf_when_libreoffice_fails(self):
+        renderer = DocumentPageRenderer(libreoffice_command="soffice")
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            long_name = "內部_" + ("Bell Taih US CA Unshipped Order Status - 20260522" * 3) + ".pptx"
+            source_dir = root / "bundle" / long_name.replace(".pptx", "-file-id")
+            source_dir.mkdir(parents=True)
+            source_path = source_dir / long_name
+            source_path.write_bytes(b"pptx")
+            expected_output = source_dir / f"{source_path.stem}.pdf"
+
+            def fake_run(command, **_kwargs):
+                convert_outdir = Path(command[-2])
+                (convert_outdir / "source.pdf").write_bytes(b"partial-pdf")
+                return CompletedProcess(command, 1, "", "conversion failed")
+
+            with patch("kbsearch_cli.rendering.subprocess.run", side_effect=fake_run):
+                with self.assertRaises(DocumentRenderError):
+                    renderer._convert_office_to_pdf(source_path, source_dir)
+
+            self.assertFalse(expected_output.exists())
 
 
 def _available_cjk_font_path() -> Path | None:

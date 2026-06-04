@@ -1,11 +1,11 @@
-import logging
+﻿import logging
 import sys
 import tempfile
 import unittest
 from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 
-from kbsearch_secure_backend.logging_config import LOGGER_NAME, configure_backend_logging
+from app.logging_config import LOGGER_NAME, configure_backend_logging
 
 
 class LoggingConfigTests(unittest.TestCase):

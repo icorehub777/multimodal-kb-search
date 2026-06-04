@@ -15,19 +15,16 @@
 
 ## Config 與 Secret
 
-- 所有設定讀取集中在 `kbsearch_importer.config`，其他模組不得直接讀取環境變數。
+- 所有設定讀取集中在 `app.config`，其他模組不得直接讀取環境變數。
 - 缺少必要設定時必須明確失敗。
 - 新增設定時同步更新 `.env.example`、config model 與測試。
 - `LIBREOFFICE_COMMAND` 必須由設定層提供完整絕對路徑，不得依賴 `PATH` 中的 `soffice`。
 - `KBSEARCH_CJK_FONT_PATH` 必須由設定層提供完整絕對路徑；TXT / MD 轉 PDF 只可使用此單一字型設定，不得掃描候選字型或讀取環境 fallback。
-- `config/.env`、`config/google_drive_sources.yaml`、`work/` 與同步產物屬於 importer 執行環境內容，不得提交 Git。
+- `config/.env`、`config/gcp-adc.json`、`config/google_drive_sources.yaml`、`work/` 與同步產物屬於 importer 執行環境內容，不得提交 Git。
 
 ## Google Workspace 認證
 
-- importer 程式碼固定透過 `google.auth.default()` 取得 Application Default Credentials。
-- 開發與正式部署的差異只應體現在執行環境如何提供 ADC。
-- 不在程式碼中直接讀取 service account JSON key、OAuth client secret 或其他手動 credential 檔。
-- 不在 importer 中實作一般使用者 OAuth 授權碼流程；該流程屬於 `query_cli/`。
+- 背景同步採 Service Account JSON + Domain-Wide Delegation。
 
 ## 檔案與路徑處理
 
@@ -41,7 +38,8 @@
 - 不得吞掉外部服務錯誤。
 - 外部服務錯誤應轉成明確 domain error，並保留足夠排錯資訊。
 - library layer 不得呼叫 `sys.exit()`；exit code 只在 CLI 頂層處理。
-- logging 應能追蹤批次、文件、階段、狀態與錯誤摘要。
+- 服務啟動時必須執行完整環境檢查（設定、LibreOffice、CJK 字型、Google Drive、DashScope embedding、Qdrant collection 與 vector size）；若 Qdrant collection 不存在，依 `QDRANT_COLLECTION` 與 `QDRANT_VECTOR_SIZE` 自動建立（cosine）；檢查失敗時記錄完整錯誤摘要後讓程序退出。
+- logging 應能追蹤批次、文件、階段、狀態與錯誤摘要；log 固定寫入 `logs/importer.log` 並同時輸出 stdout。
 - 改變 Qdrant 狀態的操作應保留可追蹤 log。
 
 ## 測試

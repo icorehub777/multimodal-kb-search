@@ -3,6 +3,7 @@
 .env.*
 !.env.example
 importer/config/google_drive_sources.yaml
+importer/config/gcp-adc.json
 *.pem
 *.key
 *.p12
@@ -10,6 +11,13 @@ importer/config/google_drive_sources.yaml
 client_secret*.json
 credentials*.json
 token*.json
+query_cli/config/oauth_client.json
+query_cli/config/token.json
+query_cli/config/token_cache.json
+agent_runtime/_internal/config/oauth_client.json
+agent_runtime/_internal/config/token.json
+agent_runtime/_internal/config/token_cache.json
+agent_runtime/_internal/config/.env
 
 # Python
 __pycache__/
@@ -21,6 +29,9 @@ __pycache__/
 .venv/
 venv/
 env/
+
+# Personal / local notes
+docs/TODO.md
 
 # Local outputs
 .output/
@@ -41,8 +52,6 @@ query_cli/build/
 /tests/
 
 # Runtime workspace generated content
-agent_runtime/_internal/python/*
-!agent_runtime/_internal/python/.gitkeep
 agent_runtime/_internal/packages/*
 !agent_runtime/_internal/packages/.gitkeep
 agent_runtime/_internal/logs/*
