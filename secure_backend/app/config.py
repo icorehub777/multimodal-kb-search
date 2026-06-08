@@ -15,7 +15,7 @@ class BackendConfig:
     dashscope_embedding_model: str
     dashscope_vector_size: int
     qdrant_url: str
-    qdrant_api_key: str
+    qdrant_api_key: str | None
     qdrant_collection: str
     qdrant_vector_size: int
     log_file_path: Path
@@ -36,7 +36,7 @@ def load_backend_config(env_file: str | Path | None = DEFAULT_ENV_FILE) -> Backe
         dashscope_embedding_model=_required_str("DASHSCOPE_EMBEDDING_MODEL"),
         dashscope_vector_size=_required_int("DASHSCOPE_VECTOR_SIZE"),
         qdrant_url=_required_str("QDRANT_URL"),
-        qdrant_api_key=_required_str("QDRANT_API_KEY"),
+        qdrant_api_key=_optional_str("QDRANT_API_KEY"),
         qdrant_collection=_required_str("QDRANT_COLLECTION"),
         qdrant_vector_size=_required_int("QDRANT_VECTOR_SIZE"),
         log_file_path=DEFAULT_LOG_FILE,
@@ -47,6 +47,13 @@ def load_backend_config(env_file: str | Path | None = DEFAULT_ENV_FILE) -> Backe
             f"({config.dashscope_vector_size} != {config.qdrant_vector_size})."
         )
     return config
+
+
+def _optional_str(name: str) -> str | None:
+    value = os.getenv(name)
+    if value is None or value.strip() == "":
+        return None
+    return value.strip()
 
 
 def _required_str(name: str) -> str:

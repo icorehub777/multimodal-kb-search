@@ -51,12 +51,9 @@ def _probe_dashscope(config: BackendConfig) -> int:
 
 
 def _probe_qdrant(config: BackendConfig) -> tuple[int, int]:
-    try:
-        from qdrant_client import QdrantClient
-    except ImportError as exc:
-        raise RuntimeError("qdrant-client is required for vector search operations.") from exc
+    from app.qdrant_client_factory import build_qdrant_client
 
-    client = QdrantClient(url=config.qdrant_url, api_key=config.qdrant_api_key)
+    client = build_qdrant_client(config.qdrant_url, config.qdrant_api_key)
     collection = config.qdrant_collection
     host = _qdrant_host(config.qdrant_url)
 

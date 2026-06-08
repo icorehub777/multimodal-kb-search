@@ -2,16 +2,12 @@
 
 from app.config import BackendConfig
 from app.embedding import DashScopeQueryEmbeddingClient
+from app.qdrant_client_factory import build_qdrant_client
 from app.qdrant_search import QdrantSearchAdapter
 from app.service import VectorSearchService
 
 
 def create_vector_search_service(config: BackendConfig) -> VectorSearchService:
-    try:
-        from qdrant_client import QdrantClient
-    except ImportError as exc:
-        raise RuntimeError("qdrant-client is required for vector search operations.") from exc
-
     return VectorSearchService(
         embedder=DashScopeQueryEmbeddingClient(
             api_key=config.dashscope_api_key,
@@ -19,7 +15,7 @@ def create_vector_search_service(config: BackendConfig) -> VectorSearchService:
             dimension=config.dashscope_vector_size,
         ),
         searcher=QdrantSearchAdapter(
-            client=QdrantClient(url=config.qdrant_url, api_key=config.qdrant_api_key),
+            client=build_qdrant_client(config.qdrant_url, config.qdrant_api_key),
             collection=config.qdrant_collection,
         ),
     )

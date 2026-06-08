@@ -17,8 +17,8 @@ class BackendConfigTests(unittest.TestCase):
                         "DASHSCOPE_API_KEY=secret",
                         "DASHSCOPE_EMBEDDING_MODEL=qwen-vl",
                         "DASHSCOPE_VECTOR_SIZE=4",
-                        "QDRANT_URL=https://qdrant.example.com",
-                        "QDRANT_API_KEY=qdrant-secret",
+                        "QDRANT_URL=http://127.0.0.1:6333",
+                        "QDRANT_API_KEY=",
                         "QDRANT_COLLECTION=kbsearch",
                         "QDRANT_VECTOR_SIZE=4",
                     ]
@@ -43,8 +43,8 @@ class BackendConfigTests(unittest.TestCase):
                         "DASHSCOPE_API_KEY=secret",
                         "DASHSCOPE_EMBEDDING_MODEL=qwen-vl",
                         "DASHSCOPE_VECTOR_SIZE=4",
-                        "QDRANT_URL=https://qdrant.example.com",
-                        "QDRANT_API_KEY=qdrant-secret",
+                        "QDRANT_URL=http://127.0.0.1:6333",
+                        "QDRANT_API_KEY=",
                         "QDRANT_COLLECTION=kbsearch",
                         "QDRANT_VECTOR_SIZE=4",
                     ]
@@ -57,6 +57,29 @@ class BackendConfigTests(unittest.TestCase):
 
         self.assertEqual(config.log_file_path, APP_ROOT / "logs" / "secure_backend.log")
 
+    def test_load_backend_config_allows_empty_qdrant_api_key(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            env_file = Path(temp_dir) / ".env"
+            env_file.write_text(
+                "\n".join(
+                    [
+                        "DASHSCOPE_API_KEY=secret",
+                        "DASHSCOPE_EMBEDDING_MODEL=qwen-vl",
+                        "DASHSCOPE_VECTOR_SIZE=4",
+                        "QDRANT_URL=http://127.0.0.1:6333",
+                        "QDRANT_API_KEY=",
+                        "QDRANT_COLLECTION=kbsearch",
+                        "QDRANT_VECTOR_SIZE=4",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            with patch.dict(os.environ, {}, clear=True):
+                config = load_backend_config(env_file)
+
+        self.assertIsNone(config.qdrant_api_key)
+
     def test_load_backend_config_rejects_missing_required_value(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             env_file = Path(temp_dir) / ".env"
@@ -65,8 +88,8 @@ class BackendConfigTests(unittest.TestCase):
                     [
                         "DASHSCOPE_EMBEDDING_MODEL=qwen-vl",
                         "DASHSCOPE_VECTOR_SIZE=4",
-                        "QDRANT_URL=https://qdrant.example.com",
-                        "QDRANT_API_KEY=qdrant-secret",
+                        "QDRANT_URL=http://127.0.0.1:6333",
+                        "QDRANT_API_KEY=",
                         "QDRANT_COLLECTION=kbsearch",
                         "QDRANT_VECTOR_SIZE=4",
                     ]
@@ -87,8 +110,8 @@ class BackendConfigTests(unittest.TestCase):
                         "DASHSCOPE_API_KEY=secret",
                         "DASHSCOPE_EMBEDDING_MODEL=qwen-vl",
                         "DASHSCOPE_VECTOR_SIZE=4",
-                        "QDRANT_URL=https://qdrant.example.com",
-                        "QDRANT_API_KEY=qdrant-secret",
+                        "QDRANT_URL=http://127.0.0.1:6333",
+                        "QDRANT_API_KEY=",
                         "QDRANT_COLLECTION=kbsearch",
                         "QDRANT_VECTOR_SIZE=3",
                     ]

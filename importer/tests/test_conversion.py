@@ -14,25 +14,45 @@ class ConversionTests(unittest.TestCase):
         converter = DocumentConverter()
         source = Path("Spec.pdf")
 
-        self.assertEqual(converter.convert_to_pdf(source, "application/pdf", Path("out")), source)
+        with TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir)
+            self.assertEqual(
+                converter.convert_to_pdf(source, "application/pdf", output_dir),
+                source,
+            )
+            self.assertFalse(any(output_dir.iterdir()))
 
     def test_downloaded_pdf_source_returns_source_path_even_when_original_mime_is_google_native(self):
         converter = DocumentConverter()
         source = Path("GoogleDoc.pdf")
 
-        self.assertEqual(
-            converter.convert_to_pdf(source, "application/vnd.google-apps.document", Path("out")),
-            source,
-        )
+        with TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir)
+            self.assertEqual(
+                converter.convert_to_pdf(
+                    source,
+                    "application/vnd.google-apps.document",
+                    output_dir,
+                ),
+                source,
+            )
+            self.assertFalse(any(output_dir.iterdir()))
 
     def test_google_native_document_mime_returns_exported_source_path(self):
         converter = DocumentConverter()
         source = Path("GoogleDocWithoutPdfSuffix")
 
-        self.assertEqual(
-            converter.convert_to_pdf(source, "application/vnd.google-apps.document", Path("out")),
-            source,
-        )
+        with TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir)
+            self.assertEqual(
+                converter.convert_to_pdf(
+                    source,
+                    "application/vnd.google-apps.document",
+                    output_dir,
+                ),
+                source,
+            )
+            self.assertFalse(any(output_dir.iterdir()))
 
     def test_office_conversion_failure_raises_domain_error(self):
         converter = DocumentConverter(libreoffice_command="missing-libreoffice")

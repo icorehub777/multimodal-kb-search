@@ -46,7 +46,7 @@ cd secure_backend
 Copy-Item config\.env.example config\.env
 ```
 
-`config/.env` 放本機開發設定與 secret，主要欄位為 DashScope 與 Qdrant。應用程式 log 固定寫入 `logs/secure_backend.log`（Docker 部署時由 `docker/logs/` 掛載取得）。
+`config/.env` 放本機開發設定與 secret，主要欄位為 DashScope 與 Qdrant(http://127.0.0.1:6333)。應用程式 log 固定寫入 `logs/secure_backend.log`（Docker 部署時由 `docker/logs/` 掛載取得）。
 
 啟動本機 API（在 `secure_backend/` 目錄下執行）。服務啟動時會自動檢查設定、DashScope embedding 與 Qdrant collection；檢查失敗時程序會退出，並在 log 中留下錯誤摘要：
 
@@ -103,11 +103,13 @@ secure_backend/
 | `config/.env` | 從專案資料夾中的 `config/` 中複製，包含各種 secret 設定 |
 | `logs/` | 服務 log 輸出目錄 |
 
-依照正式環境的狀況調整 `.env` 中的設定後，於此服務根目錄執行以下指令啟動 container：
+依照正式環境的狀況調整 `.env` 中的設定後( `QDRANT_URL` 要改成 `http://qdrant:6333` )，於此服務根目錄執行以下指令啟動 container：
 
 ```powershell
 docker compose up -d
 ```
+
+常駐容器名稱為 `kbsearch-secure-backend`（`docker ps` 可見）。
 
 查看 log 或停止服務：
 

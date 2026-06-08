@@ -24,8 +24,8 @@ _BASE_ENV = "\n".join(
         "DASHSCOPE_API_KEY=secret",
         "DASHSCOPE_EMBEDDING_MODEL=qwen3-vl-embedding",
         "DASHSCOPE_VECTOR_SIZE=2560",
-        "QDRANT_URL=https://qdrant.example.com",
-        "QDRANT_API_KEY=secret",
+        "QDRANT_URL=http://127.0.0.1:6333",
+        "QDRANT_API_KEY=",
         "QDRANT_COLLECTION=kbsearch",
         "QDRANT_VECTOR_SIZE=2560",
         "LIBREOFFICE_COMMAND=C:\\Program Files\\LibreOffice\\program\\soffice.exe",
@@ -80,6 +80,12 @@ class ConfigTests(unittest.TestCase):
 
             with self.assertRaisesRegex(ConfigError, "requires drive_id"):
                 load_google_drive_sources(source_config)
+
+    def test_load_importer_config_allows_empty_qdrant_api_key(self) -> None:
+        with self._config_context("QDRANT_API_KEY=") as (env_file, source_config):
+            config = load_importer_config(env_file)
+
+        self.assertIsNone(config.qdrant_api_key)
 
     def test_load_importer_config_rejects_vector_size_mismatch(self) -> None:
         with self._config_context("QDRANT_VECTOR_SIZE=128") as (env_file, source_config):

@@ -4,12 +4,15 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    environment:
-      GOOGLE_APPLICATION_CREDENTIALS: /app/config/gcp-adc.json
     volumes:
-      - ./config/.env:/app/config/.env:ro
-      - ./config/gcp-adc.json:/app/config/gcp-adc.json:ro
-      - ./config/google_drive_sources.yaml:/app/config/google_drive_sources.yaml:ro
+      - ./config:/app/config:ro
       - ./logs:/app/logs
       - ./work:/app/work
     restart: "no"
+    networks:
+      - kbsearch
+
+networks:
+  kbsearch:
+    name: kbsearch
+    external: true

@@ -29,17 +29,17 @@ importer/
 
 ### 正式部署目錄
 
-從 repo 複製 `docker/docker-compose.yml` 到服務根目錄，並建立與開發相同的 `config/`、`logs/`、`work/`：
+importer 從 repo 複製 `docker/docker-compose.yml` 到服務根目錄，並建立 `config/`、`logs/`、`work/`：
 
 ```text
-importer/                           # 服務根目錄
-  docker-compose.yml                # 單次同步 container（自 docker/ 複製）
+importer/
+  docker-compose.yml
   config/
-    .env                            # 設定與 secret
-    gcp-adc.json                    # Service Account JSON
-    google_drive_sources.yaml       # 掃描來源
-  logs/                             # 執行 log
-  work/                             # 同步暫存
+    .env
+    gcp-adc.json
+    google_drive_sources.yaml
+  logs/
+  work/
 ```
 
 ### `.env`
@@ -54,8 +54,8 @@ importer/                           # 服務根目錄
 | `DASHSCOPE_API_KEY` | DashScope API key |
 | `DASHSCOPE_EMBEDDING_MODEL` | Embedding 模型 |
 | `DASHSCOPE_VECTOR_SIZE` | 向量維度（須與 `QDRANT_VECTOR_SIZE` 相同） |
-| `QDRANT_URL` | Qdrant URL |
-| `QDRANT_API_KEY` | Qdrant API key |
+| `QDRANT_URL` | 本機測試時用 `http://127.0.0.1:6333`；docker 部署時用 `http://qdrant:6333` |
+| `QDRANT_API_KEY` | 選填；地端預設不啟用 API key，雲端託管時再填 |
 | `QDRANT_COLLECTION` | Collection 名稱 |
 | `QDRANT_VECTOR_SIZE` | Collection 向量維度 |
 | `LIBREOFFICE_COMMAND` | LibreOffice `soffice` 絕對路徑 |
@@ -107,7 +107,8 @@ Copy-Item config\google_drive_sources.example.yaml config\google_drive_sources.y
 - 確認 `.env` 中的字型存在，若不存在請設定其他本機存在的字型檔，如 `mingliu.ttc`（細明體) 或 `kaiu.ttf`（標楷體）。
 - 確認已跟 GCP 管理員拿到 Service Account JSON 認證檔，放到 `config/` 後，確定與 `.env` 中設定一致。
 - 確定 `GOOGLE_DWD_SUBJECT_EMAIL` 中設定的 GMAIL 帳號有所有要同步的 Google Drive 來源的存取權限。
-- 確定 `.env` 中 `dashscope` 與 `qdrant` 的外部服務連線資訊設定正確。
+- 須先啟動 Qdrant，並確認 `.env` 中的 `QDRANT_URL` 設定為 `http://127.0.0.1:6333`。
+- 確認 `.env` 中的 `dashscope` 設定正確。
 
 編輯 `config/.env`、`config/google_drive_sources.yaml`，並放入 `config/gcp-adc.json`。
 
@@ -163,7 +164,8 @@ importer/
   work/
 ```
 
-參考 `開發測試環境準備` 中的設定檔複製/調整與其他建置環境準備的內容準備正式環境
+參考 `開發測試環境準備` 中的設定檔複製/調整與其他建置環境準備的內容準備正式環境。
+其中 `QDRANT_URL` 的設定要改成 `http://qdrant:6333`
 
 
 ### 手動測試

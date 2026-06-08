@@ -9,6 +9,7 @@ KBSearch 專案主要目的：
 ```text
 KBSearch/
   docs/
+  qdrant/
   importer/
   query_cli/
   secure_backend/
@@ -16,6 +17,7 @@ KBSearch/
 ```
 
 - `docs/`：設計文件。
+- `qdrant/`：地端 Qdrant 向量庫。
 - `importer/`：Goolge Workspace 文件與向量庫同步子專案。
 - `query_cli/`：協助 Agent 進行 google workspace 全文檢索與向量庫查詢的指令工具子專案，並透過 `secure_backend` 存取 embedding model 與操作 vector store。
 - `secure_backend/`：FastAPI 子專案，封裝阿里雲 embedding model 存取與 Qdrant vector store 操作(因為此兩服務的 api key 不得讓一般使用者看到，所以必須切割出這個 api 服務專案)。

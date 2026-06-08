@@ -1,0 +1,21 @@
+name: kbsearch-qdrant
+
+services:
+  qdrant:
+    image: qdrant/qdrant:v1.18.0
+    container_name: kbsearch-qdrant
+    # 僅綁本機 loopback，供 conda / uvicorn 整合測試；不對區網開放。container 仍用 http://qdrant:6333。
+    ports:
+      - "127.0.0.1:6333:6333"
+    volumes:
+      - ./qdrant_storage:/qdrant/storage
+    restart: unless-stopped
+    networks:
+      kbsearch:
+        aliases:
+          - qdrant
+
+networks:
+  kbsearch:
+    name: kbsearch
+    driver: bridge
