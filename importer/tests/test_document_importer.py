@@ -3,7 +3,8 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from app.document_importer import PageImage, PipelineDocumentImporter
-from app.errors import DocumentImportError
+from app.document_processing import UnsupportedDocumentTypeError
+from app.errors import DocumentConversionError, DocumentImportError, ExternalServiceError
 from app.models import WorkspaceDocument
 
 
@@ -21,6 +22,16 @@ class FakeConverter:
         output_path = output_dir / "source.pdf"
         output_path.write_text("pdf", encoding="utf-8")
         return output_path
+
+
+class DomainErrorConverter:
+    def convert_to_pdf(self, source_path, mime_type, output_dir):
+        raise DocumentConversionError("office conversion failed")
+
+
+class BuggyConverter:
+    def convert_to_pdf(self, source_path, mime_type, output_dir):
+        raise TypeError("converter bug")
 
 
 class FakeRenderer:
@@ -45,7 +56,7 @@ class FakeEmbedder:
 
     def embed_page_image(self, image_path):
         if image_path.name == self.fail_on_page_name:
-            raise RuntimeError("embedding failed")
+            raise ExternalServiceError("embedding failed")
         return [float(image_path.stem), 0.0]
 
 
@@ -111,9 +122,11 @@ class DocumentImporterTests(unittest.TestCase):
                 work_dir=Path(temp_dir),
             )
 
-            with self.assertRaises(DocumentImportError):
+            with self.assertRaises(DocumentImportError) as raised:
                 importer.import_document(document)
 
+        self.assertEqual(raised.exception.stage, "embed")
+        self.assertEqual(raised.exception.page_number, 2)
         self.assertEqual(qdrant_index.pages, [])
 
     def test_import_document_removes_work_dir_after_success_when_configured(self):
@@ -197,6 +210,69 @@ class DocumentImporterTests(unittest.TestCase):
 
         self.assertEqual(imported_pages, 1)
         self.assertEqual(qdrant_index.pages[0][1].page_number, 1)
+
+    def _sample_document(self) -> WorkspaceDocument:
+        return WorkspaceDocument(
+            file_id="file-1",
+            name="Spec.pdf",
+            location="/Spec.pdf",
+            web_url="https://drive/file-1",
+            version="7",
+            modified_time="2026-05-24T00:00:00Z",
+            mime_type="application/pdf",
+        )
+
+    def test_import_document_wraps_domain_conversion_failure(self):
+        with TemporaryDirectory() as temp_dir:
+            importer = PipelineDocumentImporter(
+                downloader=FakeDownloader(),
+                converter=DomainErrorConverter(),
+                renderer=FakeRenderer(),
+                embedder=FakeEmbedder(),
+                qdrant_index=FakeQdrantIndex(),
+                work_dir=Path(temp_dir),
+            )
+
+            with self.assertRaises(DocumentImportError) as raised:
+                importer.import_document(self._sample_document())
+
+        self.assertEqual(raised.exception.stage, "convert")
+        self.assertIsInstance(raised.exception.__cause__, DocumentConversionError)
+
+    def test_import_document_propagates_unexpected_converter_error(self):
+        with TemporaryDirectory() as temp_dir:
+            importer = PipelineDocumentImporter(
+                downloader=FakeDownloader(),
+                converter=BuggyConverter(),
+                renderer=FakeRenderer(),
+                embedder=FakeEmbedder(),
+                qdrant_index=FakeQdrantIndex(),
+                work_dir=Path(temp_dir),
+            )
+
+            with self.assertRaises(TypeError):
+                importer.import_document(self._sample_document())
+
+    def test_import_document_wraps_unsupported_document_type_error(self):
+        class UnsupportedDownloader(FakeDownloader):
+            def download(self, file_id, name, mime_type, output_dir):
+                raise UnsupportedDocumentTypeError("excel is unsupported")
+
+        with TemporaryDirectory() as temp_dir:
+            importer = PipelineDocumentImporter(
+                downloader=UnsupportedDownloader(),
+                converter=FakeConverter(),
+                renderer=FakeRenderer(),
+                embedder=FakeEmbedder(),
+                qdrant_index=FakeQdrantIndex(),
+                work_dir=Path(temp_dir),
+            )
+
+            with self.assertRaises(DocumentImportError) as raised:
+                importer.import_document(self._sample_document())
+
+        self.assertEqual(raised.exception.stage, "download")
+        self.assertIsInstance(raised.exception.__cause__, UnsupportedDocumentTypeError)
 
 
 if __name__ == "__main__":

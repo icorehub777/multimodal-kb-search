@@ -18,7 +18,7 @@ class MainTests(unittest.TestCase):
                 return type(
                     "Summary",
                     (),
-                    {"imported": 1, "deleted": 2, "reimported": 3, "skipped": 4},
+                    {"imported": 1, "deleted": 2, "reimported": 3, "skipped": 4, "failed": 0},
                 )()
 
         fake_config = type(
@@ -55,6 +55,37 @@ class MainTests(unittest.TestCase):
         cleanup_logs.assert_called_once()
         configure_logging.assert_called_once_with(log_file)
         create_orchestrator.assert_called_once_with(fake_config)
+
+    def test_main_returns_nonzero_when_sync_has_failed_imports(self):
+        class FakeOrchestrator:
+            def run(self):
+                return type(
+                    "Summary",
+                    (),
+                    {"imported": 1, "deleted": 0, "reimported": 0, "skipped": 0, "failed": 1},
+                )()
+
+        fake_config = type(
+            "Config",
+            (),
+            {
+                "qdrant_collection": "kbsearch",
+                "google_drive_sources": (object(),),
+                "log_retention_days": 14,
+            },
+        )()
+
+        with patch("main.load_importer_config", return_value=fake_config), patch(
+            "main.build_run_log_file_path",
+            return_value=SAMPLE_LOG_FILE,
+        ), patch("main.cleanup_old_log_files", return_value=0), patch(
+            "main.configure_importer_logging",
+            return_value=logging.getLogger("importer.tests.main.partial"),
+        ), patch("main._run_startup_probe"), patch(
+            "main.create_sync_orchestrator",
+            return_value=FakeOrchestrator(),
+        ):
+            self.assertEqual(main(), 1)
 
     def test_main_returns_nonzero_when_config_load_fails(self):
         with patch(

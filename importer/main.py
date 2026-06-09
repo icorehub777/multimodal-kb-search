@@ -52,13 +52,14 @@ def main() -> int:
         _run_startup_probe(config, logger)
         summary = create_sync_orchestrator(config).run()
         logger.info(
-            "importer finished imported=%s deleted=%s reimported=%s skipped=%s",
+            "importer finished imported=%s deleted=%s reimported=%s skipped=%s failed=%s",
             summary.imported,
             summary.deleted,
             summary.reimported,
             summary.skipped,
+            summary.failed,
         )
-        return 0
+        return 1 if summary.failed > 0 else 0
     except (ConfigError, ImporterError, RuntimeError, OSError) as exc:
         if logger is not None:
             logger.exception(
