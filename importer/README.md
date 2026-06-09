@@ -62,11 +62,12 @@ importer/
 | `KBSEARCH_CJK_FONT_PATH` | CJK 字型絕對路徑 |
 | `IMPORTER_KEEP_SUCCESS_WORK_FILES` | 檔案匯入成功後是否保留 `work/` 暫存 |
 | `IMPORTER_KEEP_FAILED_WORK_FILES` | 檔案匯入失敗後是否保留 `work/` 暫存 |
+| `IMPORTER_LOG_RETENTION_DAYS` | 執行 log 保留天數；每次啟動會刪除較舊的 `logs/importer-*.log`；設 `0` 表示不自動清理 |
 
 
 Google 存取的認證方式為 Service Account JSON + Domain-Wide Delegation（`signJwt`）。
 
-執行 log：`logs/importer.log`（每日輪替 14 天，同時輸出 stdout）。
+執行 log：每次執行寫入 `logs/importer-YYYYMMDD-HHMMSS-ffffff-pPID.log`，並同時輸出 stdout；依 `IMPORTER_LOG_RETENTION_DAYS` 清理舊 log（預設 14 天）。清理失敗時會記錄錯誤並中止匯入。
 
 ## 開發測試環境準備
 
@@ -176,7 +177,7 @@ cd C:\path\to\importer
 docker compose run --rm importer
 ```
 
-`docker compose run --rm` 會啟動 container、執行 `python main.py`、結束後移除 container。執行紀錄寫入 `logs/importer.log`。
+`docker compose run --rm` 會啟動 container、執行 `python main.py`、結束後移除 container。執行紀錄寫入 `logs/importer-YYYYMMDD-HHMMSS-ffffff-pPID.log`。
 
 ### 設定排程執行
 
@@ -192,4 +193,4 @@ docker compose run --rm importer
    - **新增引數**：`compose run --rm importer`
    - **開始於**：服務根目錄的完整路徑（例如 `C:\deploy\kbsearch\importer`）；須含 `docker-compose.yml` 與 `config/`
 5. 主機須已安裝 Docker 且 Docker 引擎在排程觸發時為運行中（Windows 上通常為 Docker Desktop 或同等服務）。
-6. 排程的「動作」與上方「手動測試」相同；啟用排程前請先完成手動測試。儲存後可在工作排程器對該工作按「執行」，並檢查 `logs/importer.log`。
+6. 排程的「動作」與上方「手動測試」相同；啟用排程前請先完成手動測試。儲存後可在工作排程器對該工作按「執行」，並檢查 `logs/` 下最新的 `importer-*.log`。

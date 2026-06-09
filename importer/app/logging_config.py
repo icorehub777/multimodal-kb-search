@@ -1,12 +1,46 @@
 from __future__ import annotations
 
 import logging
+import os
 import sys
-from logging.handlers import TimedRotatingFileHandler
+from datetime import datetime, timedelta
 from pathlib import Path
 
 LOGGER_NAME = "importer"
 STDOUT_HANDLER_NAME = f"{LOGGER_NAME}.stdout"
+RUN_LOG_FILE_PATTERN = "importer-*.log"
+
+
+def build_run_log_file_path(
+    log_dir: Path,
+    started_at: datetime | None = None,
+    process_id: int | None = None,
+) -> Path:
+    moment = started_at or datetime.now()
+    pid = process_id if process_id is not None else os.getpid()
+    return log_dir / f"{moment.strftime('importer-%Y%m%d-%H%M%S-%f')}-p{pid}.log"
+
+
+def cleanup_old_log_files(
+    log_dir: Path,
+    retention_days: int,
+    *,
+    now: datetime | None = None,
+) -> int:
+    if retention_days <= 0:
+        return 0
+
+    log_dir.mkdir(parents=True, exist_ok=True)
+    cutoff = (now or datetime.now()) - timedelta(days=retention_days)
+    removed = 0
+    for path in log_dir.glob(RUN_LOG_FILE_PATTERN):
+        if not path.is_file():
+            continue
+        modified_at = datetime.fromtimestamp(path.stat().st_mtime)
+        if modified_at < cutoff:
+            path.unlink()
+            removed += 1
+    return removed
 
 
 def configure_importer_logging(log_file_path: Path) -> logging.Logger:
@@ -24,17 +58,20 @@ def configure_importer_logging(log_file_path: Path) -> logging.Logger:
         logger.addHandler(stdout_handler)
 
     resolved_log_path = log_file_path.resolve()
-    for handler in logger.handlers:
-        if isinstance(handler, TimedRotatingFileHandler) and Path(handler.baseFilename) == resolved_log_path:
-            return logger
+    current_file_handler: logging.FileHandler | None = None
+    for existing_handler in list(logger.handlers):
+        if not isinstance(existing_handler, logging.FileHandler):
+            continue
+        if Path(existing_handler.baseFilename) == resolved_log_path:
+            current_file_handler = existing_handler
+            continue
+        existing_handler.close()
+        logger.removeHandler(existing_handler)
 
-    handler = TimedRotatingFileHandler(
-        resolved_log_path,
-        when="midnight",
-        interval=1,
-        backupCount=14,
-        encoding="utf-8",
-    )
+    if current_file_handler is not None:
+        return logger
+
+    handler = logging.FileHandler(resolved_log_path, encoding="utf-8")
     handler.setLevel(logging.INFO)
     handler.setFormatter(formatter)
     logger.addHandler(handler)

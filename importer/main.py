@@ -4,11 +4,17 @@ from __future__ import annotations
 
 import logging
 import sys
+from datetime import datetime
 
-from app.config import DEFAULT_LOG_FILE, ConfigError, ImporterConfig, load_importer_config
+from app.config import DEFAULT_LOG_DIR, ConfigError, ImporterConfig, load_importer_config
 from app.errors import ImporterError
 from app.factories import create_sync_orchestrator
-from app.logging_config import LOGGER_NAME, configure_importer_logging
+from app.logging_config import (
+    LOGGER_NAME,
+    build_run_log_file_path,
+    cleanup_old_log_files,
+    configure_importer_logging,
+)
 from app.startup_probe import probe_startup_environment
 
 
@@ -16,12 +22,32 @@ def main() -> int:
     logger: logging.Logger | None = None
     try:
         config = load_importer_config()
-        logger = configure_importer_logging(DEFAULT_LOG_FILE)
+        started_at = datetime.now()
+        log_file = build_run_log_file_path(DEFAULT_LOG_DIR, started_at)
+        logger = configure_importer_logging(log_file)
+        try:
+            removed_logs = cleanup_old_log_files(
+                DEFAULT_LOG_DIR,
+                config.log_retention_days,
+                now=started_at,
+            )
+        except OSError as exc:
+            logger.exception(
+                "log_cleanup_failed log_dir=%s retention_days=%s error=%s message=%s",
+                DEFAULT_LOG_DIR,
+                config.log_retention_days,
+                exc.__class__.__name__,
+                exc,
+            )
+            return 1
         logger.info(
-            "importer started collection=%s sources=%s log_file=%s",
+            "importer started collection=%s sources=%s log_file=%s "
+            "log_retention_days=%s removed_old_logs=%s",
             config.qdrant_collection,
             len(config.google_drive_sources),
-            DEFAULT_LOG_FILE,
+            log_file,
+            config.log_retention_days,
+            removed_logs,
         )
         _run_startup_probe(config, logger)
         summary = create_sync_orchestrator(config).run()
@@ -33,7 +59,7 @@ def main() -> int:
             summary.skipped,
         )
         return 0
-    except (ConfigError, ImporterError, RuntimeError) as exc:
+    except (ConfigError, ImporterError, RuntimeError, OSError) as exc:
         if logger is not None:
             logger.exception(
                 "importer failed error=%s message=%s",

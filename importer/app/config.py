@@ -38,12 +38,13 @@ class ImporterConfig:
     cjk_font_path: Path
     keep_success_work_files: bool
     keep_failed_work_files: bool
+    log_retention_days: int
 
 
 APP_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_ENV_FILE = APP_ROOT / "config" / ".env"
 DEFAULT_WORK_DIR = APP_ROOT / "work"
-DEFAULT_LOG_FILE = APP_ROOT / "logs" / "importer.log"
+DEFAULT_LOG_DIR = APP_ROOT / "logs"
 
 
 def resolve_app_path(raw: str | Path) -> Path:
@@ -86,6 +87,7 @@ def load_importer_config(env_file: str | Path | None = DEFAULT_ENV_FILE) -> Impo
         cjk_font_path=_required_absolute_path("KBSEARCH_CJK_FONT_PATH"),
         keep_success_work_files=_optional_bool("IMPORTER_KEEP_SUCCESS_WORK_FILES", True),
         keep_failed_work_files=_optional_bool("IMPORTER_KEEP_FAILED_WORK_FILES", True),
+        log_retention_days=_optional_int("IMPORTER_LOG_RETENTION_DAYS", 14),
     )
 
     if config.dashscope_vector_size != config.qdrant_vector_size:
@@ -203,3 +205,16 @@ def _required_int(name: str) -> int:
         return int(value)
     except ValueError as exc:
         raise ConfigError(f"Config {name} must be an integer.") from exc
+
+
+def _optional_int(name: str, default: int) -> int:
+    value = os.getenv(name)
+    if value is None or value.strip() == "":
+        return default
+    try:
+        parsed = int(value.strip())
+    except ValueError as exc:
+        raise ConfigError(f"Config {name} must be an integer.") from exc
+    if parsed < 0:
+        raise ConfigError(f"Config {name} must be zero or a positive integer.")
+    return parsed

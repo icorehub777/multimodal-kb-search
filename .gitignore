@@ -32,6 +32,7 @@ env/
 
 # Personal / local notes
 docs/TODO.md
+.claude/
 
 # Local outputs
 .output/

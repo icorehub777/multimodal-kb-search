@@ -42,6 +42,7 @@ def _importer_config(temp_dir: Path) -> ImporterConfig:
         cjk_font_path=font_path,
         keep_success_work_files=True,
         keep_failed_work_files=True,
+        log_retention_days=14,
     )
 
 

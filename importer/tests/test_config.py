@@ -164,6 +164,17 @@ class ConfigTests(unittest.TestCase):
         self.assertFalse(config.keep_success_work_files)
         self.assertTrue(config.keep_failed_work_files)
 
+    def test_load_importer_config_reads_log_retention_days(self) -> None:
+        with self._config_context("IMPORTER_LOG_RETENTION_DAYS=30") as (env_file, source_config):
+            config = load_importer_config(env_file)
+
+        self.assertEqual(config.log_retention_days, 30)
+
+    def test_load_importer_config_rejects_negative_log_retention_days(self) -> None:
+        with self._config_context("IMPORTER_LOG_RETENTION_DAYS=-1") as (env_file, source_config):
+            with self.assertRaisesRegex(ConfigError, "IMPORTER_LOG_RETENTION_DAYS"):
+                load_importer_config(env_file)
+
     def test_load_importer_config_rejects_invalid_work_file_retention_setting(self) -> None:
         with self._config_context("IMPORTER_KEEP_SUCCESS_WORK_FILES=maybe") as (env_file, source_config):
             with self.assertRaisesRegex(ConfigError, "IMPORTER_KEEP_SUCCESS_WORK_FILES"):

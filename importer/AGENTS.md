@@ -39,7 +39,7 @@
 - 外部服務錯誤應轉成明確 domain error，並保留足夠排錯資訊。
 - library layer 不得呼叫 `sys.exit()`；exit code 只在 CLI 頂層處理。
 - 服務啟動時必須執行完整環境檢查（設定、LibreOffice、CJK 字型、Google Drive、DashScope embedding、Qdrant collection 與 vector size）；若 Qdrant collection 不存在，依 `QDRANT_COLLECTION` 與 `QDRANT_VECTOR_SIZE` 自動建立（cosine）；檢查失敗時記錄完整錯誤摘要後讓程序退出。
-- logging 應能追蹤批次、文件、階段、狀態與錯誤摘要；log 固定寫入 `logs/importer.log` 並同時輸出 stdout。
+- logging 應能追蹤批次、文件、階段、狀態與錯誤摘要；每次執行寫入 `logs/importer-YYYYMMDD-HHMMSS-ffffff-pPID.log` 並同時輸出 stdout，並依 `IMPORTER_LOG_RETENTION_DAYS` 清理舊 log；清理失敗時必須記錄錯誤並中止匯入。
 - 改變 Qdrant 狀態的操作應保留可追蹤 log。
 
 ## 測試
