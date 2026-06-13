@@ -45,6 +45,14 @@ repo_root/
 
 ---
 
+## 執行環境規則
+
+- 執行 `kbsearch.exe query` 時，Agent 必須直接要求使用者同意以 sandbox 外部方式執行，不得先在 sandbox 內試跑。
+- 任何可能觸發 Google OAuth、瀏覽器登入視窗、GUI 視窗或本機認證流程的命令，都必須直接以 sandbox 外部同意方式執行。
+- 原因是首次授權時需要開啟瀏覽器或輸出 Google OAuth URL；sandbox 內可能無法正確帶出登入流程，容易造成逾時後才重試。
+
+---
+
 ## 查詢執行規則
 
 - 收到使用者查詢需求後，Agent 必須把使用者查詢拆成兩條路線，包括多模態相似度搜尋與 Google Drive 檔案搜尋。
