@@ -8,8 +8,10 @@
 
 ```text
 repo_root/
-  query_results/                  # 查詢結果輸出位置
-  workspace/                      # 執行查詢任務以外的任務的工作區
+  tasks/                          # 使用者任務工作區
+    <yyyyMMdd-HHmmss>-<safe_task_name>/
+      query_results/              # 此任務的一到多次查詢結果
+      <其他任務產物>
   memory.md                       # Agent 跨 session 工作記憶
   AGENTS.md                       # Agent 操作規則
   _internal/
@@ -22,7 +24,16 @@ repo_root/
     logs/                         # kbsearch_cli.log
 ```
 
-`_internal/` 是內部執行資料夾，Agent 不得讀取與修改此資料夾中的任何內容。
+`_internal/` 是內部執行資料夾。Agent 不得修改其中的設定、套件、虛擬環境或認證資料；允許在查詢失敗時讀取 `_internal/logs/kbsearch_cli.log` 進行排錯。
+
+---
+
+## 任務工作區
+
+- 收到新的使用者任務時，必須在 `tasks/` 下建立獨立任務資料夾，命名格式為 `<yyyyMMdd-HHmmss>-<safe_task_name>`。
+- 同一任務的使用者輸入、查詢結果、分析內容與產出均放在同一任務資料夾中；既有任務的後續需求繼續使用原任務資料夾。
+- 任務中的每次查詢結果固定放在該任務的 `query_results/` 下；其餘內容由 Agent 依實際工作需求安排。
+- `safe_task_name` 與後述 `safe_query_name` 應簡短描述目的，並避免使用 `< > : " / \ | ? *`、`..`、結尾空白或結尾句點。
 
 ---
 
@@ -33,13 +44,13 @@ repo_root/
 執行知識庫搜尋指令時，工作目錄必須為 `_internal/`。以下為指令執行參數：
 
 ```powershell
-.\.venv\Scripts\kbsearch.exe query --name "<查詢名稱>" --vector-query "<向量查詢文字>" --drive-query "<Google Drive q 查詢語法>" [--image <圖片路徑>] [--limit <數量>] [--min-score <分數>]
+.\.venv\Scripts\kbsearch.exe query --output-dir "../tasks/<任務資料夾>/query_results/<yyyyMMdd-HHmmss>-<safe_query_name>" --vector-query "<向量查詢文字>" --drive-query "<Google Drive q 查詢語法>" [--image <圖片路徑>] [--limit <數量>] [--min-score <分數>]
 ```
 
-- `--name` 是本次查詢結果資料夾名稱的一部分，必填，應簡短描述使用者問題。
+- `--output-dir` 必填，由 Agent 指定本次查詢結果的完整新資料夾路徑；每次執行都必須使用尚不存在的新路徑。
 - `--vector-query` 必填，送給 vector search。
 - `--drive-query` 必填，直接送給 Google Drive API `files().list(q=...)`。
-- `--image` 可重複指定多次；路徑須為相對 `_internal/` 工作目錄的本機圖檔路徑（例如 `../workspace/<任務資料夾>/user-01.png`）。
+- `--image` 可重複指定多次；路徑須為相對 `_internal/` 工作目錄的本機圖檔路徑（例如 `../tasks/<任務資料夾>/user-01.png`）。
 - `--limit` 控制全文搜尋與向量搜尋各自回傳的候選數量，由 Agent 依照狀況自行決定。
 - `--min-score` 是向量搜尋最低分數門檻，未指定時不套用最低分數，原則上不建議 Agent 指定此值。
 
@@ -59,26 +70,28 @@ repo_root/
 - 若使用者提供圖片，Agent 應先理解每張圖片，產生可檢索的圖片描述。圖片描述需描述圖中可辨識的文字、產品、表格、版面、顏色、型號、流程、錯誤訊息、文件類型與其他可協助搜尋的特徵。
 - 多模態相似度搜尋：針對 `--vector-query` 參數傳入值，需保留使用者原始自然語言，再補充 Agent 抽出的檢索重點與圖片描述；不得任意改寫成另一個問題或加入使用者未表達、圖片也無法確認的假設。
 - Google Drive 檔案搜尋：針對 `--drive-query` 參數傳入值：須從自然語言與圖片描述抽取關鍵字、型號、檔名片段等條件，組成 Google Drive API 的 `q` 語法直接傳入 CLI（非另建平行關鍵字清單），且只能使用支援的欄位與運算子，例如 `fullText contains ...`、`name contains ...`、`mimeType`、`modifiedTime`、`createdTime`、`owner`、`sharedWithMe`、`starred`、`trashed`。
-- 使用者附圖：將圖片存至 `workspace/<yyyyMMdd-HHmmss>-<目的>/`（檔名建議 `user-01.png`、`user-02.png`），再以 `--image` 傳入相對 `_internal/` 的路徑（例如 `../workspace/<任務資料夾>/user-01.png`）；多張圖可重複指定 `--image`。
+- 使用者附圖：將圖片存至目前任務資料夾中（檔名建議 `user-01.png`、`user-02.png`），再以 `--image` 傳入相對 `_internal/` 的路徑（例如 `../tasks/<任務資料夾>/user-01.png`）；多張圖可重複指定 `--image`。
+- 執行前須依日期時間與查詢目的產生新的查詢結果路徑。若指令回報路徑已存在，不得覆蓋、刪除或重用該資料夾，應改用新的查詢結果路徑重新執行。
+- 查詢結果資料夾一旦建立，不論查詢成功或失敗均不得刪除或供後續查詢重用；查詢失敗時應保留其中的部分產物供排錯。
+- 查詢失敗時，先閱讀 stderr 的錯誤訊息與 `_internal/logs/kbsearch_cli.log`。可自行處理的路徑、查詢參數或任務檔案問題應先修正後重試；涉及權限、外部服務、部署環境或其他無法處理的問題，再向使用者說明原因與所需處理方式。
 
 
 ## 查詢結果結構
 
-- 每次查詢會在 `query_results/` 下建立一個結果資料夾，命名格式為：`<yyyyMMdd-HHmmss>-<safe_query_name>`。
-- 指令執行成功時，**stdout** 會回傳 JSON，其中 `bundle_name` 即本次結果資料夾名稱；Agent 以 `query_results/<bundle_name>/` 作為該次查詢根目錄。
+- 每次查詢結果位於 Agent 透過 `--output-dir` 指定的獨立資料夾中。
+- 指令執行成功時，**stdout** 會回傳 JSON，其中 `output_dir` 即本次查詢結果資料夾路徑。
 - 結果資料夾的基本結構如下：
 
 ```text
-query_results/
-  <yyyyMMdd-HHmmss>-<safe_query_name>/
-    query_plan.json
-    full_text_results.json
-    vector_results.json
-    <safe_file_name>-<google_file_id>/
-      <downloaded original file>
-      0001.png
-      0002.png
-      ...
+<output_dir>/
+  query_plan.json
+  full_text_results.json
+  vector_results.json
+  <safe_file_name>-<google_file_id>/
+    <downloaded original file>
+    0001.png
+    0002.png
+    ...
 ```
 
 - `query_plan.json` 記錄本次實際使用的 `vector_query`、`drive_query`、`image_paths`、`limit` 與 `min_score`。
@@ -115,26 +128,18 @@ query_results/
 
 ---
 
-## 任務執行工作資料夾
-
-- 每次任務若需要工作資料夾，必須在 `workspace/` 下建立獨立子資料夾，名稱需包含日期時間與目的，例如 `2026-05-23_1830_search-policy-docs/`。
-- 若使用者有提供圖檔做相似度查詢，需將圖檔依照以上規則於工作資料夾中建立獨立子資料夾，並將圖檔放在此子資料夾中。
-- 若使用者於查詢完成後，要求參考查詢結果檔案內容做任何後續處理，也須在工作資料夾中建立獨立子資料夾，該任務產生的一切檔案一律放在此子資料夾中。
-
----
-
 ## Memory.md 填寫規則
 
 - `memory.md` 供跨 session 接手任務時所需的資訊。
 - **更新時機**：
   - 開始新一輪查詢或後續任務時，更新「目前正在處理」。
-  - `kbsearch query` 完成並取得 `bundle_name` 後，更新「最近查詢與處理紀錄」；若該輪查詢已可直接回答或任務結束，清空或重置「目前正在處理」。
+  - `kbsearch query` 完成並取得 `output_dir` 後，更新「最近查詢與處理紀錄」；若該輪查詢已可直接回答或任務結束，清空或重置「目前正在處理」。
   - 查詢結果不足而進行下一輪查詢前，在「最近查詢與處理紀錄」或「後續建議」簡記本輪不足原因與調整方向。
   - 發現會影響後續判斷的資料限制、索引狀態或重要結論時，更新「已知資料狀態」或「重要發現」。
   - 需等待使用者補充條件或確認時，更新「待確認」。
   - session 結束或任務暫停前，確保「目前正在處理」與「待確認」反映最新狀態。
 - **更新注意**
-  - 以 `bundle_name`、任務資料夾路徑等**指標**記錄即可；詳細清單、下載檔與 PNG 仍以 `query_results/`、`workspace/` 內檔案為準。
+  - 以任務資料夾與查詢結果資料夾路徑等**指標**記錄即可；詳細清單、下載檔、PNG 與任務產物仍以該任務資料夾內的檔案為準。
   - 同一任務持續進行時更新既有條目，避免並留多份互相矛盾的「目前正在處理」。
 
 ---

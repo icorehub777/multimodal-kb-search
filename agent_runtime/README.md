@@ -6,8 +6,7 @@
 
 ```text
 agent_runtime/
-  query_results/                  # 查詢結果輸出
-  workspace/                      # 執行查詢任務以外的任務的工作區
+  tasks/                          # 使用者任務工作區
   memory.md                       # Agent 跨 session 工作記憶
   AGENTS.md                       # Agent 操作規則（部署至使用者端）
   _internal/
@@ -53,7 +52,6 @@ Test-Path "C:\Program Files\LibreOffice\program\soffice.exe"
 Test-Path "C:\Windows\Fonts\msjh.ttc"
 Get-ChildItem "C:\Windows\Fonts" -Include *.ttf,*.ttc -Recurse | Select-Object -ExpandProperty FullName
 ```
-- `KBSEARCH_QUERY_RESULTS_ROOT`：改為 `../query_results`
 - `KBSEARCH_SECURE_BACKEND_BASE_URL`：改為運作端可連線的 backend URL
 
 ### 4. 建立 .venv 並安裝 wheel
@@ -74,15 +72,15 @@ python -m venv .venv
 ```powershell
 cd agent_runtime\_internal
 .\.venv\Scripts\kbsearch.exe query `
-  --name "agent-runtime-測試" `
+  --output-dir "../tasks/20260613-130000-agent-runtime-test/query_results/20260613-131500-initial-query" `
   --vector-query "測試向量查詢文字" `
   --drive-query "(fullText contains '關鍵字' or name contains '關鍵字') and trashed = false" `
   --limit 10
 ```
 
-若有附圖則可加上 `--image` 參數。此參數可重複指定多次；路徑須為相對 `_internal/` 工作目錄的本機圖檔路徑（例如 `../workspace/<任務資料夾>/user-01.png`）。
+若有附圖則可加上 `--image` 參數。此參數可重複指定多次；路徑須為相對 `_internal/` 工作目錄的本機圖檔路徑（例如 `../tasks/<任務資料夾>/user-01.png`）。
 
-成功時 **stdout** 輸出 JSON，含 `bundle_name`；結果寫入 `agent_runtime\query_results\<bundle_name>\`。Log 寫入 `agent_runtime\_internal\logs\kbsearch_cli.log`。
+成功時 **stdout** 輸出 JSON，含 `output_dir`；結果寫入指定的查詢結果資料夾。Log 寫入 `agent_runtime\_internal\logs\kbsearch_cli.log`。
 
 首次執行若尚無 `token_cache.json`，程式會開啟瀏覽器完成 Google OAuth 授權，並寫入 `config\token_cache.json`。
 
@@ -96,8 +94,7 @@ cd agent_runtime\_internal
 agent_runtime/
   AGENTS.md
   memory.md
-  query_results/
-  workspace/
+  tasks/
   _internal/
     config/
       .env
