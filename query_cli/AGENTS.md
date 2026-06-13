@@ -14,13 +14,13 @@
 - 各子指令的核心流程應以 protocol 或注入物件接收外部能力（Google Drive、`secure_backend`、檔案處理、結果輸出等），核心邏輯不得依賴 argparse、terminal 格式或 Agent 文字格式。
 - 外部服務呼叫應包在 client / adapter 中；核心流程不得直接依賴 HTTP library 的 response 物件。
 - Google Drive OAuth、Drive API 操作應集中在 query CLI 專用 client；使用者 Drive 認證只能使用 OAuth 2.0 授權碼流程。
-- `secure_backend` base URL、OAuth 路徑、log 與各指令輸出位置等設定應集中在設定層讀取；預設為目前工作目錄的 `config/.env`。新增或變更設定時需同步更新 config model、README 與測試。
+- `secure_backend` base URL、OAuth 路徑與 log 位置等環境設定應集中在設定層讀取；預設為目前工作目錄的 `config/.env`。新增或變更設定時需同步更新 config model、README 與測試。
 
 ## 檔案與路徑
 
 - 使用 `pathlib.Path`；設定中的相對路徑相對於 CLI 執行時的目前工作目錄解析。
 - 由外部輸入（指令參數、檔名、Google file ID 等）組合本機路徑時，必須避免路徑穿越與非法檔名。
-- 各子指令的產物目錄、命名規則與允許寫入範圍，依 README 與 `agent_runtime/` 約定；共通要求是產物不得寫出約定目錄之外。
+- 由呼叫端指定的產物目錄應視為該次指令的寫入邊界；指令不得覆蓋既有產物目錄或寫出指定目錄之外。
 
 ## CLI 輸出
 

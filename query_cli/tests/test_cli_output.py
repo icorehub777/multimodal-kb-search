@@ -29,7 +29,7 @@ class CliOutputTests(unittest.TestCase):
             "Query progress: phase=download status=finished file_id=file-1 page_count=10 index=2 total=4",
         )
 
-    def test_build_query_success_payload_includes_bundle_name_and_counts(self):
+    def test_build_query_success_payload_includes_output_dir_and_counts(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             bundle_dir = Path(temp_dir) / "20260531-120000-手動測試"
             bundle_dir.mkdir()
@@ -44,7 +44,6 @@ class CliOutputTests(unittest.TestCase):
                 vector_results=[],
             )
             result = QueryRunResult(
-                query_name="手動測試",
                 bundle=bundle,
                 full_text_count=1,
                 vector_count=4,
@@ -60,7 +59,7 @@ class CliOutputTests(unittest.TestCase):
             payload,
             {
                 "status": "finished",
-                "bundle_name": "20260531-120000-手動測試",
+                "output_dir": bundle_dir.as_posix(),
                 "full_text_count": 1,
                 "vector_count": 4,
                 "download_count": 3,

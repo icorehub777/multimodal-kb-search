@@ -22,7 +22,6 @@ def _sample_config(root: Path) -> QueryCliConfig:
         secure_backend_base_url="http://127.0.0.1:8000",
         google_oauth_client_config=oauth_client,
         google_oauth_token_cache=token_cache,
-        query_results_root=root / "query_results",
         query_logs_root=root / "logs",
         libreoffice_command=str(root / "soffice.exe"),
         cjk_font_path=root / "msjh.ttc",

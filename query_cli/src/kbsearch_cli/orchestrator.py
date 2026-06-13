@@ -77,7 +77,7 @@ class QueryOrchestrator:
 
     def run(
         self,
-        query_name: str,
+        output_dir: Path,
         vector_query: str,
         drive_query: str,
         limit: int,
@@ -166,7 +166,7 @@ class QueryOrchestrator:
         )
         union_breakdown = _union_breakdown(full_text_results, vector_results)
         bundle = self._result_writer.create_bundle(
-            query_name=query_name,
+            output_dir=output_dir,
             query_plan={
                 "vector_query": vector_query,
                 "drive_query": drive_query,
@@ -222,8 +222,8 @@ class QueryOrchestrator:
             progress=progress,
         )
         logger.info(
-            "query phase=complete bundle_name=%s union_count=%s download_count=%s",
-            bundle.path.name,
+            "query phase=complete output_dir=%s union_count=%s download_count=%s",
+            bundle.path,
             len(download_targets),
             len(downloaded_files),
         )
@@ -235,7 +235,6 @@ class QueryOrchestrator:
             download_count=len(downloaded_files),
         )
         return QueryRunResult(
-            query_name=query_name,
             bundle=bundle,
             full_text_count=len(full_text_results),
             vector_count=len(vector_candidates),

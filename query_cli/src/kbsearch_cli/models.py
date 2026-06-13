@@ -53,7 +53,6 @@ class DownloadedFileResult:
 
 @dataclass(frozen=True)
 class QueryRunResult:
-    query_name: str
     bundle: QueryResultBundle
     full_text_count: int
     vector_count: int

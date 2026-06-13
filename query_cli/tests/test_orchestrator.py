@@ -105,6 +105,12 @@ class FakePageRenderer:
         return [output_path]
 
 
+def _create_output_dir(root: str, name: str) -> Path:
+    output_dir = Path(root) / name
+    output_dir.mkdir()
+    return output_dir
+
+
 class QueryOrchestratorTests(unittest.TestCase):
     def test_run_downloads_and_renders_union_of_full_text_and_vector_files(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -114,14 +120,14 @@ class QueryOrchestratorTests(unittest.TestCase):
             orchestrator = QueryOrchestrator(
                 google_drive=google_drive,
                 backend=backend,
-                result_writer=QueryResultWriter(Path(temp_dir), clock=lambda: "20260524-203000"),
+                result_writer=QueryResultWriter(),
                 page_renderer=renderer,
             )
 
             image_path = Path(temp_dir) / "sample.png"
             image_path.write_bytes(b"png")
             result = orchestrator.run(
-                query_name="客戶查詢",
+                output_dir=_create_output_dir(temp_dir, "客戶查詢"),
                 vector_query="semantic alpha",
                 drive_query="fullText contains 'alpha' and trashed = false",
                 limit=10,
@@ -165,12 +171,12 @@ class QueryOrchestratorTests(unittest.TestCase):
             orchestrator = QueryOrchestrator(
                 google_drive=google_drive,
                 backend=CollidingBackendClient(),
-                result_writer=QueryResultWriter(Path(temp_dir), clock=lambda: "20260524-203000"),
+                result_writer=QueryResultWriter(),
                 page_renderer=FakePageRenderer(),
             )
 
             result = orchestrator.run(
-                query_name="碰撞",
+                output_dir=_create_output_dir(temp_dir, "碰撞"),
                 vector_query="alpha",
                 drive_query="fullText contains 'alpha' and trashed = false",
                 limit=10,
@@ -196,12 +202,12 @@ class QueryOrchestratorTests(unittest.TestCase):
             orchestrator = QueryOrchestrator(
                 google_drive=google_drive,
                 backend=ThreeResultBackendClient(),
-                result_writer=QueryResultWriter(Path(temp_dir), clock=lambda: "20260524-203000"),
+                result_writer=QueryResultWriter(),
                 page_renderer=FakePageRenderer(),
             )
 
             orchestrator.run(
-                query_name="存取檢查",
+                output_dir=_create_output_dir(temp_dir, "存取檢查"),
                 vector_query="alpha",
                 drive_query="fullText contains 'alpha' and trashed = false",
                 limit=10,
@@ -221,12 +227,12 @@ class QueryOrchestratorTests(unittest.TestCase):
             orchestrator = QueryOrchestrator(
                 google_drive=google_drive,
                 backend=FakeBackendClient(),
-                result_writer=QueryResultWriter(Path(temp_dir), clock=lambda: "20260524-203000"),
+                result_writer=QueryResultWriter(),
                 page_renderer=FakePageRenderer(),
             )
 
             bundle = orchestrator.run(
-                query_name="無存取",
+                output_dir=_create_output_dir(temp_dir, "無存取"),
                 vector_query="alpha",
                 drive_query="fullText contains 'alpha' and trashed = false",
                 limit=10,
@@ -252,12 +258,12 @@ class QueryOrchestratorTests(unittest.TestCase):
             orchestrator = QueryOrchestrator(
                 google_drive=google_drive,
                 backend=AccessibleOnlyBackendClient(),
-                result_writer=QueryResultWriter(Path(temp_dir), clock=lambda: "20260524-203000"),
+                result_writer=QueryResultWriter(),
                 page_renderer=FakePageRenderer(),
             )
 
             bundle = orchestrator.run(
-                query_name="向量聯集",
+                output_dir=_create_output_dir(temp_dir, "向量聯集"),
                 vector_query="alpha",
                 drive_query="fullText contains 'alpha' and trashed = false",
                 limit=10,
@@ -274,13 +280,13 @@ class QueryOrchestratorTests(unittest.TestCase):
             orchestrator = QueryOrchestrator(
                 google_drive=FakeGoogleDriveClient(),
                 backend=FakeBackendClient(),
-                result_writer=QueryResultWriter(Path(temp_dir), clock=lambda: "20260524-203000"),
+                result_writer=QueryResultWriter(),
                 page_renderer=FakePageRenderer(),
             )
 
             with self.assertRaisesRegex(QueryCliError, "Query image not found"):
                 orchestrator.run(
-                    query_name="缺圖",
+                    output_dir=_create_output_dir(temp_dir, "缺圖"),
                     vector_query="alpha",
                     drive_query="fullText contains 'alpha' and trashed = false",
                     limit=10,

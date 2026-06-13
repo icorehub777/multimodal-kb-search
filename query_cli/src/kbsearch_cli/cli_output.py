@@ -22,7 +22,7 @@ def format_query_success_output(result: QueryRunResult) -> str:
 def build_query_success_payload(result: QueryRunResult) -> dict[str, Any]:
     return {
         "status": "finished",
-        "bundle_name": result.bundle.path.name,
+        "output_dir": result.bundle.path.as_posix(),
         "full_text_count": result.full_text_count,
         "vector_count": result.vector_count,
         "download_count": result.download_count,

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
 from typing import Any
 
 from kbsearch_cli.backend_client import SecureBackendClient
@@ -21,17 +20,12 @@ def create_query_orchestrator(config: QueryCliConfig) -> QueryOrchestrator:
     return QueryOrchestrator(
         google_drive=GoogleDriveQueryClient(_create_drive_service(config)),
         backend=SecureBackendClient(config.secure_backend_base_url),
-        result_writer=QueryResultWriter(config.query_results_root, clock=_timestamp),
+        result_writer=QueryResultWriter(),
         page_renderer=DocumentPageRenderer(
             libreoffice_command=config.libreoffice_command,
             cjk_font_path=config.cjk_font_path,
         ),
     )
-
-
-def _timestamp() -> str:
-    return datetime.now().strftime("%Y%m%d-%H%M%S")
-
 
 def discard_oauth_token_cache(config: QueryCliConfig) -> bool:
     token_cache = config.google_oauth_token_cache

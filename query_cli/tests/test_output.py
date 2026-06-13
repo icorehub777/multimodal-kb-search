@@ -12,15 +12,14 @@ class QueryOutputTests(unittest.TestCase):
         self.assertEqual(safe_path_name("../客戶:A?"), "客戶_A")
         self.assertEqual(safe_path_name(""), "untitled")
 
-    def test_query_result_writer_creates_query_folder_and_result_lists(self):
+    def test_query_result_writer_writes_result_lists_to_output_directory(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            writer = QueryResultWriter(
-                results_root=Path(temp_dir),
-                clock=lambda: "20260524-203000",
-            )
+            writer = QueryResultWriter()
+            output_dir = Path(temp_dir) / "20260524-203000-測試查詢"
+            output_dir.mkdir()
 
             bundle = writer.create_bundle(
-                query_name="../測試查詢",
+                output_dir=output_dir,
                 query_plan={
                     "vector_query": "semantic spec",
                     "drive_query": "fullText contains 'spec' and trashed = false",
@@ -55,7 +54,7 @@ class QueryOutputTests(unittest.TestCase):
                 ],
             )
 
-            self.assertEqual(bundle.path.name, "20260524-203000-測試查詢")
+            self.assertEqual(bundle.path, output_dir)
             full_text_json = json.loads((bundle.path / "full_text_results.json").read_text(encoding="utf-8"))
             vector_json = json.loads((bundle.path / "vector_results.json").read_text(encoding="utf-8"))
             query_plan_json = json.loads((bundle.path / "query_plan.json").read_text(encoding="utf-8"))
@@ -63,6 +62,19 @@ class QueryOutputTests(unittest.TestCase):
         self.assertEqual(full_text_json[0]["google_file_id"], "file-1")
         self.assertEqual(vector_json[0]["pages"][0]["page_number"], 1)
         self.assertEqual(query_plan_json["drive_query"], "fullText contains 'spec' and trashed = false")
+
+    def test_reserve_output_directory_creates_parents_and_rejects_existing_directory(self):
+        from kbsearch_cli.errors import QueryCliError
+        from kbsearch_cli.output import reserve_output_directory
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir) / "task" / "query_results" / "query-01"
+
+            reserve_output_directory(output_dir)
+
+            self.assertTrue(output_dir.is_dir())
+            with self.assertRaisesRegex(QueryCliError, "already exists"):
+                reserve_output_directory(output_dir)
 
 
 if __name__ == "__main__":

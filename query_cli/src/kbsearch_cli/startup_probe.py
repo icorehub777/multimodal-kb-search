@@ -22,7 +22,6 @@ class StartupProbeResult:
     google_drive_authenticated: bool
     libreoffice_command: str
     cjk_font_path: Path
-    query_results_root: Path
 
 
 def probe_startup_environment(
@@ -32,7 +31,6 @@ def probe_startup_environment(
 ) -> StartupProbeResult:
     """Verify local config paths and external services before running a query."""
     _probe_local_tools(config)
-    _probe_query_results_root(config)
     _probe_secure_backend(config)
     google_drive_authenticated = _probe_google_drive_if_configured(
         config,
@@ -45,7 +43,6 @@ def probe_startup_environment(
         google_drive_authenticated=google_drive_authenticated,
         libreoffice_command=config.libreoffice_command,
         cjk_font_path=config.cjk_font_path,
-        query_results_root=config.query_results_root,
     )
 
 
@@ -59,15 +56,6 @@ def _probe_local_tools(config: QueryCliConfig) -> None:
         raise ConfigError(f"LibreOffice command not found: {config.libreoffice_command}")
     if not config.cjk_font_path.is_file():
         raise ConfigError(f"CJK font not found: {config.cjk_font_path}")
-
-
-def _probe_query_results_root(config: QueryCliConfig) -> None:
-    try:
-        config.query_results_root.mkdir(parents=True, exist_ok=True)
-    except OSError as exc:
-        raise ConfigError(
-            f"Query results root is not writable: {config.query_results_root}"
-        ) from exc
 
 
 def _probe_secure_backend(config: QueryCliConfig) -> None:

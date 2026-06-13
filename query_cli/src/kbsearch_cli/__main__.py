@@ -10,6 +10,7 @@ from kbsearch_cli.config import ConfigError, load_query_cli_config
 from kbsearch_cli.errors import QueryCliError
 from kbsearch_cli.factories import create_query_orchestrator
 from kbsearch_cli.logging_config import configure_query_cli_logging, query_log_file_path
+from kbsearch_cli.output import reserve_output_directory
 from kbsearch_cli.startup_probe import probe_startup_environment
 
 
@@ -21,13 +22,12 @@ def _run_startup_probe(config, logger: logging.Logger) -> None:
     _emit_progress("startup_probe", {"status": "started"})
     logger.info(
         "startup_probe started secure_backend_base_url=%s oauth_client=%s token_cache=%s "
-        "libreoffice_command=%s cjk_font_path=%s query_results_root=%s",
+        "libreoffice_command=%s cjk_font_path=%s",
         config.secure_backend_base_url,
         config.google_oauth_client_config,
         config.google_oauth_token_cache,
         config.libreoffice_command,
         config.cjk_font_path,
-        config.query_results_root,
     )
     try:
         result = probe_startup_environment(config)
@@ -41,14 +41,13 @@ def _run_startup_probe(config, logger: logging.Logger) -> None:
         raise
     logger.info(
         "startup_probe succeeded secure_backend_base_url=%s google_drive_authenticated=%s "
-        "oauth_client=%s token_cache=%s libreoffice_command=%s cjk_font_path=%s query_results_root=%s",
+        "oauth_client=%s token_cache=%s libreoffice_command=%s cjk_font_path=%s",
         result.secure_backend_base_url,
         result.google_drive_authenticated,
         result.google_oauth_client_config,
         result.google_oauth_token_cache,
         result.libreoffice_command,
         result.cjk_font_path,
-        result.query_results_root,
     )
     _emit_progress(
         "startup_probe",
@@ -75,7 +74,7 @@ def main(argv: list[str] | None = None) -> int:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     query_parser = subparsers.add_parser("query")
-    query_parser.add_argument("--name", required=True)
+    query_parser.add_argument("--output-dir", required=True)
     query_parser.add_argument("--vector-query", required=True)
     query_parser.add_argument("--drive-query", required=True)
     query_parser.add_argument("--image", action="append", default=[])
@@ -91,11 +90,14 @@ def main(argv: list[str] | None = None) -> int:
             config = load_query_cli_config()
             log_path = query_log_file_path(config.query_logs_root)
             logger = configure_query_cli_logging(config.query_logs_root)
-            logger.info("query started name=%s", args.name)
-            _emit_progress("query", {"status": "started", "name": args.name})
+            output_dir = Path(args.output_dir)
+            logger.info("query started output_dir=%s", output_dir)
+            _emit_progress("query", {"status": "started", "output_dir": output_dir})
+            reserve_output_directory(output_dir)
+            logger.info("query output directory reserved output_dir=%s", output_dir)
             _run_startup_probe(config, logger)
             result = create_query_orchestrator(config).run(
-                query_name=args.name,
+                output_dir=output_dir,
                 vector_query=args.vector_query,
                 drive_query=args.drive_query,
                 image_paths=[Path(path) for path in args.image],

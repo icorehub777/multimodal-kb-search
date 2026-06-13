@@ -14,13 +14,11 @@ class QueryCliConfig:
     secure_backend_base_url: str
     google_oauth_client_config: Path
     google_oauth_token_cache: Path
-    query_results_root: Path
     query_logs_root: Path
     libreoffice_command: str
     cjk_font_path: Path
 
 
-DEFAULT_RESULTS_ROOT = Path("query_results")
 DEFAULT_LOGS_ROOT = Path("logs")
 
 
@@ -36,9 +34,6 @@ def load_query_cli_config(env_file: str | Path | None = None) -> QueryCliConfig:
         secure_backend_base_url=_required_str("KBSEARCH_SECURE_BACKEND_BASE_URL"),
         google_oauth_client_config=_resolve_path(_required_str("GOOGLE_OAUTH_CLIENT_CONFIG"), root),
         google_oauth_token_cache=_resolve_path(_required_str("GOOGLE_OAUTH_TOKEN_CACHE"), root),
-        query_results_root=_resolve_cwd_path(
-            _optional_str("KBSEARCH_QUERY_RESULTS_ROOT", str(DEFAULT_RESULTS_ROOT)),
-        ),
         query_logs_root=_resolve_cwd_path(
             _optional_str("KBSEARCH_QUERY_LOGS_ROOT", str(DEFAULT_LOGS_ROOT)),
         ),

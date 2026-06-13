@@ -22,7 +22,6 @@ def _sample_config(
     token_cache = config_dir / "token_cache.json"
     libreoffice = root / "soffice.exe"
     cjk_font = root / "msjh.ttc"
-    results_root = root / "query_results"
 
     if oauth_client_exists:
         oauth_client.write_text("{}", encoding="utf-8")
@@ -37,7 +36,6 @@ def _sample_config(
         secure_backend_base_url="http://127.0.0.1:8000",
         google_oauth_client_config=oauth_client,
         google_oauth_token_cache=token_cache,
-        query_results_root=results_root,
         query_logs_root=root / "logs",
         libreoffice_command=str(libreoffice),
         cjk_font_path=cjk_font,

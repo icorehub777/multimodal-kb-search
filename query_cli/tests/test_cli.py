@@ -37,7 +37,6 @@ class CliTests(unittest.TestCase):
             vector_results=[],
         )
         run_result = QueryRunResult(
-            query_name="客戶",
             bundle=bundle,
             full_text_count=1,
             vector_count=2,
@@ -62,6 +61,8 @@ class CliTests(unittest.TestCase):
 
         fake_orchestrator = FakeOrchestrator()
         with patch("kbsearch_cli.__main__.load_query_cli_config") as load_config, patch(
+            "kbsearch_cli.__main__.reserve_output_directory",
+        ) as reserve_output_directory, patch(
             "kbsearch_cli.__main__._run_startup_probe",
         ) as run_startup_probe, patch(
             "kbsearch_cli.__main__.create_query_orchestrator",
@@ -76,8 +77,8 @@ class CliTests(unittest.TestCase):
                 main(
                     [
                         "query",
-                        "--name",
-                        "客戶",
+                        "--output-dir",
+                        bundle_path.as_posix(),
                         "--vector-query",
                         "semantic alpha",
                         "--drive-query",
@@ -92,13 +93,14 @@ class CliTests(unittest.TestCase):
             )
 
         configure_logging.assert_called_once_with(Path("C:/tmp/logs"))
+        reserve_output_directory.assert_called_once_with(bundle_path)
         run_startup_probe.assert_called_once()
         create_orchestrator.assert_called_once_with(load_config.return_value)
-        self.assertEqual(fake_orchestrator.kwargs["query_name"], "客戶")
+        self.assertEqual(fake_orchestrator.kwargs["output_dir"], bundle_path)
         self.assertIs(fake_orchestrator.kwargs["progress"], _emit_progress)
         payload = json.loads(stdout.getvalue())
         self.assertEqual(payload["status"], "finished")
-        self.assertEqual(payload["bundle_name"], "20260531-120000-客戶")
+        self.assertEqual(payload["output_dir"], bundle_path.as_posix())
         self.assertEqual(payload["full_text_count"], 1)
         self.assertEqual(payload["vector_count"], 2)
         self.assertEqual(payload["download_count"], 1)
@@ -113,8 +115,8 @@ class CliTests(unittest.TestCase):
                 exit_code = main(
                     [
                         "query",
-                        "--name",
-                        "客戶",
+                        "--output-dir",
+                        "C:/tmp/query/new-query",
                         "--vector-query",
                         "alpha",
                         "--drive-query",
@@ -129,6 +131,7 @@ class CliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             log_root = Path(temp_dir) / "configured-logs"
             config = type("Config", (), {"query_logs_root": log_root})()
+            output_dir = Path(temp_dir) / "new-query"
             try:
                 with patch("kbsearch_cli.__main__.load_query_cli_config", return_value=config), patch(
                     "kbsearch_cli.__main__._run_startup_probe",
@@ -140,8 +143,8 @@ class CliTests(unittest.TestCase):
                     exit_code = main(
                         [
                             "query",
-                            "--name",
-                            "客戶",
+                            "--output-dir",
+                            str(output_dir),
                             "--vector-query",
                             "alpha",
                             "--drive-query",
@@ -156,6 +159,45 @@ class CliTests(unittest.TestCase):
             self.assertIn("log=", stderr.getvalue())
             log_text = (log_root / "kbsearch_cli.log").read_text(encoding="utf-8")
             self.assertIn("query failed", log_text)
+            self.assertTrue(output_dir.exists())
+
+    def test_query_rejects_existing_output_dir_before_startup_probe_and_logs_error(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            output_dir = root / "existing-query"
+            output_dir.mkdir()
+            log_root = root / "logs"
+            config = type("Config", (), {"query_logs_root": log_root})()
+
+            with patch("kbsearch_cli.__main__.load_query_cli_config", return_value=config), patch(
+                "kbsearch_cli.__main__._run_startup_probe",
+            ) as run_startup_probe, patch(
+                "kbsearch_cli.__main__.create_query_orchestrator",
+            ) as create_orchestrator, patch(
+                "kbsearch_cli.__main__.configure_query_cli_logging",
+                side_effect=lambda path: configure_query_cli_logging(path),
+            ), redirect_stderr(StringIO()) as stderr:
+                exit_code = main(
+                    [
+                        "query",
+                        "--output-dir",
+                        str(output_dir),
+                        "--vector-query",
+                        "alpha",
+                        "--drive-query",
+                        "fullText contains 'alpha' and trashed = false",
+                    ]
+                )
+
+            self.assertEqual(exit_code, 1)
+            run_startup_probe.assert_not_called()
+            create_orchestrator.assert_not_called()
+            self.assertIn("already exists", stderr.getvalue())
+            self.assertIn(
+                "output directory already exists",
+                (log_root / "kbsearch_cli.log").read_text(encoding="utf-8"),
+            )
+            _close_query_cli_log_handlers()
 
     def test_configure_query_cli_logging_uses_daily_rotating_file_in_configured_log_root(self):
         log_root = Path("C:/tmp/kbsearch-query-logs")
