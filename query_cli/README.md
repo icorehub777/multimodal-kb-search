@@ -38,13 +38,23 @@ KBSEARCH_SECURE_BACKEND_BASE_URL=http://127.0.0.1:8000
 GOOGLE_OAUTH_CLIENT_CONFIG=config/oauth_client.json
 GOOGLE_OAUTH_TOKEN_CACHE=config/token_cache.json
 KBSEARCH_QUERY_LOGS_ROOT=logs
+KBSEARCH_RENDER_DOWNLOADED_FILES=true
 LIBREOFFICE_COMMAND=C:\Program Files\LibreOffice\program\soffice.exe
 KBSEARCH_CJK_FONT_PATH=C:\Windows\Fonts\msjh.ttc
 ```
 
+`KBSEARCH_RENDER_DOWNLOADED_FILES` 控制下載後是否將文件轉成 PDF 與逐頁 PNG：
+
+- `true`：下載後立即轉換並產生逐頁 PNG；需要轉換的 Office、TXT、MD 文件會保留中介 PDF。XLS/XLSX 不執行頁面渲染。
+- `false`：只保留下載檔，不執行額外轉換或逐頁渲染。
+
+Google 原生檔案不受上述設定影響：Google Docs 與 Google Slides 固定由 Drive API 匯出為 PDF，Google Sheets 固定匯出為 XLSX。上傳至 Drive 的 XLS/XLSX 下載原始檔。
+
+停用渲染時，`LIBREOFFICE_COMMAND` 與 `KBSEARCH_CJK_FONT_PATH` 可省略。
+
 `config/oauth_client.json` 為 Google OAuth **Desktop 用戶端憑證**，須向**內部 Google / GCP 管理者**申請並取得 JSON 後，手動放到 `config/oauth_client.json`（程式不會自動產生）。`config/token_cache.json` 則在首次執行 `kbsearch query`、完成 browser 授權後由程式寫入；若 token 無法 refresh 或驗證失敗，程式會刪除該檔並在下次 query 時重新開啟 browser 登入。兩者皆不納版控。
 
-每次 `kbsearch query` 會先建立呼叫端指定的查詢結果目錄，再執行 startup 檢查：OAuth client、LibreOffice、CJK 字型與 `secure_backend /healthz`；若已有 token cache 也會驗證 Google Drive 授權。
+每次 `kbsearch query` 會先建立呼叫端指定的查詢結果目錄，再執行 startup 檢查：OAuth client 與 `secure_backend /healthz`；啟用下載後渲染時才檢查 LibreOffice 與 CJK 字型。若已有 token cache 也會驗證 Google Drive 授權。
 
 ## 手動測試
 
@@ -69,7 +79,7 @@ kbsearch query `
 - `--limit`：向量與 Drive 搜尋各別的結果筆數上限，預設 `10`。
 - `--min-score`：向量相似度下限；省略則不過濾低分結果。
 
-執行中會在 **stderr** 輸出進度；每個下載檔案僅輸出 `phase=download status=started` 與 `phase=download status=finished`（含 `page_count`；涵蓋 Drive 下載與分頁渲染）。與 union 層的 `phase=download` 以欄位區分（單檔含 `file_id`、`index`、`total`）。下載與分頁轉檔可能較久。成功時 **stdout** 輸出 JSON 摘要：
+執行中會在 **stderr** 輸出進度；每個下載檔案僅輸出 `phase=download status=started` 與 `phase=download status=finished`（含 `page_count`；停用渲染時為 `0`）。與 union 層的 `phase=download` 以欄位區分（單檔含 `file_id`、`index`、`total`）。下載與分頁轉檔可能較久。成功時 **stdout** 輸出 JSON 摘要：
 
 ```json
 {

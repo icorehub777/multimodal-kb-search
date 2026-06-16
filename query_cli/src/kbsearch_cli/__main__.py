@@ -22,10 +22,11 @@ def _run_startup_probe(config, logger: logging.Logger) -> None:
     _emit_progress("startup_probe", {"status": "started"})
     logger.info(
         "startup_probe started secure_backend_base_url=%s oauth_client=%s token_cache=%s "
-        "libreoffice_command=%s cjk_font_path=%s",
+        "render_downloaded_files=%s libreoffice_command=%s cjk_font_path=%s",
         config.secure_backend_base_url,
         config.google_oauth_client_config,
         config.google_oauth_token_cache,
+        config.render_downloaded_files,
         config.libreoffice_command,
         config.cjk_font_path,
     )
@@ -41,11 +42,13 @@ def _run_startup_probe(config, logger: logging.Logger) -> None:
         raise
     logger.info(
         "startup_probe succeeded secure_backend_base_url=%s google_drive_authenticated=%s "
-        "oauth_client=%s token_cache=%s libreoffice_command=%s cjk_font_path=%s",
+        "oauth_client=%s token_cache=%s render_downloaded_files=%s "
+        "libreoffice_command=%s cjk_font_path=%s",
         result.secure_backend_base_url,
         result.google_drive_authenticated,
         result.google_oauth_client_config,
         result.google_oauth_token_cache,
+        result.render_downloaded_files,
         result.libreoffice_command,
         result.cjk_font_path,
     )
@@ -54,6 +57,7 @@ def _run_startup_probe(config, logger: logging.Logger) -> None:
         {
             "status": "finished",
             "google_drive_authenticated": result.google_drive_authenticated,
+            "render_downloaded_files": result.render_downloaded_files,
         },
     )
     if not result.google_drive_authenticated:

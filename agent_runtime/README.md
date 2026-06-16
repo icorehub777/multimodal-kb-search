@@ -6,6 +6,7 @@
 
 ```text
 agent_runtime/
+  requirements.txt                # Agent 使用 codex PDF skill 所需套件
   tasks/                          # 使用者任務工作區
   memory.md                       # Agent 跨 session 工作記憶
   AGENTS.md                       # Agent 操作規則（部署至使用者端）
@@ -25,7 +26,7 @@ agent_runtime/
 
 在搬移到正式機之前，可在開發機上依下列步驟建立與正式結構相同的 `agent_runtime/`。
 
-### 1. 安裝 LibreOffice 並確認路徑
+### 1. 安裝 LibreOffice 與 Poppler
 
 在目標機器安裝 LibreOffice。`soffice.exe` 預設路徑通常為 `C:\Program Files\LibreOffice\program\soffice.exe`。
 
@@ -34,6 +35,39 @@ Test-Path "C:\Program Files\LibreOffice\program\soffice.exe"
 ```
 
 輸出為 `True` 時，記下實際路徑，供步驟 3 寫入 `.env` 的 `LIBREOFFICE_COMMAND`。
+
+另將 LibreOffice 的 `program` 目錄加入 Windows 系統 `PATH`，並重新啟動 Codex Desktop。
+`LIBREOFFICE_COMMAND` 供 `query_cli` 使用；Documents Skill 的渲染腳本則直接呼叫 `soffice`，因此需要從 `PATH` 找到它。
+設定完後，使用以下指令驗證：
+
+```powershell
+Get-Command soffice
+soffice --version
+```
+
+Codex 的 PDF Skill 將 PDF 頁面渲染為 PNG，以及 Documents Skill 將 DOCX 的中介 PDF 渲染為 PNG 時，都需要 Poppler。
+
+Poppler 安裝與設定步驟：
+
+1. 從可信任的發行來源取得 Windows Poppler build，解壓縮或安裝至固定位置，例如 `C:\Program Files\poppler\`。
+2. 找到實際包含 `pdfinfo.exe` 與 `pdftoppm.exe` 的目錄，例如 `C:\Program Files\poppler\Library\bin\`。
+3. 將該目錄加入 Windows 系統 `PATH`。
+4. 重新啟動 Codex Desktop，讓 Agent 執行程序取得更新後的 `PATH`。
+5. 在新的 PowerShell 視窗驗證：
+
+```powershell
+Get-Command pdfinfo
+Get-Command pdftoppm
+pdfinfo -v
+pdftoppm -v
+```
+
+Optional：若需要 Presentations Skill 執行完整 PPTX package 輔助檢查，可另外安裝相容的 `unzip` CLI，並將其執行檔所在目錄加入 Windows 系統 `PATH`。這不是基本 PPTX 匯入或投影片渲染必需項目；用途是讓 Skill 檢查 PPTX 內部 package，例如擷取 `ppt/media/` 內嵌媒體、掃描字型與統計圖表或投影片 XML parts。
+
+```powershell
+Get-Command unzip
+unzip -v
+```
 
 ### 2. 放入 wheel
 
@@ -60,10 +94,11 @@ Get-ChildItem "C:\Windows\Fonts" -Include *.ttf,*.ttc -Recurse | Select-Object -
 cd agent_runtime\_internal
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install --upgrade pip
+.\.venv\Scripts\python.exe -m pip install -r ..\requirements.txt
 .\.venv\Scripts\python.exe -m pip install --force-reinstall .\packages\kbsearch_cli-*.whl
 ```
 
-`.venv` 綁定建立當下該機器的 Python 路徑，不可從其他電腦或開發環境整包複製後直接使用。
+請注意：`.venv` 綁定建立當下該機器的 Python 路徑，不可從其他電腦或開發環境整包複製後直接使用。
 
 ### 5. 執行查詢
 
@@ -93,7 +128,7 @@ cd agent_runtime\_internal
 ```text
 agent_runtime/
   AGENTS.md
-  memory.md
+  requirements.txt
   tasks/
   _internal/
     config/
@@ -105,4 +140,5 @@ agent_runtime/
 ```
 
 搬移完成後參考以上 `測試環境準備` 中的步驟建置正式環境。
+建置完成後，可刪除 `requirements.txt` 與 `_internal/packages/` 資料夾。
 ---

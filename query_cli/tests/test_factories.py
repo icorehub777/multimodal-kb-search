@@ -1,12 +1,14 @@
 import json
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from kbsearch_cli.config import QueryCliConfig
 from kbsearch_cli.factories import (
     _create_drive_service,
+    create_query_orchestrator,
     discard_oauth_token_cache,
     load_google_credentials,
 )
@@ -29,6 +31,16 @@ def _sample_config(root: Path) -> QueryCliConfig:
 
 
 class GoogleCredentialsFactoryTests(unittest.TestCase):
+    def test_create_query_orchestrator_disables_page_renderer_from_config(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = _sample_config(Path(temp_dir))
+            config = replace(config, render_downloaded_files=False)
+
+            with patch("kbsearch_cli.factories._create_drive_service", return_value=object()):
+                orchestrator = create_query_orchestrator(config)
+
+        self.assertIsNone(orchestrator._page_renderer)
+
     def test_discard_oauth_token_cache_removes_existing_file(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             config = _sample_config(Path(temp_dir))

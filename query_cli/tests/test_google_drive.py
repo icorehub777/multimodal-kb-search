@@ -87,6 +87,67 @@ class GoogleDriveQueryClientTests(unittest.TestCase):
         ):
             client.download("file-1", "Spec.pdf", "application/pdf", Path("C:/tmp/out"))
 
+    def test_download_exports_google_sheet_as_xlsx(self):
+        class FakeDownloadFilesResource:
+            def __init__(self):
+                self.export_kwargs = None
+
+            def export_media(self, **kwargs):
+                self.export_kwargs = kwargs
+                return b"xlsx-content"
+
+        files_resource = FakeDownloadFilesResource()
+        client = GoogleDriveQueryClient(
+            type("Service", (), {"files": lambda self: files_resource})()
+        )
+
+        with patch("kbsearch_cli.google_drive._write_request_bytes") as write_request:
+            output_path = client.download(
+                "sheet-1",
+                "Orders",
+                "application/vnd.google-apps.spreadsheet",
+                Path("C:/tmp/out"),
+            )
+
+        self.assertEqual(output_path, Path("C:/tmp/out/Orders.xlsx"))
+        self.assertEqual(
+            files_resource.export_kwargs,
+            {
+                "fileId": "sheet-1",
+                "mimeType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            },
+        )
+        write_request.assert_called_once_with(b"xlsx-content", output_path)
+
+    def test_download_keeps_uploaded_xlsx_as_original_file(self):
+        class FakeDownloadFilesResource:
+            def __init__(self):
+                self.get_media_kwargs = None
+
+            def get_media(self, **kwargs):
+                self.get_media_kwargs = kwargs
+                return b"xlsx-content"
+
+        files_resource = FakeDownloadFilesResource()
+        client = GoogleDriveQueryClient(
+            type("Service", (), {"files": lambda self: files_resource})()
+        )
+
+        with patch("kbsearch_cli.google_drive._write_request_bytes") as write_request:
+            output_path = client.download(
+                "xlsx-1",
+                "Orders.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                Path("C:/tmp/out"),
+            )
+
+        self.assertEqual(output_path, Path("C:/tmp/out/Orders.xlsx"))
+        self.assertEqual(
+            files_resource.get_media_kwargs,
+            {"fileId": "xlsx-1", "supportsAllDrives": True},
+        )
+        write_request.assert_called_once_with(b"xlsx-content", output_path)
+
 
 class FakeGetRequest:
     def __init__(self, failure=None, payload=None):

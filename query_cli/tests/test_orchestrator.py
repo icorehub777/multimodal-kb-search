@@ -112,6 +112,32 @@ def _create_output_dir(root: str, name: str) -> Path:
 
 
 class QueryOrchestratorTests(unittest.TestCase):
+    def test_run_downloads_without_rendering_when_page_renderer_is_disabled(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            google_drive = FakeGoogleDriveClient()
+            orchestrator = QueryOrchestrator(
+                google_drive=google_drive,
+                backend=FakeBackendClient(),
+                result_writer=QueryResultWriter(),
+                page_renderer=None,
+            )
+
+            result = orchestrator.run(
+                output_dir=_create_output_dir(temp_dir, "僅下載"),
+                vector_query="semantic alpha",
+                drive_query="fullText contains 'alpha' and trashed = false",
+                limit=10,
+                min_score=0.5,
+            )
+
+            alpha = result.bundle.path / "Alpha.pdf-file-1"
+            beta = result.bundle.path / "Beta.pdf-file-2"
+            self.assertTrue((alpha / "Alpha.pdf").exists())
+            self.assertTrue((beta / "Beta.pdf").exists())
+            self.assertEqual(list(alpha.glob("*.png")), [])
+            self.assertEqual(list(beta.glob("*.png")), [])
+            self.assertEqual(result.downloaded_files[0].page_paths, [])
+
     def test_run_downloads_and_renders_union_of_full_text_and_vector_files(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             google_drive = FakeGoogleDriveClient()
@@ -150,6 +176,46 @@ class QueryOrchestratorTests(unittest.TestCase):
             self.assertEqual(backend.calls, [("semantic alpha", [image_path], 10, 0.5)])
             self.assertEqual(bundle.query_plan_path.read_text(encoding="utf-8").count(image_path.as_posix()), 1)
             self.assertEqual(renderer.rendered, ["Alpha.pdf", "Beta.pdf"])
+
+    def test_run_keeps_spreadsheets_without_page_rendering(self):
+        class SpreadsheetGoogleDriveClient(FakeGoogleDriveClient):
+            def search(self, drive_query, limit):
+                return [
+                    FullTextSearchResult(
+                        google_file_id="sheet-1",
+                        name="Orders",
+                        mime_type="application/vnd.google-apps.spreadsheet",
+                        web_url="https://drive/sheet-1",
+                    )
+                ]
+
+            def download(self, file_id, name, mime_type, output_dir):
+                if mime_type != "application/vnd.google-apps.spreadsheet":
+                    return super().download(file_id, name, mime_type, output_dir)
+                output_path = output_dir / "Orders.xlsx"
+                output_path.write_bytes(b"xlsx")
+                return output_path
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            renderer = FakePageRenderer()
+            orchestrator = QueryOrchestrator(
+                google_drive=SpreadsheetGoogleDriveClient(),
+                backend=FakeBackendClient(),
+                result_writer=QueryResultWriter(),
+                page_renderer=renderer,
+            )
+
+            result = orchestrator.run(
+                output_dir=_create_output_dir(temp_dir, "試算表"),
+                vector_query="orders",
+                drive_query="fullText contains 'orders' and trashed = false",
+                limit=10,
+                min_score=0.5,
+            )
+
+            self.assertTrue((result.bundle.path / "Orders-sheet-1" / "Orders.xlsx").exists())
+            self.assertEqual(result.downloaded_files[0].page_paths, [])
+            self.assertEqual(renderer.rendered, ["file-1.pdf"])
 
     def test_run_uses_file_id_suffix_when_normalized_file_names_collide(self):
         class CollidingGoogleDriveClient(FakeGoogleDriveClient):

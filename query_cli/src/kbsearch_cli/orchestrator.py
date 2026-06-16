@@ -20,6 +20,7 @@ from kbsearch_cli.output import QueryResultWriter, safe_path_name
 
 logger = logging.getLogger(LOGGER_NAME)
 ProgressCallback = Callable[[str, Mapping[str, object]], None]
+SPREADSHEET_EXTENSIONS = {".xls", ".xlsx"}
 
 
 class GoogleDriveClient(Protocol):
@@ -68,7 +69,7 @@ class QueryOrchestrator:
         google_drive: GoogleDriveClient,
         backend: BackendClient,
         result_writer: QueryResultWriter,
-        page_renderer: PageRenderer,
+        page_renderer: PageRenderer | None,
     ) -> None:
         self._google_drive = google_drive
         self._backend = backend
@@ -173,6 +174,7 @@ class QueryOrchestrator:
                 "image_paths": [_path_as_posix(path) for path in resolved_image_paths],
                 "limit": limit,
                 "min_score": min_score,
+                "render_downloaded_files": self._page_renderer is not None,
             },
             full_text_results=full_text_results,
             vector_results=vector_results,
@@ -283,7 +285,15 @@ class QueryOrchestrator:
                     mime_type=mime_type,
                     output_dir=file_dir,
                 )
-                page_paths = self._page_renderer.render_pages(source_path, file_dir)
+                page_paths = []
+                if self._page_renderer is not None and source_path.suffix.lower() not in SPREADSHEET_EXTENSIONS:
+                    page_paths = self._page_renderer.render_pages(source_path, file_dir)
+                elif self._page_renderer is not None:
+                    logger.info(
+                        "query phase=download rendering_skipped file_id=%s name=%s reason=spreadsheet",
+                        target.google_file_id,
+                        name,
+                    )
             except Exception as exc:
                 logger.exception(
                     "query phase=download failed file_id=%s name=%s error=%s message=%s",

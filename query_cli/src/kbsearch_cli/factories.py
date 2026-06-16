@@ -17,14 +17,17 @@ logger = logging.getLogger(LOGGER_NAME)
 
 
 def create_query_orchestrator(config: QueryCliConfig) -> QueryOrchestrator:
+    page_renderer = None
+    if config.render_downloaded_files:
+        page_renderer = DocumentPageRenderer(
+            libreoffice_command=config.libreoffice_command,
+            cjk_font_path=config.cjk_font_path,
+        )
     return QueryOrchestrator(
         google_drive=GoogleDriveQueryClient(_create_drive_service(config)),
         backend=SecureBackendClient(config.secure_backend_base_url),
         result_writer=QueryResultWriter(),
-        page_renderer=DocumentPageRenderer(
-            libreoffice_command=config.libreoffice_command,
-            cjk_font_path=config.cjk_font_path,
-        ),
+        page_renderer=page_renderer,
     )
 
 def discard_oauth_token_cache(config: QueryCliConfig) -> bool:

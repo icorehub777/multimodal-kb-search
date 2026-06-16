@@ -11,9 +11,13 @@ from kbsearch_cli.models import FullTextSearchResult
 
 logger = logging.getLogger(LOGGER_NAME)
 
-GOOGLE_NATIVE_EXPORT_MIME_TYPES = {
-    "application/vnd.google-apps.document",
-    "application/vnd.google-apps.presentation",
+GOOGLE_NATIVE_EXPORTS = {
+    "application/vnd.google-apps.document": ("application/pdf", ".pdf"),
+    "application/vnd.google-apps.presentation": ("application/pdf", ".pdf"),
+    "application/vnd.google-apps.spreadsheet": (
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        ".xlsx",
+    ),
 }
 DRIVE_SEARCH_FIELDS = "files(id,name,mimeType,webViewLink)"
 DRIVE_METADATA_FIELDS = "id,name,mimeType,webViewLink"
@@ -120,11 +124,13 @@ class GoogleDriveQueryClient:
     def download(self, file_id: str, name: str, mime_type: str, output_dir: Path) -> Path:
         output_dir.mkdir(parents=True, exist_ok=True)
         try:
-            if mime_type in GOOGLE_NATIVE_EXPORT_MIME_TYPES:
-                output_path = output_dir / f"{safe_download_name(name)}.pdf"
+            native_export = GOOGLE_NATIVE_EXPORTS.get(mime_type)
+            if native_export is not None:
+                export_mime_type, output_extension = native_export
+                output_path = output_dir / f"{safe_download_name(name)}{output_extension}"
                 request = self._drive_service.files().export_media(
                     fileId=file_id,
-                    mimeType="application/pdf",
+                    mimeType=export_mime_type,
                 )
             else:
                 output_path = output_dir / safe_download_name(name)

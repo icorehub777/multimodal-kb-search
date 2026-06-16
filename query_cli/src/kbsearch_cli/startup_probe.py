@@ -20,8 +20,9 @@ class StartupProbeResult:
     google_oauth_client_config: Path
     google_oauth_token_cache: Path
     google_drive_authenticated: bool
-    libreoffice_command: str
-    cjk_font_path: Path
+    libreoffice_command: str | None
+    cjk_font_path: Path | None
+    render_downloaded_files: bool
 
 
 def probe_startup_environment(
@@ -43,6 +44,7 @@ def probe_startup_environment(
         google_drive_authenticated=google_drive_authenticated,
         libreoffice_command=config.libreoffice_command,
         cjk_font_path=config.cjk_font_path,
+        render_downloaded_files=config.render_downloaded_files,
     )
 
 
@@ -51,6 +53,10 @@ def _probe_local_tools(config: QueryCliConfig) -> None:
         raise ConfigError(
             f"Google OAuth client not found: {config.google_oauth_client_config}"
         )
+    if not config.render_downloaded_files:
+        return
+    if config.libreoffice_command is None or config.cjk_font_path is None:
+        raise ConfigError("Render tools are required when downloaded file rendering is enabled.")
     libreoffice_path = Path(config.libreoffice_command)
     if not libreoffice_path.is_file():
         raise ConfigError(f"LibreOffice command not found: {config.libreoffice_command}")

@@ -15,6 +15,7 @@ def _sample_config(
     token_cache_exists: bool = False,
     libreoffice_exists: bool = True,
     cjk_font_exists: bool = True,
+    render_downloaded_files: bool = True,
 ) -> QueryCliConfig:
     config_dir = root / "config"
     config_dir.mkdir(parents=True, exist_ok=True)
@@ -39,6 +40,7 @@ def _sample_config(
         query_logs_root=root / "logs",
         libreoffice_command=str(libreoffice),
         cjk_font_path=cjk_font,
+        render_downloaded_files=render_downloaded_files,
     )
 
 
@@ -74,6 +76,21 @@ class StartupProbeTests(unittest.TestCase):
 
             with self.assertRaisesRegex(ConfigError, "CJK font not found"):
                 probe_startup_environment(config)
+
+    def test_probe_skips_render_tools_when_rendering_disabled(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = _sample_config(
+                Path(temp_dir),
+                libreoffice_exists=False,
+                cjk_font_exists=False,
+                render_downloaded_files=False,
+            )
+            fake_response = type("FakeResponse", (), {"status_code": 200})()
+
+            with patch("requests.get", return_value=fake_response):
+                result = probe_startup_environment(config)
+
+        self.assertFalse(result.render_downloaded_files)
 
     def test_probe_fails_when_secure_backend_unreachable(self):
         import requests

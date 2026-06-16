@@ -45,6 +45,48 @@ class QueryCliConfigTests(unittest.TestCase):
         self.assertEqual(config.query_logs_root, internal_root / "logs")
         self.assertEqual(config.libreoffice_command, "C:/Program Files/LibreOffice/program/soffice.exe")
         self.assertEqual(config.cjk_font_path, Path("C:/Windows/Fonts/msjh.ttc"))
+        self.assertTrue(config.render_downloaded_files)
+
+    def test_load_query_cli_config_allows_missing_render_tools_when_rendering_disabled(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            env_file = Path(temp_dir) / ".env"
+            env_file.write_text(
+                "\n".join(
+                    [
+                        "KBSEARCH_SECURE_BACKEND_BASE_URL=http://127.0.0.1:8000",
+                        "GOOGLE_OAUTH_CLIENT_CONFIG=client.json",
+                        "GOOGLE_OAUTH_TOKEN_CACHE=token.json",
+                        "KBSEARCH_RENDER_DOWNLOADED_FILES=false",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            with patch.dict(os.environ, {}, clear=True):
+                config = load_query_cli_config(env_file)
+
+        self.assertFalse(config.render_downloaded_files)
+        self.assertIsNone(config.libreoffice_command)
+        self.assertIsNone(config.cjk_font_path)
+
+    def test_load_query_cli_config_rejects_invalid_render_downloaded_files(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            env_file = Path(temp_dir) / ".env"
+            env_file.write_text(
+                "\n".join(
+                    [
+                        "KBSEARCH_SECURE_BACKEND_BASE_URL=http://127.0.0.1:8000",
+                        "GOOGLE_OAUTH_CLIENT_CONFIG=client.json",
+                        "GOOGLE_OAUTH_TOKEN_CACHE=token.json",
+                        "KBSEARCH_RENDER_DOWNLOADED_FILES=maybe",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            with patch.dict(os.environ, {}, clear=True):
+                with self.assertRaisesRegex(ConfigError, "KBSEARCH_RENDER_DOWNLOADED_FILES"):
+                    load_query_cli_config(env_file)
 
     def test_load_query_cli_config_defaults_runtime_paths_to_cwd(self):
         with tempfile.TemporaryDirectory() as temp_dir:

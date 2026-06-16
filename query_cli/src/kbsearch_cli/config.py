@@ -15,8 +15,9 @@ class QueryCliConfig:
     google_oauth_client_config: Path
     google_oauth_token_cache: Path
     query_logs_root: Path
-    libreoffice_command: str
-    cjk_font_path: Path
+    libreoffice_command: str | None
+    cjk_font_path: Path | None
+    render_downloaded_files: bool = True
 
 
 DEFAULT_LOGS_ROOT = Path("logs")
@@ -30,6 +31,7 @@ def load_query_cli_config(env_file: str | Path | None = None) -> QueryCliConfig:
         load_dotenv(dotenv_path=env_path, override=False)
 
     root = _resolve_query_cli_root(env_path)
+    render_downloaded_files = _optional_bool("KBSEARCH_RENDER_DOWNLOADED_FILES", True)
     return QueryCliConfig(
         secure_backend_base_url=_required_str("KBSEARCH_SECURE_BACKEND_BASE_URL"),
         google_oauth_client_config=_resolve_path(_required_str("GOOGLE_OAUTH_CLIENT_CONFIG"), root),
@@ -37,8 +39,15 @@ def load_query_cli_config(env_file: str | Path | None = None) -> QueryCliConfig:
         query_logs_root=_resolve_cwd_path(
             _optional_str("KBSEARCH_QUERY_LOGS_ROOT", str(DEFAULT_LOGS_ROOT)),
         ),
-        libreoffice_command=_required_absolute_path_str("LIBREOFFICE_COMMAND"),
-        cjk_font_path=_required_absolute_path("KBSEARCH_CJK_FONT_PATH"),
+        libreoffice_command=_render_tool_path_str(
+            "LIBREOFFICE_COMMAND",
+            required=render_downloaded_files,
+        ),
+        cjk_font_path=_render_tool_path(
+            "KBSEARCH_CJK_FONT_PATH",
+            required=render_downloaded_files,
+        ),
+        render_downloaded_files=render_downloaded_files,
     )
 
 
@@ -84,8 +93,37 @@ def _required_absolute_path(name: str) -> Path:
     return Path(_required_absolute_path_str(name))
 
 
+def _render_tool_path_str(name: str, *, required: bool) -> str | None:
+    value = os.getenv(name)
+    if value is None or value.strip() == "":
+        if required:
+            raise ConfigError(f"Missing required config: {name}")
+        return None
+    value = value.strip()
+    if not Path(value).is_absolute():
+        raise ConfigError(f"Config {name} must be an absolute path.")
+    return value
+
+
+def _render_tool_path(name: str, *, required: bool) -> Path | None:
+    value = _render_tool_path_str(name, required=required)
+    return Path(value) if value is not None else None
+
+
 def _optional_str(name: str, default: str) -> str:
     value = os.getenv(name)
     if value is None or value.strip() == "":
         return default
     return value.strip()
+
+
+def _optional_bool(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None or value.strip() == "":
+        return default
+    normalized = value.strip().lower()
+    if normalized == "true":
+        return True
+    if normalized == "false":
+        return False
+    raise ConfigError(f"Config {name} must be true or false.")
