@@ -25,13 +25,6 @@ class DocumentPageRenderer:
         self._cjk_font_path = cjk_font_path
         self._dpi = dpi
 
-    def render_pages(self, source_path: Path, output_dir: Path) -> list[Path]:
-        output_dir.mkdir(parents=True, exist_ok=True)
-        render_source = self._render_source_path(source_path, output_dir)
-        if render_source.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp"}:
-            return self._render_image(render_source, output_dir)
-        return self._render_pdf(render_source, output_dir)
-
     def process(
         self,
         source_path: Path,
@@ -160,19 +153,6 @@ class DocumentPageRenderer:
                 y -= line_height
         pdf.save()
         return output_path
-
-    def _render_pdf(self, pdf_path: Path, output_dir: Path) -> list[Path]:
-        try:
-            import fitz
-        except ImportError as exc:
-            raise DocumentRenderError("PyMuPDF is required for PDF page rendering.") from exc
-
-        with fitz.open(pdf_path) as document:
-            return self.render_pdf_pages(
-                pdf_path,
-                output_dir,
-                list(range(1, len(document) + 1)),
-            )
 
     def extract_pdf_text(self, pdf_path: Path, output_dir: Path) -> list[Path]:
         try:
