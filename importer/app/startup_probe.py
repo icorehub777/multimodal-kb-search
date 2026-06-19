@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -27,7 +28,6 @@ class StartupProbeResult:
     qdrant_documents: int
     qdrant_vector_size: int
     qdrant_collection_created: bool
-    libreoffice_command: str
     cjk_font_path: Path
 
 
@@ -46,15 +46,13 @@ def probe_startup_environment(config: ImporterConfig) -> StartupProbeResult:
         qdrant_documents=qdrant_documents,
         qdrant_vector_size=qdrant_vector_size,
         qdrant_collection_created=qdrant_collection_created,
-        libreoffice_command=config.libreoffice_command,
         cjk_font_path=config.cjk_font_path,
     )
 
 
 def _probe_local_tools(config: ImporterConfig) -> None:
-    libreoffice_path = Path(config.libreoffice_command)
-    if not libreoffice_path.is_file():
-        raise ConfigError(f"LibreOffice command not found: {config.libreoffice_command}")
+    if shutil.which("soffice") is None:
+        raise ConfigError("LibreOffice command not found in PATH: soffice")
     if not config.cjk_font_path.is_file():
         raise ConfigError(f"CJK font not found: {config.cjk_font_path}")
 

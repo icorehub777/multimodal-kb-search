@@ -10,8 +10,6 @@ from app.startup_probe import probe_startup_environment
 
 
 def _importer_config(temp_dir: Path) -> ImporterConfig:
-    libreoffice = temp_dir / "soffice.exe"
-    libreoffice.write_bytes(b"")
     font_path = temp_dir / "font.ttc"
     font_path.write_bytes(b"font")
     source_config = temp_dir / "google_drive_sources.yaml"
@@ -38,7 +36,6 @@ def _importer_config(temp_dir: Path) -> ImporterConfig:
         qdrant_api_key="qdrant-key",
         qdrant_collection="kbsearch",
         qdrant_vector_size=4,
-        libreoffice_command=str(libreoffice),
         cjk_font_path=font_path,
         keep_success_work_files=True,
         keep_failed_work_files=True,
@@ -54,7 +51,7 @@ class StartupProbeTests(unittest.TestCase):
                 points_count=12,
                 config=SimpleNamespace(params=SimpleNamespace(vectors=SimpleNamespace(size=4))),
             )
-            with patch(
+            with patch("app.startup_probe.shutil.which", return_value="soffice"), patch(
                 "app.startup_probe.create_drive_scanner",
             ) as create_scanner, patch(
                 "app.startup_probe.DashScopeImageEmbeddingClient.embed_image",
@@ -79,9 +76,11 @@ class StartupProbeTests(unittest.TestCase):
     def test_probe_startup_environment_fails_when_libreoffice_missing(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             config = _importer_config(Path(temp_dir))
-            Path(config.libreoffice_command).unlink()
 
-            with self.assertRaisesRegex(ConfigError, "LibreOffice command not found"):
+            with patch("app.startup_probe.shutil.which", return_value=None), self.assertRaisesRegex(
+                ConfigError,
+                "LibreOffice command not found in PATH",
+            ):
                 probe_startup_environment(config)
 
     def test_probe_startup_environment_creates_collection_when_missing(self):
@@ -91,7 +90,7 @@ class StartupProbeTests(unittest.TestCase):
                 points_count=0,
                 config=SimpleNamespace(params=SimpleNamespace(vectors=SimpleNamespace(size=4))),
             )
-            with patch(
+            with patch("app.startup_probe.shutil.which", return_value="soffice"), patch(
                 "app.startup_probe.create_drive_scanner",
             ) as create_scanner, patch(
                 "app.startup_probe.DashScopeImageEmbeddingClient.embed_image",
@@ -118,7 +117,7 @@ class StartupProbeTests(unittest.TestCase):
                 points_count=1,
                 config=SimpleNamespace(params=SimpleNamespace(vectors=SimpleNamespace(size=8))),
             )
-            with patch(
+            with patch("app.startup_probe.shutil.which", return_value="soffice"), patch(
                 "app.startup_probe.create_drive_scanner",
             ) as create_scanner, patch(
                 "app.startup_probe.DashScopeImageEmbeddingClient.embed_image",

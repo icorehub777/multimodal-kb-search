@@ -16,7 +16,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY main.py .
 COPY app/ app/
 
-ENV LIBREOFFICE_COMMAND=/usr/bin/soffice
 ENV KBSEARCH_CJK_FONT_PATH=/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc
 
 CMD ["python", "main.py"]

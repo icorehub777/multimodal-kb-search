@@ -60,7 +60,6 @@ def create_sync_orchestrator(config: ImporterConfig) -> SyncOrchestrator:
         document_importer=PipelineDocumentImporter(
             downloader=GoogleDriveDownloader(drive_service),
             converter=DocumentConverter(
-                libreoffice_command=config.libreoffice_command,
                 cjk_font_path=config.cjk_font_path,
             ),
             renderer=PdfPageRenderer(),

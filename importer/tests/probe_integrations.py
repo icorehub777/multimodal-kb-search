@@ -136,13 +136,12 @@ def probe_sync_decisions() -> None:
 
 
 def probe_libreoffice() -> None:
-    config = load_importer_config()
     docx_mime_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     with TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
         source_path = temp_path / "sample.docx"
         _write_minimal_docx(source_path)
-        output_path = DocumentConverter(config.libreoffice_command).convert_to_pdf(
+        output_path = DocumentConverter().convert_to_pdf(
             source_path,
             docx_mime_type,
             temp_path / "out",
@@ -156,7 +155,7 @@ def probe_document_processing() -> None:
     config = load_importer_config()
     scanner = create_drive_scanner(config)
     downloader = create_drive_downloader(config)
-    converter = DocumentConverter(config.libreoffice_command)
+    converter = DocumentConverter()
     renderer = PdfPageRenderer()
     documents = scanner.list_documents()
     if not documents:

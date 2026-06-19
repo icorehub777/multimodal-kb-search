@@ -28,7 +28,6 @@ _BASE_ENV = "\n".join(
         "QDRANT_API_KEY=",
         "QDRANT_COLLECTION=kbsearch",
         "QDRANT_VECTOR_SIZE=2560",
-        "LIBREOFFICE_COMMAND=C:\\Program Files\\LibreOffice\\program\\soffice.exe",
         "KBSEARCH_CJK_FONT_PATH=C:\\Windows\\Fonts\\msjh.ttc",
     ]
 )
@@ -124,25 +123,11 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config.app_root, APP_ROOT)
         self.assertEqual(config.google_drive_source_config, source_config)
 
-    def test_load_importer_config_reads_required_absolute_libreoffice_command(self) -> None:
+    def test_load_importer_config_reads_required_absolute_cjk_font_path(self) -> None:
         with self._config_context() as (env_file, source_config):
             config = load_importer_config(env_file)
 
-        self.assertEqual(config.libreoffice_command, "C:\\Program Files\\LibreOffice\\program\\soffice.exe")
         self.assertEqual(config.cjk_font_path, Path("C:\\Windows\\Fonts\\msjh.ttc"))
-
-    def test_load_importer_config_rejects_missing_libreoffice_command(self) -> None:
-        with self._config_context(
-            "LIBREOFFICE_COMMAND=",
-            "KBSEARCH_CJK_FONT_PATH=C:\\Windows\\Fonts\\msjh.ttc",
-        ) as (env_file, source_config):
-            with self.assertRaisesRegex(ConfigError, "LIBREOFFICE_COMMAND"):
-                load_importer_config(env_file)
-
-    def test_load_importer_config_rejects_relative_libreoffice_command(self) -> None:
-        with self._config_context("LIBREOFFICE_COMMAND=soffice") as (env_file, source_config):
-            with self.assertRaisesRegex(ConfigError, "absolute path"):
-                load_importer_config(env_file)
 
     def test_load_importer_config_rejects_missing_cjk_font_path(self) -> None:
         with self._config_context("KBSEARCH_CJK_FONT_PATH=") as (env_file, source_config):

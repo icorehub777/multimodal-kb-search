@@ -8,11 +8,11 @@ from app.document_processing import classify_document_type, page_png_path
 from app.errors import DocumentConversionError
 
 CJK_TEXT_FONT_NAME = "KBSearchTextCJK"
+SOFFICE_EXECUTABLE = "soffice"
 
 
 class DocumentConverter:
-    def __init__(self, libreoffice_command: str = "soffice", cjk_font_path: Path | None = None) -> None:
-        self._libreoffice_command = libreoffice_command
+    def __init__(self, cjk_font_path: Path | None = None) -> None:
         self._cjk_font_path = cjk_font_path
 
     def convert_to_pdf(self, source_path: Path, mime_type: str, output_dir: Path) -> Path:
@@ -37,7 +37,7 @@ class DocumentConverter:
         try:
             result = subprocess.run(
                 [
-                    self._libreoffice_command,
+                    SOFFICE_EXECUTABLE,
                     "--headless",
                     "--convert-to",
                     "pdf",

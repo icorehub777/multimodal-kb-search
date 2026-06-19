@@ -44,7 +44,7 @@ importer/
 
 ### `.env`
 
-自 `config/.env.example` 複製為 `config/.env`。路徑類設定相對 `importer/` 根目錄。
+自 `config/.env.example` 複製為 `config/.env`。一般檔案路徑相對 `importer/` 根目錄；`KBSEARCH_CJK_FONT_PATH` 必須使用絕對路徑。
 
 | 變數 | 說明 |
 |------|------|
@@ -58,7 +58,6 @@ importer/
 | `QDRANT_API_KEY` | 選填；地端預設不啟用 API key，雲端託管時再填 |
 | `QDRANT_COLLECTION` | Collection 名稱 |
 | `QDRANT_VECTOR_SIZE` | Collection 向量維度 |
-| `LIBREOFFICE_COMMAND` | LibreOffice `soffice` 絕對路徑 |
 | `KBSEARCH_CJK_FONT_PATH` | CJK 字型絕對路徑 |
 | `IMPORTER_KEEP_SUCCESS_WORK_FILES` | 檔案匯入成功後是否保留 `work/` 暫存 |
 | `IMPORTER_KEEP_FAILED_WORK_FILES` | 檔案匯入失敗後是否保留 `work/` 暫存 |
@@ -93,6 +92,24 @@ cd importer
 python -m pip install -r requirements.txt
 ```
 
+### 安裝文件處理工具
+
+安裝 LibreOffice，並將其 `program` 目錄加入 Windows 系統 `PATH`。importer 固定以 `soffice` 指令執行 LibreOffice。
+
+```powershell
+Test-Path "C:\Program Files\LibreOffice\program\soffice.exe"
+Get-Command soffice
+soffice --version
+```
+
+另需準備一個 CJK 字型檔供 TXT／MD 轉 PDF，並將其絕對路徑設定於 `KBSEARCH_CJK_FONT_PATH`。
+
+```powershell
+Test-Path "C:\Windows\Fonts\msjh.ttc"
+```
+
+### 建立本機設定
+
 建立本機設定檔：
 
 ```powershell
@@ -104,7 +121,6 @@ Copy-Item config\google_drive_sources.example.yaml config\google_drive_sources.y
 ### 其他前置環境準備
 
 - 確認 `google_drive_sources.yaml` 中設定的 Google Drive 同步來源正確。
-- 確認開發機已安裝 LibreOffice，並確認其執行檔 `soffice` 絕對路徑與  `.env` 中設定一致。
 - 確認 `.env` 中的字型存在，若不存在請設定其他本機存在的字型檔，如 `mingliu.ttc`（細明體) 或 `kaiu.ttf`（標楷體）。
 - 確認已跟 GCP 管理員拿到 Service Account JSON 認證檔，放到 `config/` 後，確定與 `.env` 中設定一致。
 - 確定 `GOOGLE_DWD_SUBJECT_EMAIL` 中設定的 GMAIL 帳號有所有要同步的 Google Drive 來源的存取權限。

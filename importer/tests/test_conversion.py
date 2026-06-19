@@ -55,18 +55,19 @@ class ConversionTests(unittest.TestCase):
             self.assertFalse(any(output_dir.iterdir()))
 
     def test_office_conversion_failure_raises_domain_error(self):
-        converter = DocumentConverter(libreoffice_command="missing-libreoffice")
+        converter = DocumentConverter()
 
         with TemporaryDirectory() as temp_dir:
             source = Path(temp_dir) / "Spec.docx"
             source.write_text("doc", encoding="utf-8")
-            with patch("subprocess.run", side_effect=FileNotFoundError("missing")):
+            with patch("subprocess.run", side_effect=FileNotFoundError("missing")) as run:
                 with self.assertRaises(DocumentConversionError):
                     converter.convert_to_pdf(
                         source,
                         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                         Path(temp_dir),
                     )
+            self.assertEqual(run.call_args.args[0][0], "soffice")
 
     def test_pdf_page_renderer_returns_numbered_page_images(self):
         class FakePage:

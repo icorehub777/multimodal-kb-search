@@ -96,7 +96,7 @@ def _run_startup_probe(config: ImporterConfig, logger: logging.Logger) -> None:
     logger.info(
         "startup_probe succeeded google_documents=%s dashscope_model=%s dashscope_dimension=%s "
         "qdrant_host=%s qdrant_collection=%s qdrant_documents=%s qdrant_vector_size=%s "
-        "qdrant_collection_created=%s libreoffice_command=%s cjk_font_path=%s",
+        "qdrant_collection_created=%s cjk_font_path=%s",
         result.google_documents,
         result.dashscope_model,
         result.dashscope_dimension,
@@ -105,7 +105,6 @@ def _run_startup_probe(config: ImporterConfig, logger: logging.Logger) -> None:
         result.qdrant_documents,
         result.qdrant_vector_size,
         result.qdrant_collection_created,
-        result.libreoffice_command,
         result.cjk_font_path,
     )
 

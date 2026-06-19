@@ -34,7 +34,6 @@ class ImporterConfig:
     qdrant_api_key: str | None
     qdrant_collection: str
     qdrant_vector_size: int
-    libreoffice_command: str
     cjk_font_path: Path
     keep_success_work_files: bool
     keep_failed_work_files: bool
@@ -83,7 +82,6 @@ def load_importer_config(env_file: str | Path | None = DEFAULT_ENV_FILE) -> Impo
         qdrant_api_key=_optional_str("QDRANT_API_KEY"),
         qdrant_collection=_required_str("QDRANT_COLLECTION"),
         qdrant_vector_size=_required_int("QDRANT_VECTOR_SIZE"),
-        libreoffice_command=_required_absolute_path_str("LIBREOFFICE_COMMAND"),
         cjk_font_path=_required_absolute_path("KBSEARCH_CJK_FONT_PATH"),
         keep_success_work_files=_optional_bool("IMPORTER_KEEP_SUCCESS_WORK_FILES", True),
         keep_failed_work_files=_optional_bool("IMPORTER_KEEP_FAILED_WORK_FILES", True),

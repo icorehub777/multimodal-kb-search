@@ -18,7 +18,7 @@
 - 所有設定讀取集中在 `app.config`，其他模組不得直接讀取環境變數。
 - 缺少必要設定時必須明確失敗。
 - 新增設定時同步更新 `.env.example`、config model 與測試。
-- `LIBREOFFICE_COMMAND` 必須由設定層提供完整絕對路徑，不得依賴 `PATH` 中的 `soffice`。
+- LibreOffice 只允許透過系統 `PATH` 中的 `soffice` 呼叫。
 - `KBSEARCH_CJK_FONT_PATH` 必須由設定層提供完整絕對路徑；TXT / MD 轉 PDF 只可使用此單一字型設定，不得掃描候選字型或讀取環境 fallback。
 - `config/.env`、`config/gcp-adc.json`、`config/google_drive_sources.yaml`、`work/` 與同步產物屬於 importer 執行環境內容，不得提交 Git。
 
