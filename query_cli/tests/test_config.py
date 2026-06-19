@@ -21,7 +21,6 @@ class QueryCliConfigTests(unittest.TestCase):
                         "GOOGLE_OAUTH_CLIENT_CONFIG=config/oauth_client.json",
                         "GOOGLE_OAUTH_TOKEN_CACHE=config/token_cache.json",
                         "KBSEARCH_QUERY_LOGS_ROOT=logs",
-                        "LIBREOFFICE_COMMAND=C:/Program Files/LibreOffice/program/soffice.exe",
                         "KBSEARCH_CJK_FONT_PATH=C:/Windows/Fonts/msjh.ttc",
                     ]
                 ),
@@ -43,7 +42,6 @@ class QueryCliConfigTests(unittest.TestCase):
             internal_root / "config" / "token_cache.json",
         )
         self.assertEqual(config.query_logs_root, internal_root / "logs")
-        self.assertEqual(config.libreoffice_command, "C:/Program Files/LibreOffice/program/soffice.exe")
         self.assertEqual(config.cjk_font_path, Path("C:/Windows/Fonts/msjh.ttc"))
         self.assertTrue(config.render_downloaded_files)
 
@@ -66,7 +64,6 @@ class QueryCliConfigTests(unittest.TestCase):
                 config = load_query_cli_config(env_file)
 
         self.assertFalse(config.render_downloaded_files)
-        self.assertIsNone(config.libreoffice_command)
         self.assertIsNone(config.cjk_font_path)
 
     def test_load_query_cli_config_rejects_invalid_render_downloaded_files(self):
@@ -97,7 +94,6 @@ class QueryCliConfigTests(unittest.TestCase):
                         "KBSEARCH_SECURE_BACKEND_BASE_URL=http://127.0.0.1:8000",
                         "GOOGLE_OAUTH_CLIENT_CONFIG=client.json",
                         "GOOGLE_OAUTH_TOKEN_CACHE=token.json",
-                        "LIBREOFFICE_COMMAND=C:/Program Files/LibreOffice/program/soffice.exe",
                         "KBSEARCH_CJK_FONT_PATH=C:/Windows/Fonts/msjh.ttc",
                     ]
                 ),
@@ -129,7 +125,6 @@ class QueryCliConfigTests(unittest.TestCase):
                     [
                         "GOOGLE_OAUTH_CLIENT_CONFIG=client.json",
                         "GOOGLE_OAUTH_TOKEN_CACHE=token.json",
-                        "LIBREOFFICE_COMMAND=C:/Program Files/LibreOffice/program/soffice.exe",
                         "KBSEARCH_CJK_FONT_PATH=C:/Windows/Fonts/msjh.ttc",
                     ]
                 ),
@@ -138,45 +133,6 @@ class QueryCliConfigTests(unittest.TestCase):
 
             with patch.dict(os.environ, {}, clear=True):
                 with self.assertRaisesRegex(ConfigError, "KBSEARCH_SECURE_BACKEND_BASE_URL"):
-                    load_query_cli_config(env_file)
-
-    def test_load_query_cli_config_rejects_missing_libreoffice_command(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            env_file = Path(temp_dir) / ".env"
-            env_file.write_text(
-                "\n".join(
-                    [
-                        "KBSEARCH_SECURE_BACKEND_BASE_URL=http://127.0.0.1:8000",
-                        "GOOGLE_OAUTH_CLIENT_CONFIG=client.json",
-                        "GOOGLE_OAUTH_TOKEN_CACHE=token.json",
-                        "KBSEARCH_CJK_FONT_PATH=C:/Windows/Fonts/msjh.ttc",
-                    ]
-                ),
-                encoding="utf-8",
-            )
-
-            with patch.dict(os.environ, {}, clear=True):
-                with self.assertRaisesRegex(ConfigError, "LIBREOFFICE_COMMAND"):
-                    load_query_cli_config(env_file)
-
-    def test_load_query_cli_config_rejects_relative_libreoffice_command(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            env_file = Path(temp_dir) / ".env"
-            env_file.write_text(
-                "\n".join(
-                    [
-                        "KBSEARCH_SECURE_BACKEND_BASE_URL=http://127.0.0.1:8000",
-                        "GOOGLE_OAUTH_CLIENT_CONFIG=client.json",
-                        "GOOGLE_OAUTH_TOKEN_CACHE=token.json",
-                        "LIBREOFFICE_COMMAND=soffice",
-                        "KBSEARCH_CJK_FONT_PATH=C:/Windows/Fonts/msjh.ttc",
-                    ]
-                ),
-                encoding="utf-8",
-            )
-
-            with patch.dict(os.environ, {}, clear=True):
-                with self.assertRaisesRegex(ConfigError, "absolute path"):
                     load_query_cli_config(env_file)
 
     def test_load_query_cli_config_rejects_missing_cjk_font_path(self):
@@ -188,7 +144,6 @@ class QueryCliConfigTests(unittest.TestCase):
                         "KBSEARCH_SECURE_BACKEND_BASE_URL=http://127.0.0.1:8000",
                         "GOOGLE_OAUTH_CLIENT_CONFIG=client.json",
                         "GOOGLE_OAUTH_TOKEN_CACHE=token.json",
-                        "LIBREOFFICE_COMMAND=C:/Program Files/LibreOffice/program/soffice.exe",
                     ]
                 ),
                 encoding="utf-8",
@@ -207,7 +162,6 @@ class QueryCliConfigTests(unittest.TestCase):
                         "KBSEARCH_SECURE_BACKEND_BASE_URL=http://127.0.0.1:8000",
                         "GOOGLE_OAUTH_CLIENT_CONFIG=client.json",
                         "GOOGLE_OAUTH_TOKEN_CACHE=token.json",
-                        "LIBREOFFICE_COMMAND=C:/Program Files/LibreOffice/program/soffice.exe",
                         "KBSEARCH_CJK_FONT_PATH=msjh.ttc",
                     ]
                 ),

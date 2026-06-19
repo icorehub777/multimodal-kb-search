@@ -25,7 +25,6 @@ def _sample_config(root: Path) -> QueryCliConfig:
         google_oauth_client_config=oauth_client,
         google_oauth_token_cache=token_cache,
         query_logs_root=root / "logs",
-        libreoffice_command=str(root / "soffice.exe"),
         cjk_font_path=root / "msjh.ttc",
     )
 

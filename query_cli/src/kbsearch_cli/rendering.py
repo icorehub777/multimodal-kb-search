@@ -10,16 +10,15 @@ from kbsearch_cli.errors import DocumentRenderError
 
 CJK_TEXT_FONT_NAME = "KBSearchTextCJK"
 _LIBREOFFICE_MAX_SOURCE_PATH = 240
+SOFFICE_EXECUTABLE = "soffice"
 
 
 class DocumentPageRenderer:
     def __init__(
         self,
-        libreoffice_command: str = "soffice",
         cjk_font_path: Path | None = None,
         dpi: int = 200,
     ) -> None:
-        self._libreoffice_command = libreoffice_command
         self._cjk_font_path = cjk_font_path
         self._dpi = dpi
 
@@ -46,7 +45,7 @@ class DocumentPageRenderer:
             with _office_conversion_inputs(source_path) as (convert_source, convert_outdir):
                 result = subprocess.run(
                     [
-                        self._libreoffice_command,
+                        SOFFICE_EXECUTABLE,
                         "--headless",
                         "--convert-to",
                         "pdf",

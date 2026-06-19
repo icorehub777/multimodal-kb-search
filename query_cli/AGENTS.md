@@ -27,6 +27,7 @@
 - **stderr**：錯誤訊息與長時間操作的即時進度；訊息須說明哪個設定、路徑或服務出問題，供 Agent 與人類判斷原因。
 - `query` 子指令的進度 `phase` 須與 log 一致（`search`、`access_check`、`download`、`complete`）。單檔 `phase=download` 涵蓋 Drive 下載與分頁渲染；與 union 層 `download` 以欄位（如 `file_id`、`index`）區分。
 - `KBSEARCH_RENDER_DOWNLOADED_FILES=false` 時只下載檔案，不得呼叫頁面 renderer。Google Docs / Slides 固定匯出 PDF，Google Sheets 固定匯出 XLSX；其他格式不得自行加入匯出策略。
+- 啟用下載後渲染時，LibreOffice 只允許透過系統 `PATH` 中的 `soffice` 呼叫，不提供 command path 設定。
 - XLS/XLSX 不交由 query CLI 頁面 renderer 處理，僅保留下載檔供 Agent 使用 Spreadsheets Skill 讀取與解析。
 - **stdout**：成功時輸出該子指令的**可解析結果**（格式由各指令文件定義）；失敗時 exit code 為 `1`。
 - 可預期失敗須轉成明確 domain error（`ConfigError`、`ExternalServiceError`、`DocumentRenderError`、`QueryCliError` 等），保留排錯資訊；不得讓第三方 library 原始 exception 直接外洩到 terminal。

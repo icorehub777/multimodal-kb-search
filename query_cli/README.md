@@ -16,14 +16,33 @@ conda env list | Select-String kbsearch
 conda create -n kbsearch python=3.12 pip setuptools wheel
 ```
 
-進入環境並安裝 `query_cli` package。：
-
+進入環境並安裝 `query_cli` package：
 
 ```powershell
 conda activate kbsearch
 cd query_cli
-python -m pip install -e .
+python -m pip install -e .  # 調整程式後會即時更新
 ```
+
+### 安裝下載後渲染工具
+
+只有將 `KBSEARCH_RENDER_DOWNLOADED_FILES` 設為 `true` 時，才需要準備本節工具。
+
+安裝 LibreOffice，並將其 `program` 目錄加入 Windows 系統 `PATH`。query_cli 直接呼叫 `soffice` 將 DOC、DOCX、PPT、PPTX 轉成中介 PDF。
+
+```powershell
+Test-Path "C:\Program Files\LibreOffice\program\soffice.exe"
+Get-Command soffice
+soffice --version
+```
+
+啟用渲染時，也需準備一個 CJK 字型檔供 TXT／MD 轉 PDF，並將其絕對路徑設定於 `KBSEARCH_CJK_FONT_PATH`。
+
+```powershell
+Test-Path "C:\Windows\Fonts\msjh.ttc"
+```
+
+### 建立本機設定
 
 建立本機設定檔：
 
@@ -39,7 +58,6 @@ GOOGLE_OAUTH_CLIENT_CONFIG=config/oauth_client.json
 GOOGLE_OAUTH_TOKEN_CACHE=config/token_cache.json
 KBSEARCH_QUERY_LOGS_ROOT=logs
 KBSEARCH_RENDER_DOWNLOADED_FILES=true
-LIBREOFFICE_COMMAND=C:\Program Files\LibreOffice\program\soffice.exe
 KBSEARCH_CJK_FONT_PATH=C:\Windows\Fonts\msjh.ttc
 ```
 
@@ -50,11 +68,11 @@ KBSEARCH_CJK_FONT_PATH=C:\Windows\Fonts\msjh.ttc
 
 Google 原生檔案不受上述設定影響：Google Docs 與 Google Slides 固定由 Drive API 匯出為 PDF，Google Sheets 固定匯出為 XLSX。上傳至 Drive 的 XLS/XLSX 下載原始檔。
 
-停用渲染時，`LIBREOFFICE_COMMAND` 與 `KBSEARCH_CJK_FONT_PATH` 可省略。
+啟用渲染時，LibreOffice 的 `soffice` 必須可從系統 `PATH` 找到，並須設定 `KBSEARCH_CJK_FONT_PATH`。停用渲染時不需要安裝 LibreOffice，也可省略 `KBSEARCH_CJK_FONT_PATH`。
 
 `config/oauth_client.json` 為 Google OAuth **Desktop 用戶端憑證**，須向**內部 Google / GCP 管理者**申請並取得 JSON 後，手動放到 `config/oauth_client.json`（程式不會自動產生）。`config/token_cache.json` 則在首次執行 `kbsearch query`、完成 browser 授權後由程式寫入；若 token 無法 refresh 或驗證失敗，程式會刪除該檔並在下次 query 時重新開啟 browser 登入。兩者皆不納版控。
 
-每次 `kbsearch query` 會先建立呼叫端指定的查詢結果目錄，再執行 startup 檢查：OAuth client 與 `secure_backend /healthz`；啟用下載後渲染時才檢查 LibreOffice 與 CJK 字型。若已有 token cache 也會驗證 Google Drive 授權。
+每次 `kbsearch query` 會先建立呼叫端指定的查詢結果目錄，再執行 startup 檢查：OAuth client 與 `secure_backend /healthz`；啟用下載後渲染時才檢查系統 `PATH` 中的 `soffice` 與 CJK 字型。若已有 token cache 也會驗證 Google Drive 授權。
 
 ## 手動測試
 

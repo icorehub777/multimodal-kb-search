@@ -67,7 +67,7 @@ class RenderingTests(unittest.TestCase):
         self.assertEqual(seen_paths, [str(configured_font)])
 
     def test_convert_office_to_pdf_uses_short_temp_path_when_source_path_is_too_long(self):
-        renderer = DocumentPageRenderer(libreoffice_command="soffice")
+        renderer = DocumentPageRenderer()
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             long_name = "內部_" + ("Bell Taih US CA Unshipped Order Status - 20260522" * 3) + ".pptx"
@@ -77,6 +77,7 @@ class RenderingTests(unittest.TestCase):
             source_path.write_bytes(b"pptx")
 
             def fake_run(command, **_kwargs):
+                self.assertEqual(command[0], "soffice")
                 convert_source = Path(command[-1])
                 convert_outdir = Path(command[-2])
                 self.assertEqual(convert_source.name, "source.pptx")
@@ -91,7 +92,7 @@ class RenderingTests(unittest.TestCase):
             self.assertTrue(output_path.exists())
 
     def test_convert_office_to_pdf_does_not_leave_pdf_when_libreoffice_fails(self):
-        renderer = DocumentPageRenderer(libreoffice_command="soffice")
+        renderer = DocumentPageRenderer()
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             long_name = "內部_" + ("Bell Taih US CA Unshipped Order Status - 20260522" * 3) + ".pptx"

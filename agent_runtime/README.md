@@ -34,10 +34,7 @@ agent_runtime/
 Test-Path "C:\Program Files\LibreOffice\program\soffice.exe"
 ```
 
-輸出為 `True` 時，記下實際路徑，供步驟 3 寫入 `.env` 的 `LIBREOFFICE_COMMAND`。
-
-另將 LibreOffice 的 `program` 目錄加入 Windows 系統 `PATH`，並重新啟動 Codex Desktop。
-`LIBREOFFICE_COMMAND` 供 `query_cli` 使用；Documents Skill 的渲染腳本則直接呼叫 `soffice`，因此需要從 `PATH` 找到它。
+輸出為 `True` 後，將 LibreOffice 的 `program` 目錄加入 Windows 系統 `PATH`，並重新啟動 Codex Desktop。`query_cli` 與 Documents Skill 都直接呼叫 `soffice`，不接受另外設定執行檔路徑。
 設定完後，使用以下指令驗證：
 
 ```powershell
@@ -79,7 +76,6 @@ unzip -v
 
 若未調整建議的 `agent_runtime` 資料夾結構，複製後須調整 `.env` 中的：
 
-- `LIBREOFFICE_COMMAND`：改為步驟 1 確認的 `soffice.exe` 路徑
 - `KBSEARCH_CJK_FONT_PATH`：改為該機器上**已存在**的 CJK 字型檔絕對路徑（`.ttf` 或 `.ttc`）。`msjh.ttc` 僅為繁中 Windows 常見範例；若不存在，可改用同目錄其他 CJK 字型（例如 `msyh.ttc`、`mingliu.ttc`），或先安裝字型（例如 Noto Sans CJK）後再填入路徑：
 
 ```powershell
@@ -90,7 +86,9 @@ Get-ChildItem "C:\Windows\Fonts" -Include *.ttf,*.ttc -Recurse | Select-Object -
 
 ### 4. 建立 .venv 並安裝 wheel
 
-```powershell
+以下指令必須使用 Windows Command Prompt（`cmd.exe`）執行，不得使用 PowerShell：
+
+```bat
 cd agent_runtime\_internal
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install --upgrade pip

@@ -20,7 +20,6 @@ def create_query_orchestrator(config: QueryCliConfig) -> QueryOrchestrator:
     page_renderer = None
     if config.render_downloaded_files:
         page_renderer = DocumentPageRenderer(
-            libreoffice_command=config.libreoffice_command,
             cjk_font_path=config.cjk_font_path,
         )
     return QueryOrchestrator(

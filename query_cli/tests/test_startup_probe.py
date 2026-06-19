@@ -13,7 +13,6 @@ def _sample_config(
     *,
     oauth_client_exists: bool = True,
     token_cache_exists: bool = False,
-    libreoffice_exists: bool = True,
     cjk_font_exists: bool = True,
     render_downloaded_files: bool = True,
 ) -> QueryCliConfig:
@@ -21,15 +20,12 @@ def _sample_config(
     config_dir.mkdir(parents=True, exist_ok=True)
     oauth_client = config_dir / "oauth_client.json"
     token_cache = config_dir / "token_cache.json"
-    libreoffice = root / "soffice.exe"
     cjk_font = root / "msjh.ttc"
 
     if oauth_client_exists:
         oauth_client.write_text("{}", encoding="utf-8")
     if token_cache_exists:
         token_cache.write_text("{}", encoding="utf-8")
-    if libreoffice_exists:
-        libreoffice.write_bytes(b"")
     if cjk_font_exists:
         cjk_font.write_bytes(b"")
 
@@ -38,7 +34,6 @@ def _sample_config(
         google_oauth_client_config=oauth_client,
         google_oauth_token_cache=token_cache,
         query_logs_root=root / "logs",
-        libreoffice_command=str(libreoffice),
         cjk_font_path=cjk_font,
         render_downloaded_files=render_downloaded_files,
     )
@@ -50,7 +45,9 @@ class StartupProbeTests(unittest.TestCase):
             config = _sample_config(Path(temp_dir))
             fake_response = type("FakeResponse", (), {"status_code": 200})()
 
-            with patch("requests.get", return_value=fake_response):
+            with patch("shutil.which", return_value="soffice"), patch(
+                "requests.get", return_value=fake_response
+            ):
                 result = probe_startup_environment(config)
 
         self.assertFalse(result.google_drive_authenticated)
@@ -65,32 +62,38 @@ class StartupProbeTests(unittest.TestCase):
 
     def test_probe_fails_when_libreoffice_missing(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            config = _sample_config(Path(temp_dir), libreoffice_exists=False)
+            config = _sample_config(Path(temp_dir))
 
-            with self.assertRaisesRegex(ConfigError, "LibreOffice command not found"):
+            with patch("shutil.which", return_value=None), self.assertRaisesRegex(
+                ConfigError,
+                "LibreOffice command not found in PATH",
+            ):
                 probe_startup_environment(config)
 
     def test_probe_fails_when_cjk_font_missing(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             config = _sample_config(Path(temp_dir), cjk_font_exists=False)
 
-            with self.assertRaisesRegex(ConfigError, "CJK font not found"):
+            with patch("shutil.which", return_value="soffice"), self.assertRaisesRegex(
+                ConfigError,
+                "CJK font not found",
+            ):
                 probe_startup_environment(config)
 
     def test_probe_skips_render_tools_when_rendering_disabled(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             config = _sample_config(
                 Path(temp_dir),
-                libreoffice_exists=False,
                 cjk_font_exists=False,
                 render_downloaded_files=False,
             )
             fake_response = type("FakeResponse", (), {"status_code": 200})()
 
-            with patch("requests.get", return_value=fake_response):
+            with patch("shutil.which") as which, patch("requests.get", return_value=fake_response):
                 result = probe_startup_environment(config)
 
         self.assertFalse(result.render_downloaded_files)
+        which.assert_not_called()
 
     def test_probe_fails_when_secure_backend_unreachable(self):
         import requests
@@ -98,7 +101,7 @@ class StartupProbeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             config = _sample_config(Path(temp_dir))
 
-            with patch(
+            with patch("shutil.which", return_value="soffice"), patch(
                 "requests.get",
                 side_effect=requests.RequestException("connection refused"),
             ):
@@ -130,7 +133,9 @@ class StartupProbeTests(unittest.TestCase):
                 },
             )()
 
-            with patch("requests.get", return_value=fake_response), patch(
+            with patch("shutil.which", return_value="soffice"), patch(
+                "requests.get", return_value=fake_response
+            ), patch(
                 "kbsearch_cli.startup_probe.load_google_credentials",
                 return_value=type("Credentials", (), {"valid": True})(),
             ), patch(

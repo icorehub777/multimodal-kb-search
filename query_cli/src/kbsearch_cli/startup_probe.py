@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
@@ -20,7 +21,6 @@ class StartupProbeResult:
     google_oauth_client_config: Path
     google_oauth_token_cache: Path
     google_drive_authenticated: bool
-    libreoffice_command: str | None
     cjk_font_path: Path | None
     render_downloaded_files: bool
 
@@ -42,7 +42,6 @@ def probe_startup_environment(
         google_oauth_client_config=config.google_oauth_client_config,
         google_oauth_token_cache=config.google_oauth_token_cache,
         google_drive_authenticated=google_drive_authenticated,
-        libreoffice_command=config.libreoffice_command,
         cjk_font_path=config.cjk_font_path,
         render_downloaded_files=config.render_downloaded_files,
     )
@@ -55,11 +54,10 @@ def _probe_local_tools(config: QueryCliConfig) -> None:
         )
     if not config.render_downloaded_files:
         return
-    if config.libreoffice_command is None or config.cjk_font_path is None:
+    if config.cjk_font_path is None:
         raise ConfigError("Render tools are required when downloaded file rendering is enabled.")
-    libreoffice_path = Path(config.libreoffice_command)
-    if not libreoffice_path.is_file():
-        raise ConfigError(f"LibreOffice command not found: {config.libreoffice_command}")
+    if shutil.which("soffice") is None:
+        raise ConfigError("LibreOffice command not found in PATH: soffice")
     if not config.cjk_font_path.is_file():
         raise ConfigError(f"CJK font not found: {config.cjk_font_path}")
 
