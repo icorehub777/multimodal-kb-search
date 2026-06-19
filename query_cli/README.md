@@ -24,9 +24,7 @@ cd query_cli
 python -m pip install -e .  # 調整程式後會即時更新
 ```
 
-### 安裝下載後渲染工具
-
-只有將 `KBSEARCH_RENDER_DOWNLOADED_FILES` 設為 `true` 時，才需要準備本節工具。
+### 安裝文件處理工具
 
 安裝 LibreOffice，並將其 `program` 目錄加入 Windows 系統 `PATH`。query_cli 直接呼叫 `soffice` 將 DOC、DOCX、PPT、PPTX 轉成中介 PDF。
 
@@ -36,7 +34,7 @@ Get-Command soffice
 soffice --version
 ```
 
-啟用渲染時，也需準備一個 CJK 字型檔供 TXT／MD 轉 PDF，並將其絕對路徑設定於 `KBSEARCH_CJK_FONT_PATH`。
+另需準備一個 CJK 字型檔供 TXT／MD 轉 PDF，並將其絕對路徑設定於 `KBSEARCH_CJK_FONT_PATH`。
 
 ```powershell
 Test-Path "C:\Windows\Fonts\msjh.ttc"
@@ -57,22 +55,16 @@ KBSEARCH_SECURE_BACKEND_BASE_URL=http://127.0.0.1:8000
 GOOGLE_OAUTH_CLIENT_CONFIG=config/oauth_client.json
 GOOGLE_OAUTH_TOKEN_CACHE=config/token_cache.json
 KBSEARCH_QUERY_LOGS_ROOT=logs
-KBSEARCH_RENDER_DOWNLOADED_FILES=true
 KBSEARCH_CJK_FONT_PATH=C:\Windows\Fonts\msjh.ttc
 ```
 
-`KBSEARCH_RENDER_DOWNLOADED_FILES` 控制下載後是否將文件轉成 PDF 與逐頁 PNG：
+Google Docs 與 Google Slides 固定由 Drive API 匯出為 PDF，Google Sheets 固定匯出為 XLSX。上傳至 Drive 的 XLS/XLSX 下載原始檔。
 
-- `true`：下載後立即轉換並產生逐頁 PNG；需要轉換的 Office、TXT、MD 文件會保留中介 PDF。XLS/XLSX 不執行頁面渲染。
-- `false`：只保留下載檔，不執行額外轉換或逐頁渲染。
-
-Google 原生檔案不受上述設定影響：Google Docs 與 Google Slides 固定由 Drive API 匯出為 PDF，Google Sheets 固定匯出為 XLSX。上傳至 Drive 的 XLS/XLSX 下載原始檔。
-
-啟用渲染時，LibreOffice 的 `soffice` 必須可從系統 `PATH` 找到，並須設定 `KBSEARCH_CJK_FONT_PATH`。停用渲染時不需要安裝 LibreOffice，也可省略 `KBSEARCH_CJK_FONT_PATH`。
+LibreOffice 的 `soffice` 必須可從系統 `PATH` 找到，並須設定 `KBSEARCH_CJK_FONT_PATH`。
 
 `config/oauth_client.json` 為 Google OAuth **Desktop 用戶端憑證**，須向**內部 Google / GCP 管理者**申請並取得 JSON 後，手動放到 `config/oauth_client.json`（程式不會自動產生）。`config/token_cache.json` 則在首次執行 `kbsearch query`、完成 browser 授權後由程式寫入；若 token 無法 refresh 或驗證失敗，程式會刪除該檔並在下次 query 時重新開啟 browser 登入。兩者皆不納版控。
 
-每次 `kbsearch query` 會先建立呼叫端指定的查詢結果目錄，再執行 startup 檢查：OAuth client 與 `secure_backend /healthz`；啟用下載後渲染時才檢查系統 `PATH` 中的 `soffice` 與 CJK 字型。若已有 token cache 也會驗證 Google Drive 授權。
+每次 `kbsearch query` 會先建立呼叫端指定的查詢結果目錄，再執行 startup 檢查：OAuth client、`secure_backend /healthz`、系統 `PATH` 中的 `soffice` 與 CJK 字型。若已有 token cache 也會驗證 Google Drive 授權。
 
 ## 手動測試
 
@@ -90,14 +82,16 @@ kbsearch query `
 
 參數說明：
 
-- `--output-dir`：本次查詢結果的完整資料夾路徑，必須使用尚不存在的新路徑；父目錄不存在時會自動建立。
+- `--output-dir`：本次查詢結果的輸出資料夾路徑，必須使用尚不存在的新路徑；父目錄不存在時會自動建立。
 - `--vector-query`：語意查詢文字；若有附圖，在此描述問題與圖片內容，連同 `--image` 一併送給 `secure_backend` 做向量搜尋。
 - `--drive-query`：Google Drive API `q` 語法，原樣送出，用於全文／檔名搜尋。
 - `--image`：本機圖片路徑（PNG/JPEG 等），可重複指定；省略則僅以文字做向量搜尋。
 - `--limit`：向量與 Drive 搜尋各別的結果筆數上限，預設 `10`。
 - `--min-score`：向量相似度下限；省略則不過濾低分結果。
 
-執行中會在 **stderr** 輸出進度；每個下載檔案僅輸出 `phase=download status=started` 與 `phase=download status=finished`（含 `page_count`；停用渲染時為 `0`）。與 union 層的 `phase=download` 以欄位區分（單檔含 `file_id`、`index`、`total`）。下載與分頁轉檔可能較久。成功時 **stdout** 輸出 JSON 摘要：
+`--output-dir` 與 `--image` 均可使用絕對或相對路徑；相對路徑以執行指令時的目前工作目錄解析。
+
+執行中會在 **stderr** 輸出進度；每個下載檔案輸出 `phase=download status=started` 與 `phase=download status=finished`，完成訊息包含文字頁數與實際渲染頁數。與 union 層的 `phase=download` 以欄位區分（單檔含 `file_id`、`index`、`total`）。下載與文件處理可能較久。成功時 **stdout** 輸出 JSON 摘要：
 
 ```json
 {
@@ -112,6 +106,44 @@ kbsearch query `
 查詢開始前會以不可覆蓋既有目錄的方式建立 `output_dir`；若路徑已存在，指令會在實際查詢前失敗。查詢途中失敗時，已建立的目錄與部分產物會保留，不得重用相同路徑。詳細清單與下載檔案見該資料夾內的 JSON 與子目錄。
 
 設定成功載入後，查詢過程與失敗資訊會記錄於 `KBSEARCH_QUERY_LOGS_ROOT` 下的 `kbsearch_cli.log`。失敗訊息會附上 log 路徑，供 Agent 或人員排查問題。
+
+每個下載檔案子資料夾會保留下載檔，並依格式產生：
+
+```text
+<safe_file_name>-<google_file_id>/
+  <downloaded file>
+  pdf/
+    document.pdf
+  text/
+    0001.txt
+    0002.txt
+  pages/
+    0003.png
+```
+
+- PDF、Word、PowerPoint、TXT、MD 會產生固定路徑 `pdf/document.pdf` 與逐頁 UTF-8 TXT。
+- `pages/` 只包含向量搜尋命中的頁面。
+- Excel 與 Google Sheets 只保留 XLS/XLSX。
+- 圖片只在向量搜尋命中時產生 `pages/0001.png`。
+
+## 指定 PDF 頁面轉圖
+
+Agent 可指定 PDF 路徑與頁碼，將額外需要閱讀的頁面轉為 PNG：
+
+```powershell
+kbsearch render-pdf-pages `
+  --pdf "C:\path\to\<safe_file_name>-<google_file_id>\pdf\document.pdf" `
+  --pages "3,5,8-10" `
+  --output-dir "C:\path\to\<safe_file_name>-<google_file_id>\pages"
+```
+
+- `--pdf`：要處理的 `pdf/document.pdf` 路徑。
+- `--output-dir`：完整輸出資料夾位置路徑。以目前設計，Agent 需指定到同一文件子資料夾內的 `pages/`；目錄不存在時會建立，已存在時直接使用。
+- `--pages`：頁碼從 `1` 開始，支援逗號清單與區間。
+
+`--pdf` 與 `--output-dir` 均可使用絕對或相對路徑；相對路徑以執行指令時的目前工作目錄解析。
+
+指定頁面的同名 PNG 會直接覆蓋，其他既有頁面不受影響。成功時 stdout 會輸出包含頁碼與 PNG 路徑的 JSON。
 
 ## 離線單元測試
 

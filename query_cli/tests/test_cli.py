@@ -49,6 +49,8 @@ class CliTests(unittest.TestCase):
                     name="Alpha.pdf",
                     directory=bundle_path / "Alpha.pdf-file-1",
                     source_path=bundle_path / "Alpha.pdf-file-1" / "Alpha.pdf",
+                    pdf_path=bundle_path / "Alpha.pdf-file-1" / "Alpha.pdf",
+                    text_paths=[bundle_path / "Alpha.pdf-file-1" / "text" / "0001.txt"],
                     page_paths=[bundle_path / "Alpha.pdf-file-1" / "0001.png"],
                 )
             ],
@@ -105,6 +107,60 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["vector_count"], 2)
         self.assertEqual(payload["download_count"], 1)
         self.assertIn("Query progress: phase=query status=started", stderr.getvalue())
+
+    def test_render_pdf_pages_renders_selected_pages_without_loading_query_config(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            pdf_path = root / "manual.pdf"
+            pdf_path.write_bytes(b"pdf")
+            output_dir = root / "pages"
+            output_dir.mkdir()
+            (output_dir / "0002.png").write_bytes(b"existing")
+            rendered_paths = [output_dir / "0002.png", output_dir / "0004.png"]
+
+            with patch("kbsearch_cli.__main__.load_query_cli_config") as load_config, patch(
+                "kbsearch_cli.__main__.DocumentPageRenderer.render_pdf_pages",
+                return_value=rendered_paths,
+            ) as render_pages, redirect_stdout(StringIO()) as stdout, redirect_stderr(
+                StringIO()
+            ) as stderr:
+                exit_code = main(
+                    [
+                        "render-pdf-pages",
+                        "--pdf",
+                        str(pdf_path),
+                        "--pages",
+                        "2,4",
+                        "--output-dir",
+                        str(output_dir),
+                    ]
+                )
+
+        self.assertEqual(exit_code, 0)
+        load_config.assert_not_called()
+        render_pages.assert_called_once_with(pdf_path, output_dir, [2, 4])
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["pages"], [2, 4])
+        self.assertEqual(payload["page_paths"], [path.as_posix() for path in rendered_paths])
+        self.assertIn("status=started", stderr.getvalue())
+        self.assertIn("status=finished", stderr.getvalue())
+
+    def test_render_pdf_pages_rejects_invalid_page_expression(self):
+        with redirect_stderr(StringIO()) as stderr:
+            exit_code = main(
+                [
+                    "render-pdf-pages",
+                    "--pdf",
+                    "manual.pdf",
+                    "--pages",
+                    "3-1",
+                    "--output-dir",
+                    "pages",
+                ]
+            )
+
+        self.assertEqual(exit_code, 1)
+        self.assertIn("Render PDF pages failed", stderr.getvalue())
 
     def test_query_failure_before_logging_only_prints_stderr(self):
         with redirect_stderr(StringIO()) as stderr:

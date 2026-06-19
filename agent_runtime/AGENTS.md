@@ -12,7 +12,6 @@ repo_root/
     <yyyyMMdd-HHmmss>-<safe_task_name>/
       memory.md                   # 此任務跨 session 的工作記憶
       query_results/              # 此任務的一到多次查詢結果
-      read_artifacts/             # Agent 按需產生的中介 PDF、頁面圖片與讀取產物
       <其他任務產物>
   memory.md                       # 目前作用中任務指標與跨任務記憶
   AGENTS.md                       # Agent 操作規則
@@ -35,8 +34,8 @@ repo_root/
 - 收到新的使用者任務時，必須在 `tasks/` 下建立獨立任務資料夾，命名格式為 `<yyyyMMdd-HHmmss>-<safe_task_name>`。
 - 建立新任務資料夾時，必須同時建立該任務的 `memory.md`。若根目錄 `memory.md` 尚不存在，也必須依本文件規範建立。
 - 同一任務的使用者輸入、查詢結果、分析內容與產出均放在同一任務資料夾中；既有任務的後續需求繼續使用原任務資料夾。
-- 任務中的每次查詢結果固定放在該任務的 `query_results/` 下；其餘內容由 Agent 依實際工作需求安排。
-- 讀取下載檔案時按需產生的中介 PDF、頁面圖片或其他讀取產物放在目前任務的 `read_artifacts/`，不得寫回或改動既有查詢結果資料夾。
+- 任務中的每次查詢結果會固定放在該任務的 `query_results/` 下；其餘內容由 Agent 依實際工作需求安排。
+- 若需產生查詢結果既有結構以外的臨時分析產物，可依用途在目前任務資料夾中建立名稱明確的子資料夾；不得寫入 `_internal/` 或其他任務資料夾，也不得寫入目前任務資料夾中的 `query_results/` 中。
 - `safe_task_name` 與後述 `safe_query_name` 應簡短描述目的，並避免使用 `< > : " / \ | ? *`、`..`、結尾空白或結尾句點。
 
 ---
@@ -51,13 +50,22 @@ repo_root/
 .\.venv\Scripts\kbsearch.exe query --output-dir "../tasks/<任務資料夾>/query_results/<yyyyMMdd-HHmmss>-<safe_query_name>" --vector-query "<向量查詢文字>" --drive-query "<Google Drive q 查詢語法>" [--image <圖片路徑>] [--limit <數量>] [--min-score <分數>]
 ```
 
-- `--output-dir` 必填，由 Agent 指定本次查詢結果的完整新資料夾路徑；每次執行都必須使用尚不存在的新路徑。
+- `--output-dir` 必填，由 Agent 指定本次查詢結果的新資料夾路徑；路徑相對於 `_internal/` 工作目錄，每次執行都必須使用尚不存在的新路徑。
 - `--vector-query` 必填，送給 vector search。
 - `--drive-query` 必填，直接送給 Google Drive API `files().list(q=...)`。
 - `--image` 可重複指定多次；路徑須為相對 `_internal/` 工作目錄的本機圖檔路徑（例如 `../tasks/<任務資料夾>/user-01.png`）。
 - `--limit` 控制全文搜尋與向量搜尋各自回傳的候選數量，由 Agent 依照狀況自行決定。
 - `--min-score` 是向量搜尋最低分數門檻，未指定時不套用最低分數，原則上不建議 Agent 指定此值。
 
+需要將查詢結果中的 PDF 額外頁面轉成 PNG 時，工作目錄同樣必須為 `_internal/`：
+
+```powershell
+.\.venv\Scripts\kbsearch.exe render-pdf-pages --pdf "../tasks/<任務資料夾>/query_results/<查詢資料夾>/<文件資料夾>/pdf/document.pdf" --pages "<頁碼或範圍>" --output-dir "../tasks/<任務資料夾>/query_results/<查詢資料夾>/<文件資料夾>/pages"
+```
+
+- `--pdf` 必填，必須明確指定要處理的 `pdf/document.pdf`；路徑相對於 `_internal/` 工作目錄。
+- `--pages` 必填，頁碼從 `1` 開始，支援單頁、逗號清單與區間，例如 `3,5,8-10`。
+- `--output-dir` 必填，固定指定同一文件資料夾內的 `pages/`；路徑相對於 `_internal/` 工作目錄。目錄可存在；同頁碼 PNG 會直接覆蓋，其他頁面保留。
 
 
 ---
@@ -88,29 +96,35 @@ repo_root/
   vector_results.json
   <safe_file_name>-<google_file_id>/
     <downloaded original file>
+    pdf/
+      document.pdf
+    text/
+      0001.txt
+      0002.txt
+    pages/
+      <vector hit page>.png
 ```
 
 - `query_plan.json` 記錄本次實際使用的 `vector_query`、`drive_query`、`image_paths`、`limit` 與 `min_score`。
 - `full_text_results.json` 是此使用者有權限存取的檔案的 Google Drive 查詢結果清單，屬於檔案層級結果。
 - `vector_results.json` 是此使用者有權限存取的檔案的圖文向量庫的相似度查詢結果清單，屬於檔案與頁面層級結果，頁面結果會包含 `page_number` 與相似度分數。
 - 針對 Google Drive 查詢結果清單與相似度查詢結果清單的聯集檔案清單（`file_id` 去重） 中的每個檔案，都建立一個以 `<safe_file_name>-<google_file_id>` 命名的檔案子資料夾。
-- 每個檔案子資料夾內只放該檔案自 Google Drive 下載的原始檔；但 Google Docs 與 Google Slides 會由 Drive API 匯出為 PDF，Google Sheet 則會轉成 XLSX。
+- 每個檔案子資料夾會保留該檔案自 Google Drive 下載的檔案；Google Docs 與 Google Slides 由 Drive API 匯出為 PDF，Google Sheet 匯出為 XLSX。
+- PDF、Word、PowerPoint、TXT、MD 另提供固定路徑 `pdf/document.pdf` 與逐頁 UTF-8 TXT；原始檔本身為 PDF 時仍會保留下載檔。
+- `pages/` 只包含向量搜尋命中的頁面，不會預先渲染全文搜尋結果或整份文件。
+- XLS/XLSX 不產生 PDF、逐頁 TXT 或 PNG。圖片不產生 PDF 或 TXT；向量命中時提供 `pages/0001.png`。
 
 ---
 
 ## 閱讀與引用
 
-- Agent 閱讀與回覆時，應以本次查詢結果清單與已下載檔案為依據，依檔案格式使用對應的讀檔 Skill 或結構化工具。
-- 讀取檔案時先進行結構化定位，避免在尚未判斷相關範圍前完整轉圖：
-  - PDF：使用 PDF Skill。需要 `pdfplumber` 時使用 `_internal/.venv/Scripts/python.exe`。
-  - DOC/DOCX：使用 Documents Skill。
-  - PPT/PPTX：使用 Presentations Skill。
-  - XLS/XLSX：使用 Spreadsheets Skill。
-  - TXT/MD：直接搜尋及讀取文字。
-  - 圖片：直接檢視原圖。
+- Agent 閱讀與回覆時，應以本次查詢結果清單、逐頁文字、命中頁 PNG 與已下載檔案為依據。
+- PDF、Word、PowerPoint、TXT、MD 統一以 `text/*.txt` 進行內容定位，使用 `rg` 的固定文字、大小寫、regex、前後文與檔案篩選能力搜尋；TXT 檔名即對應 PDF 頁碼。
+- 確定需閱讀的頁碼後，優先使用既有 `pages/*.png`；尚未產生的頁面使用 `render-pdf-pages` 從該檔案的 `pdf/document.pdf` 轉出至同一文件資料夾的 `pages/`。
+- XLS/XLSX 使用 Spreadsheets Skill。圖片直接檢視原圖或既有 `pages/0001.png`。
 - Google Sheets 由 query CLI 匯出為 XLSX，與 Drive 上原有的 XLS/XLSX 一樣使用 Spreadsheets Skill 讀取與解析；試算表不會出現在向量搜尋結果中，但可能由全文搜尋命中。
-- 閱讀向量搜尋命中頁面時，需先依 `vector_results.json` 標示的頁碼定位相關頁後，不論是哪種格式的檔案，都需將相關頁轉成 PNG 後，才可從 PNG 讀取各相關頁內容。若相關頁中沒有相關內容或內容不完整，需檢查相鄰頁的 PNG，看是否有相關內容。
-- 若是只有全文搜尋命中的檔案，不得直接閱讀或渲染整份文檔，需先依本次查詢關鍵字在已下載檔案中定位相關範圍，再按需將相關頁轉成 PNG 後，才可從 PNG 讀取各相關頁內容。相關頁中沒有相關內容或內容不完整，需檢查相鄰頁的 PNG，看是否有相關內容。
+- 閱讀向量搜尋命中頁面時，先依 `vector_results.json` 標示的頁碼讀取查詢結果已產生的 PNG。若相關頁內容不完整，可使用 `render-pdf-pages` 取得相鄰頁。
+- 若是只有全文搜尋命中的檔案，先以 `rg` 搜尋逐頁 TXT 定位頁碼，再按需將命中頁及必要相鄰頁轉成 PNG。逐頁 TXT 無法包含掃描文字、圖片、圖表或完整表格版面，因此最終內容確認仍以 PNG 為準。
 - 同一檔案同時出現在全文與向量結果時，優先參考向量命中頁，並用全文關鍵字結果補足可能相關頁。
 - 若同一問題有多份來源，應比對時間、版本與適用範圍；若資料互相矛盾，應指出衝突點並說明各來源差異，不要自行選擇一方當成唯一真相。
 - 回答使用者時，除非使用者要求說明搜尋方法，否則不要標示或強調內容來自全文搜尋或向量搜尋；搜尋類型只作為 Agent 內部閱讀排序與定位依據。對外應以文件名稱、頁碼、版本、日期、Google Drive 路徑與內容重點描述來源。

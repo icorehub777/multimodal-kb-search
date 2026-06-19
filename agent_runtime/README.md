@@ -26,7 +26,7 @@ agent_runtime/
 
 在搬移到正式機之前，可在開發機上依下列步驟建立與正式結構相同的 `agent_runtime/`。
 
-### 1. 安裝 LibreOffice 與 Poppler
+### 1. 安裝 LibreOffice；選用 Poppler
 
 在目標機器安裝 LibreOffice。`soffice.exe` 預設路徑通常為 `C:\Program Files\LibreOffice\program\soffice.exe`。
 
@@ -42,7 +42,7 @@ Get-Command soffice
 soffice --version
 ```
 
-Codex 的 PDF Skill 將 PDF 頁面渲染為 PNG，以及 Documents Skill 將 DOCX 的中介 PDF 渲染為 PNG 時，都需要 Poppler。
+查詢結果的 PDF 與 PNG 處理由 `kbsearch` 自身完成。若未來仍需讓 Codex 的 PDF Skill 或 Documents Skill 自行將 PDF 頁面渲染為 PNG，才需另外安裝 Poppler。
 
 Poppler 安裝與設定步驟：
 
@@ -86,14 +86,21 @@ Get-ChildItem "C:\Windows\Fonts" -Include *.ttf,*.ttc -Recurse | Select-Object -
 
 ### 4. 建立 .venv 並安裝 wheel
 
-以下指令必須使用 Windows Command Prompt（`cmd.exe`）執行，不得使用 PowerShell：
+建立 `.venv` 並安裝基礎依賴：
 
-```bat
+```powershell
 cd agent_runtime\_internal
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install --upgrade pip
 .\.venv\Scripts\python.exe -m pip install -r ..\requirements.txt
-.\.venv\Scripts\python.exe -m pip install --force-reinstall .\packages\kbsearch_cli-*.whl
+```
+
+安裝 `kbsearch_cli` wheel。以下程式碼區塊需整段複製至 PowerShell 執行：
+
+```powershell
+$wheels = @(Get-ChildItem -LiteralPath .\packages -Filter kbsearch_cli-*.whl)
+if ($wheels.Count -ne 1) { throw "Expected exactly one kbsearch_cli wheel, found $($wheels.Count)." }
+.\.venv\Scripts\python.exe -m pip install --force-reinstall $wheels[0].FullName
 ```
 
 請注意：`.venv` 綁定建立當下該機器的 Python 路徑，不可從其他電腦或開發環境整包複製後直接使用。
@@ -111,9 +118,20 @@ cd agent_runtime\_internal
   --limit 10
 ```
 
-若有附圖則可加上 `--image` 參數。此參數可重複指定多次；路徑須為相對 `_internal/` 工作目錄的本機圖檔路徑（例如 `../tasks/<任務資料夾>/user-01.png`）。
+`--output-dir` 與 `--image` 可使用絕對路徑，或使用相對 `_internal/` 工作目錄的路徑。Agent 依目前目錄結構使用相對路徑，例如 `../tasks/<任務資料夾>/query_results/<查詢資料夾>` 與 `../tasks/<任務資料夾>/user-01.png`。`--image` 可重複指定多次。
 
 成功時 **stdout** 輸出 JSON，含 `output_dir`；結果寫入指定的查詢結果資料夾。Log 寫入 `agent_runtime\_internal\logs\kbsearch_cli.log`。
+
+需要補充產生指定頁面的 PNG 時，同樣在 `agent_runtime\_internal` 工作目錄執行：
+
+```powershell
+.\.venv\Scripts\kbsearch.exe render-pdf-pages `
+  --pdf "../tasks/<任務資料夾>/query_results/<查詢資料夾>/<文件資料夾>/pdf/document.pdf" `
+  --pages "3,5,8-10" `
+  --output-dir "../tasks/<任務資料夾>/query_results/<查詢資料夾>/<文件資料夾>/pages"
+```
+
+`--pdf` 與 `--output-dir` 使用相對 `_internal/` 工作目錄的路徑；也可改用絕對路徑。`--output-dir` 應指定到同一文件資料夾內的 `pages/`。
 
 首次執行若尚無 `token_cache.json`，程式會開啟瀏覽器完成 Google OAuth 授權，並寫入 `config\token_cache.json`。
 

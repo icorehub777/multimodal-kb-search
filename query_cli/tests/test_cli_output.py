@@ -18,7 +18,8 @@ class CliOutputTests(unittest.TestCase):
             {
                 "status": "finished",
                 "file_id": "file-1",
-                "page_count": 10,
+                "text_page_count": 10,
+                "rendered_page_count": 2,
                 "index": 2,
                 "total": 4,
             },
@@ -26,7 +27,8 @@ class CliOutputTests(unittest.TestCase):
 
         self.assertEqual(
             message,
-            "Query progress: phase=download status=finished file_id=file-1 page_count=10 index=2 total=4",
+            "Query progress: phase=download status=finished file_id=file-1 "
+            "text_page_count=10 rendered_page_count=2 index=2 total=4",
         )
 
     def test_build_query_success_payload_includes_output_dir_and_counts(self):

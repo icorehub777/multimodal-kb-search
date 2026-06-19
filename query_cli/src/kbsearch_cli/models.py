@@ -48,6 +48,15 @@ class DownloadedFileResult:
     name: str
     directory: Path
     source_path: Path
+    pdf_path: Path | None
+    text_paths: list[Path]
+    page_paths: list[Path]
+
+
+@dataclass(frozen=True)
+class ProcessedDocument:
+    pdf_path: Path | None
+    text_paths: list[Path]
     page_paths: list[Path]
 
 

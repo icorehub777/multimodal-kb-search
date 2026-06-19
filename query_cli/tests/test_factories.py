@@ -1,7 +1,6 @@
 import json
 import tempfile
 import unittest
-from dataclasses import replace
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -30,15 +29,14 @@ def _sample_config(root: Path) -> QueryCliConfig:
 
 
 class GoogleCredentialsFactoryTests(unittest.TestCase):
-    def test_create_query_orchestrator_disables_page_renderer_from_config(self):
+    def test_create_query_orchestrator_configures_document_processor(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             config = _sample_config(Path(temp_dir))
-            config = replace(config, render_downloaded_files=False)
 
             with patch("kbsearch_cli.factories._create_drive_service", return_value=object()):
                 orchestrator = create_query_orchestrator(config)
 
-        self.assertIsNone(orchestrator._page_renderer)
+        self.assertEqual(orchestrator._document_processor._cjk_font_path, config.cjk_font_path)
 
     def test_discard_oauth_token_cache_removes_existing_file(self):
         with tempfile.TemporaryDirectory() as temp_dir:

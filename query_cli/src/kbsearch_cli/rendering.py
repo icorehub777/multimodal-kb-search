@@ -7,10 +7,13 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from kbsearch_cli.errors import DocumentRenderError
+from kbsearch_cli.models import ProcessedDocument
 
 CJK_TEXT_FONT_NAME = "KBSearchTextCJK"
 _LIBREOFFICE_MAX_SOURCE_PATH = 240
 SOFFICE_EXECUTABLE = "soffice"
+IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
+SPREADSHEET_EXTENSIONS = {".xls", ".xlsx"}
 
 
 class DocumentPageRenderer:
@@ -28,6 +31,48 @@ class DocumentPageRenderer:
         if render_source.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp"}:
             return self._render_image(render_source, output_dir)
         return self._render_pdf(render_source, output_dir)
+
+    def process(
+        self,
+        source_path: Path,
+        output_dir: Path,
+        page_numbers: list[int],
+    ) -> ProcessedDocument:
+        suffix = source_path.suffix.lower()
+        if suffix in SPREADSHEET_EXTENSIONS:
+            return ProcessedDocument(pdf_path=None, text_paths=[], page_paths=[])
+        if suffix in IMAGE_EXTENSIONS:
+            if not page_numbers:
+                return ProcessedDocument(pdf_path=None, text_paths=[], page_paths=[])
+            if set(page_numbers) != {1}:
+                raise DocumentRenderError("Image documents only support page 1.")
+            return ProcessedDocument(
+                pdf_path=None,
+                text_paths=[],
+                page_paths=self._render_image(source_path, output_dir / "pages"),
+            )
+
+        pdf_path = self.prepare_pdf(source_path, output_dir)
+        text_paths = self.extract_pdf_text(pdf_path, output_dir / "text")
+        page_paths = self.render_pdf_pages(pdf_path, output_dir / "pages", page_numbers)
+        return ProcessedDocument(
+            pdf_path=pdf_path,
+            text_paths=text_paths,
+            page_paths=page_paths,
+        )
+
+    def prepare_pdf(self, source_path: Path, output_dir: Path) -> Path:
+        pdf_dir = output_dir / "pdf"
+        pdf_dir.mkdir(parents=True, exist_ok=True)
+        output_path = pdf_dir / "document.pdf"
+        if source_path.suffix.lower() == ".pdf":
+            shutil.copy2(source_path, output_path)
+            return output_path
+
+        converted_path = self._render_source_path(source_path, output_dir)
+        if converted_path.resolve() != output_path.resolve():
+            shutil.move(str(converted_path), str(output_path))
+        return output_path
 
     def _render_source_path(self, source_path: Path, output_dir: Path) -> Path:
         suffix = source_path.suffix.lower()
@@ -122,14 +167,72 @@ class DocumentPageRenderer:
         except ImportError as exc:
             raise DocumentRenderError("PyMuPDF is required for PDF page rendering.") from exc
 
+        with fitz.open(pdf_path) as document:
+            return self.render_pdf_pages(
+                pdf_path,
+                output_dir,
+                list(range(1, len(document) + 1)),
+            )
+
+    def extract_pdf_text(self, pdf_path: Path, output_dir: Path) -> list[Path]:
+        try:
+            import fitz
+        except ImportError as exc:
+            raise DocumentRenderError("PyMuPDF is required for PDF text extraction.") from exc
+
+        output_dir.mkdir(parents=True, exist_ok=True)
         paths: list[Path] = []
-        previous_display_errors = fitz.TOOLS.mupdf_display_errors(False)
         try:
             with fitz.open(pdf_path) as document:
                 for index, page in enumerate(document, start=1):
-                    output_path = output_dir / f"{index:04d}.png"
-                    page.get_pixmap(dpi=self._dpi).save(output_path)
+                    output_path = output_dir / f"{index:04d}.txt"
+                    output_path.write_text(page.get_text("text"), encoding="utf-8")
                     paths.append(output_path)
+        except Exception as exc:
+            raise DocumentRenderError(f"PDF text extraction failed: {pdf_path}") from exc
+        return paths
+
+    def render_pdf_pages(
+        self,
+        pdf_path: Path,
+        output_dir: Path,
+        page_numbers: list[int],
+    ) -> list[Path]:
+        try:
+            import fitz
+        except ImportError as exc:
+            raise DocumentRenderError("PyMuPDF is required for PDF page rendering.") from exc
+
+        selected_pages = sorted(set(page_numbers))
+        if any(page_number < 1 for page_number in selected_pages):
+            raise DocumentRenderError("PDF page numbers must start from 1.")
+        if not selected_pages:
+            return []
+
+        output_dir.mkdir(parents=True, exist_ok=True)
+        paths: list[Path] = []
+        previous_display_errors = fitz.TOOLS.mupdf_display_errors(False)
+        try:
+            try:
+                with fitz.open(pdf_path) as document:
+                    page_count = len(document)
+                    invalid_pages = [
+                        page_number for page_number in selected_pages if page_number > page_count
+                    ]
+                    if invalid_pages:
+                        raise DocumentRenderError(
+                            "Requested page is outside PDF page range "
+                            f"(page_count={page_count}, requested={invalid_pages})."
+                        )
+                    for page_number in selected_pages:
+                        page = document[page_number - 1]
+                        output_path = output_dir / f"{page_number:04d}.png"
+                        page.get_pixmap(dpi=self._dpi).save(output_path)
+                        paths.append(output_path)
+            except DocumentRenderError:
+                raise
+            except Exception as exc:
+                raise DocumentRenderError(f"PDF page rendering failed: {pdf_path}") from exc
         finally:
             fitz.TOOLS.mupdf_display_errors(previous_display_errors)
         return paths
@@ -140,6 +243,7 @@ class DocumentPageRenderer:
         except ImportError as exc:
             raise DocumentRenderError("Pillow is required for image page rendering.") from exc
 
+        output_dir.mkdir(parents=True, exist_ok=True)
         output_path = output_dir / "0001.png"
         with Image.open(image_path) as image:
             image.convert("RGB").save(output_path, format="PNG")
@@ -216,3 +320,27 @@ def _wrap_text_line(
     if current:
         chunks.append(current)
     return chunks
+
+
+def parse_page_numbers(value: str) -> list[int]:
+    if not value or value.strip() == "":
+        raise DocumentRenderError("Page selection must not be empty.")
+
+    pages: set[int] = set()
+    for raw_part in value.split(","):
+        part = raw_part.strip()
+        if not part:
+            raise DocumentRenderError(f"Invalid page selection: {value}")
+        if "-" in part:
+            bounds = part.split("-")
+            if len(bounds) != 2 or not all(bound.isdigit() for bound in bounds):
+                raise DocumentRenderError(f"Invalid page range: {part}")
+            start, end = (int(bound) for bound in bounds)
+            if start < 1 or end < start:
+                raise DocumentRenderError(f"Invalid page range: {part}")
+            pages.update(range(start, end + 1))
+        else:
+            if not part.isdigit() or int(part) < 1:
+                raise DocumentRenderError(f"Invalid page number: {part}")
+            pages.add(int(part))
+    return sorted(pages)

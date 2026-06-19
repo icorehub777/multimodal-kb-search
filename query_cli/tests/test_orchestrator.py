@@ -2,7 +2,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from kbsearch_cli.models import FullTextSearchResult, PageSearchResult, VectorFileSearchResult
+from kbsearch_cli.models import (
+    FullTextSearchResult,
+    PageSearchResult,
+    ProcessedDocument,
+    VectorFileSearchResult,
+)
 from kbsearch_cli.errors import QueryCliError
 from kbsearch_cli.orchestrator import QueryOrchestrator
 from kbsearch_cli.output import QueryResultWriter
@@ -94,15 +99,28 @@ class FakeBackendClient:
         ]
 
 
-class FakePageRenderer:
+class FakeDocumentProcessor:
     def __init__(self):
-        self.rendered = []
+        self.processed = []
 
-    def render_pages(self, source_path, output_dir):
-        self.rendered.append(source_path.name)
-        output_path = output_dir / "0001.png"
-        output_path.write_bytes(b"png")
-        return [output_path]
+    def process(self, source_path, output_dir, page_numbers):
+        self.processed.append((source_path.name, list(page_numbers)))
+        if source_path.suffix.lower() in {".xls", ".xlsx"}:
+            return ProcessedDocument(None, [], [])
+        pdf_path = source_path
+        text_dir = output_dir / "text"
+        text_dir.mkdir()
+        text_path = text_dir / "0001.txt"
+        text_path.write_text("page text", encoding="utf-8")
+        page_paths = []
+        if page_numbers:
+            page_dir = output_dir / "pages"
+            page_dir.mkdir()
+            for page_number in page_numbers:
+                output_path = page_dir / f"{page_number:04d}.png"
+                output_path.write_bytes(b"png")
+                page_paths.append(output_path)
+        return ProcessedDocument(pdf_path, [text_path], page_paths)
 
 
 def _create_output_dir(root: str, name: str) -> Path:
@@ -112,42 +130,16 @@ def _create_output_dir(root: str, name: str) -> Path:
 
 
 class QueryOrchestratorTests(unittest.TestCase):
-    def test_run_downloads_without_rendering_when_page_renderer_is_disabled(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            google_drive = FakeGoogleDriveClient()
-            orchestrator = QueryOrchestrator(
-                google_drive=google_drive,
-                backend=FakeBackendClient(),
-                result_writer=QueryResultWriter(),
-                page_renderer=None,
-            )
-
-            result = orchestrator.run(
-                output_dir=_create_output_dir(temp_dir, "僅下載"),
-                vector_query="semantic alpha",
-                drive_query="fullText contains 'alpha' and trashed = false",
-                limit=10,
-                min_score=0.5,
-            )
-
-            alpha = result.bundle.path / "Alpha.pdf-file-1"
-            beta = result.bundle.path / "Beta.pdf-file-2"
-            self.assertTrue((alpha / "Alpha.pdf").exists())
-            self.assertTrue((beta / "Beta.pdf").exists())
-            self.assertEqual(list(alpha.glob("*.png")), [])
-            self.assertEqual(list(beta.glob("*.png")), [])
-            self.assertEqual(result.downloaded_files[0].page_paths, [])
-
     def test_run_downloads_and_renders_union_of_full_text_and_vector_files(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             google_drive = FakeGoogleDriveClient()
             backend = FakeBackendClient()
-            renderer = FakePageRenderer()
+            processor = FakeDocumentProcessor()
             orchestrator = QueryOrchestrator(
                 google_drive=google_drive,
                 backend=backend,
                 result_writer=QueryResultWriter(),
-                page_renderer=renderer,
+                document_processor=processor,
             )
 
             image_path = Path(temp_dir) / "sample.png"
@@ -165,8 +157,11 @@ class QueryOrchestratorTests(unittest.TestCase):
             file_dir = bundle.path / "Alpha.pdf-file-1"
             beta_dir = bundle.path / "Beta.pdf-file-2"
             self.assertTrue((file_dir / "Alpha.pdf").exists())
-            self.assertTrue((file_dir / "0001.png").exists())
+            self.assertTrue((file_dir / "text" / "0001.txt").exists())
+            self.assertTrue((file_dir / "pages" / "0002.png").exists())
             self.assertTrue((beta_dir / "Beta.pdf").exists())
+            self.assertTrue((beta_dir / "text" / "0001.txt").exists())
+            self.assertEqual(list((beta_dir / "pages").glob("*.png")), [])
             self.assertFalse((bundle.path / "Gamma.pdf-file-3").exists())
             self.assertEqual(
                 google_drive.downloads,
@@ -175,7 +170,10 @@ class QueryOrchestratorTests(unittest.TestCase):
             self.assertEqual(google_drive.drive_queries, ["fullText contains 'alpha' and trashed = false"])
             self.assertEqual(backend.calls, [("semantic alpha", [image_path], 10, 0.5)])
             self.assertEqual(bundle.query_plan_path.read_text(encoding="utf-8").count(image_path.as_posix()), 1)
-            self.assertEqual(renderer.rendered, ["Alpha.pdf", "Beta.pdf"])
+            self.assertEqual(
+                processor.processed,
+                [("Alpha.pdf", [2]), ("Beta.pdf", [])],
+            )
 
     def test_run_keeps_spreadsheets_without_page_rendering(self):
         class SpreadsheetGoogleDriveClient(FakeGoogleDriveClient):
@@ -197,12 +195,12 @@ class QueryOrchestratorTests(unittest.TestCase):
                 return output_path
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            renderer = FakePageRenderer()
+            processor = FakeDocumentProcessor()
             orchestrator = QueryOrchestrator(
                 google_drive=SpreadsheetGoogleDriveClient(),
                 backend=FakeBackendClient(),
                 result_writer=QueryResultWriter(),
-                page_renderer=renderer,
+                document_processor=processor,
             )
 
             result = orchestrator.run(
@@ -215,7 +213,7 @@ class QueryOrchestratorTests(unittest.TestCase):
 
             self.assertTrue((result.bundle.path / "Orders-sheet-1" / "Orders.xlsx").exists())
             self.assertEqual(result.downloaded_files[0].page_paths, [])
-            self.assertEqual(renderer.rendered, ["file-1.pdf"])
+            self.assertEqual(processor.processed, [("Orders.xlsx", []), ("file-1.pdf", [2])])
 
     def test_run_uses_file_id_suffix_when_normalized_file_names_collide(self):
         class CollidingGoogleDriveClient(FakeGoogleDriveClient):
@@ -238,7 +236,7 @@ class QueryOrchestratorTests(unittest.TestCase):
                 google_drive=google_drive,
                 backend=CollidingBackendClient(),
                 result_writer=QueryResultWriter(),
-                page_renderer=FakePageRenderer(),
+                document_processor=FakeDocumentProcessor(),
             )
 
             result = orchestrator.run(
@@ -269,7 +267,7 @@ class QueryOrchestratorTests(unittest.TestCase):
                 google_drive=google_drive,
                 backend=ThreeResultBackendClient(),
                 result_writer=QueryResultWriter(),
-                page_renderer=FakePageRenderer(),
+                document_processor=FakeDocumentProcessor(),
             )
 
             orchestrator.run(
@@ -294,7 +292,7 @@ class QueryOrchestratorTests(unittest.TestCase):
                 google_drive=google_drive,
                 backend=FakeBackendClient(),
                 result_writer=QueryResultWriter(),
-                page_renderer=FakePageRenderer(),
+                document_processor=FakeDocumentProcessor(),
             )
 
             bundle = orchestrator.run(
@@ -325,7 +323,7 @@ class QueryOrchestratorTests(unittest.TestCase):
                 google_drive=google_drive,
                 backend=AccessibleOnlyBackendClient(),
                 result_writer=QueryResultWriter(),
-                page_renderer=FakePageRenderer(),
+                document_processor=FakeDocumentProcessor(),
             )
 
             bundle = orchestrator.run(
@@ -347,7 +345,7 @@ class QueryOrchestratorTests(unittest.TestCase):
                 google_drive=FakeGoogleDriveClient(),
                 backend=FakeBackendClient(),
                 result_writer=QueryResultWriter(),
-                page_renderer=FakePageRenderer(),
+                document_processor=FakeDocumentProcessor(),
             )
 
             with self.assertRaisesRegex(QueryCliError, "Query image not found"):

@@ -12,6 +12,7 @@ from kbsearch_cli.logging_config import LOGGER_NAME
 from kbsearch_cli.models import (
     DownloadedFileResult,
     FullTextSearchResult,
+    ProcessedDocument,
     QueryResultBundle,
     QueryRunResult,
     VectorFileSearchResult,
@@ -20,7 +21,6 @@ from kbsearch_cli.output import QueryResultWriter, safe_path_name
 
 logger = logging.getLogger(LOGGER_NAME)
 ProgressCallback = Callable[[str, Mapping[str, object]], None]
-SPREADSHEET_EXTENSIONS = {".xls", ".xlsx"}
 
 
 class GoogleDriveClient(Protocol):
@@ -51,8 +51,13 @@ class BackendClient(Protocol):
         raise NotImplementedError
 
 
-class PageRenderer(Protocol):
-    def render_pages(self, source_path: Path, output_dir: Path) -> list[Path]:
+class DocumentProcessor(Protocol):
+    def process(
+        self,
+        source_path: Path,
+        output_dir: Path,
+        page_numbers: list[int],
+    ) -> ProcessedDocument:
         raise NotImplementedError
 
 
@@ -69,12 +74,12 @@ class QueryOrchestrator:
         google_drive: GoogleDriveClient,
         backend: BackendClient,
         result_writer: QueryResultWriter,
-        page_renderer: PageRenderer | None,
+        document_processor: DocumentProcessor,
     ) -> None:
         self._google_drive = google_drive
         self._backend = backend
         self._result_writer = result_writer
-        self._page_renderer = page_renderer
+        self._document_processor = document_processor
 
     def run(
         self,
@@ -174,7 +179,6 @@ class QueryOrchestrator:
                 "image_paths": [_path_as_posix(path) for path in resolved_image_paths],
                 "limit": limit,
                 "min_score": min_score,
-                "render_downloaded_files": self._page_renderer is not None,
             },
             full_text_results=full_text_results,
             vector_results=vector_results,
@@ -221,6 +225,7 @@ class QueryOrchestrator:
         downloaded_files = self._download_union_files(
             bundle.path,
             download_targets,
+            vector_results,
             progress=progress,
         )
         logger.info(
@@ -250,10 +255,12 @@ class QueryOrchestrator:
         self,
         bundle_path: Path,
         download_targets: list[_DownloadTarget],
+        vector_results: list[VectorFileSearchResult],
         *,
         progress: ProgressCallback | None = None,
     ) -> list[DownloadedFileResult]:
         downloaded_files: list[DownloadedFileResult] = []
+        vector_pages_by_file_id = _vector_pages_by_file_id(vector_results)
         total = len(download_targets)
         for index, target in enumerate(download_targets, start=1):
             name = target.name
@@ -285,15 +292,11 @@ class QueryOrchestrator:
                     mime_type=mime_type,
                     output_dir=file_dir,
                 )
-                page_paths = []
-                if self._page_renderer is not None and source_path.suffix.lower() not in SPREADSHEET_EXTENSIONS:
-                    page_paths = self._page_renderer.render_pages(source_path, file_dir)
-                elif self._page_renderer is not None:
-                    logger.info(
-                        "query phase=download rendering_skipped file_id=%s name=%s reason=spreadsheet",
-                        target.google_file_id,
-                        name,
-                    )
+                processed = self._document_processor.process(
+                    source_path,
+                    file_dir,
+                    vector_pages_by_file_id.get(target.google_file_id, []),
+                )
             except Exception as exc:
                 logger.exception(
                     "query phase=download failed file_id=%s name=%s error=%s message=%s",
@@ -304,10 +307,12 @@ class QueryOrchestrator:
                 )
                 raise
             logger.info(
-                "query phase=download finished file_id=%s name=%s page_count=%s",
+                "query phase=download finished file_id=%s name=%s text_page_count=%s "
+                "rendered_page_count=%s",
                 target.google_file_id,
                 name,
-                len(page_paths),
+                len(processed.text_paths),
+                len(processed.page_paths),
             )
             _report(
                 progress,
@@ -315,7 +320,8 @@ class QueryOrchestrator:
                 status="finished",
                 file_id=target.google_file_id,
                 name=name,
-                page_count=len(page_paths),
+                text_page_count=len(processed.text_paths),
+                rendered_page_count=len(processed.page_paths),
                 index=index,
                 total=total,
             )
@@ -325,7 +331,9 @@ class QueryOrchestrator:
                     name=name,
                     directory=file_dir,
                     source_path=source_path,
-                    page_paths=page_paths,
+                    pdf_path=processed.pdf_path,
+                    text_paths=processed.text_paths,
+                    page_paths=processed.page_paths,
                 )
             )
         return downloaded_files
@@ -359,6 +367,19 @@ def _build_download_targets(
         )
     )
     return [targets_by_id[file_id] for file_id in ordered_ids if file_id in targets_by_id]
+
+
+def _vector_pages_by_file_id(
+    vector_results: list[VectorFileSearchResult],
+) -> dict[str, list[int]]:
+    pages_by_file_id: dict[str, set[int]] = {}
+    for result in vector_results:
+        pages = pages_by_file_id.setdefault(result.google_file_id, set())
+        pages.update(page.page_number for page in result.pages)
+    return {
+        file_id: sorted(page_numbers)
+        for file_id, page_numbers in pages_by_file_id.items()
+    }
 
 
 @dataclass(frozen=True)

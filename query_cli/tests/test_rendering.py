@@ -6,10 +6,19 @@ from unittest.mock import patch
 
 import kbsearch_cli.rendering as rendering
 from kbsearch_cli.errors import DocumentRenderError
-from kbsearch_cli.rendering import DocumentPageRenderer
+from kbsearch_cli.rendering import DocumentPageRenderer, parse_page_numbers
 
 
 class RenderingTests(unittest.TestCase):
+    def test_parse_page_numbers_supports_lists_ranges_and_deduplication(self):
+        self.assertEqual(parse_page_numbers("3,5,8-10,5"), [3, 5, 8, 9, 10])
+
+    def test_parse_page_numbers_rejects_invalid_values(self):
+        for value in ("", "0", "-1", "3-1", "1,,2", "abc"):
+            with self.subTest(value=value):
+                with self.assertRaises(DocumentRenderError):
+                    parse_page_numbers(value)
+
     def test_text_to_pdf_preserves_chinese_text(self):
         try:
             import fitz
@@ -113,6 +122,99 @@ class RenderingTests(unittest.TestCase):
 
             self.assertFalse(expected_output.exists())
 
+    def test_extract_pdf_text_writes_one_utf8_file_per_page(self):
+        renderer = DocumentPageRenderer()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            pdf_path = root / "sample.pdf"
+            _create_pdf(pdf_path, ["first page", "second page"])
+
+            paths = renderer.extract_pdf_text(pdf_path, root / "text")
+
+            self.assertEqual([path.name for path in paths], ["0001.txt", "0002.txt"])
+            self.assertIn("first page", paths[0].read_text(encoding="utf-8"))
+            self.assertIn("second page", paths[1].read_text(encoding="utf-8"))
+
+    def test_process_copies_pdf_to_standard_document_path(self):
+        renderer = DocumentPageRenderer(dpi=72)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source_path = root / "original-name.pdf"
+            _create_pdf(source_path, ["first page"])
+            output_dir = root / "result"
+            output_dir.mkdir()
+            copied_source = output_dir / source_path.name
+            copied_source.write_bytes(source_path.read_bytes())
+
+            processed = renderer.process(
+                copied_source,
+                output_dir,
+                [1],
+            )
+
+            self.assertEqual(processed.pdf_path, output_dir / "pdf" / "document.pdf")
+            self.assertTrue(copied_source.exists())
+            self.assertTrue(processed.pdf_path.exists())
+            self.assertEqual([path.name for path in processed.text_paths], ["0001.txt"])
+            self.assertEqual([path.name for path in processed.page_paths], ["0001.png"])
+
+    def test_process_keeps_spreadsheet_without_derived_files(self):
+        renderer = DocumentPageRenderer()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source_path = root / "orders.xlsx"
+            source_path.write_bytes(b"xlsx")
+
+            processed = renderer.process(source_path, root, [])
+
+            self.assertIsNone(processed.pdf_path)
+            self.assertEqual(processed.text_paths, [])
+            self.assertEqual(processed.page_paths, [])
+            self.assertFalse((root / "pdf").exists())
+
+    def test_process_only_normalizes_vector_hit_image(self):
+        from PIL import Image
+
+        renderer = DocumentPageRenderer()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source_path = root / "photo.jpg"
+            Image.new("RGB", (2, 2), color=(255, 0, 0)).save(source_path)
+
+            full_text_only = renderer.process(source_path, root, [])
+            vector_hit = renderer.process(source_path, root, [1])
+
+            self.assertEqual(full_text_only.page_paths, [])
+            self.assertEqual([path.name for path in vector_hit.page_paths], ["0001.png"])
+            self.assertFalse((root / "pdf").exists())
+
+    def test_render_pdf_pages_only_renders_requested_pages(self):
+        renderer = DocumentPageRenderer(dpi=72)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            pdf_path = root / "sample.pdf"
+            _create_pdf(pdf_path, ["one", "two", "three"])
+            pages_dir = root / "pages"
+            pages_dir.mkdir()
+            existing_path = pages_dir / "0001.png"
+            existing_path.write_bytes(b"existing")
+
+            paths = renderer.render_pdf_pages(pdf_path, pages_dir, [3, 1, 3])
+
+            self.assertEqual([path.name for path in paths], ["0001.png", "0003.png"])
+            self.assertTrue(existing_path.read_bytes().startswith(b"\x89PNG"))
+            self.assertFalse((pages_dir / "0002.png").exists())
+
+    def test_render_pdf_pages_rejects_page_beyond_document(self):
+        renderer = DocumentPageRenderer()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            pdf_path = root / "sample.pdf"
+            _create_pdf(pdf_path, ["one"])
+
+            with self.assertRaisesRegex(DocumentRenderError, "outside PDF page range"):
+                renderer.render_pdf_pages(pdf_path, root / "pages", [2])
+
 
 def _available_cjk_font_path() -> Path | None:
     for font_path in (
@@ -124,6 +226,16 @@ def _available_cjk_font_path() -> Path | None:
         if font_path.exists():
             return font_path
     return None
+
+
+def _create_pdf(path: Path, page_texts: list[str]) -> None:
+    import fitz
+
+    with fitz.open() as document:
+        for text in page_texts:
+            page = document.new_page()
+            page.insert_text((72, 72), text)
+        document.save(path)
 
 
 if __name__ == "__main__":

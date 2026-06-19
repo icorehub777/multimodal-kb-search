@@ -20,15 +20,12 @@
 
 - 使用 `pathlib.Path`；設定中的相對路徑相對於 CLI 執行時的目前工作目錄解析。
 - 由外部輸入（指令參數、檔名、Google file ID 等）組合本機路徑時，必須避免路徑穿越與非法檔名。
-- 由呼叫端指定的產物目錄應視為該次指令的寫入邊界；指令不得覆蓋既有產物目錄或寫出指定目錄之外。
+- 由呼叫端指定的產物目錄應視為該次指令的寫入邊界，不得寫出指定目錄之外。
+- 產物目錄是否必須新建、是否可使用既有目錄，以及同名檔案是否覆蓋，皆屬各子指令契約，須在 README 中明確定義並以測試保護。
 
 ## CLI 輸出
 
 - **stderr**：錯誤訊息與長時間操作的即時進度；訊息須說明哪個設定、路徑或服務出問題，供 Agent 與人類判斷原因。
-- `query` 子指令的進度 `phase` 須與 log 一致（`search`、`access_check`、`download`、`complete`）。單檔 `phase=download` 涵蓋 Drive 下載與分頁渲染；與 union 層 `download` 以欄位（如 `file_id`、`index`）區分。
-- `KBSEARCH_RENDER_DOWNLOADED_FILES=false` 時只下載檔案，不得呼叫頁面 renderer。Google Docs / Slides 固定匯出 PDF，Google Sheets 固定匯出 XLSX；其他格式不得自行加入匯出策略。
-- 啟用下載後渲染時，LibreOffice 只允許透過系統 `PATH` 中的 `soffice` 呼叫，不提供 command path 設定。
-- XLS/XLSX 不交由 query CLI 頁面 renderer 處理，僅保留下載檔供 Agent 使用 Spreadsheets Skill 讀取與解析。
 - **stdout**：成功時輸出該子指令的**可解析結果**（格式由各指令文件定義）；失敗時 exit code 為 `1`。
 - 可預期失敗須轉成明確 domain error（`ConfigError`、`ExternalServiceError`、`DocumentRenderError`、`QueryCliError` 等），保留排錯資訊；不得讓第三方 library 原始 exception 直接外洩到 terminal。
 - 若 logging 已初始化，失敗訊息應附 log 檔絕對路徑；設定尚未載入成功、無法得知 log 根目錄時，僅 stderr 輸出，不得改用其他預設 log 路徑。
