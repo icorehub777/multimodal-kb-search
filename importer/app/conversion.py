@@ -1,6 +1,9 @@
 ﻿from __future__ import annotations
 
+import shutil
 import subprocess
+import tempfile
+from contextlib import contextmanager
 from pathlib import Path
 
 from app.document_importer import PageImage
@@ -8,6 +11,7 @@ from app.document_processing import classify_document_type, page_png_path
 from app.errors import DocumentConversionError
 
 CJK_TEXT_FONT_NAME = "KBSearchTextCJK"
+_LIBREOFFICE_MAX_SOURCE_PATH = 240
 SOFFICE_EXECUTABLE = "soffice"
 
 
@@ -34,30 +38,41 @@ class DocumentConverter:
         raise DocumentConversionError(f"Unsupported document type: {document_type}")
 
     def _convert_office_to_pdf(self, source_path: Path, output_dir: Path) -> Path:
+        output_path = output_dir / f"{source_path.stem}.pdf"
         try:
-            result = subprocess.run(
-                [
-                    SOFFICE_EXECUTABLE,
-                    "--headless",
-                    "--convert-to",
-                    "pdf",
-                    "--outdir",
-                    str(output_dir),
-                    str(source_path),
-                ],
-                check=False,
-                capture_output=True,
-                text=True,
-            )
+            with _office_conversion_inputs(source_path) as (convert_source, convert_outdir):
+                result = subprocess.run(
+                    [
+                        SOFFICE_EXECUTABLE,
+                        "--headless",
+                        "--convert-to",
+                        "pdf",
+                        "--outdir",
+                        str(convert_outdir),
+                        str(convert_source),
+                    ],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                )
+                if result.returncode != 0:
+                    for partial_pdf in {convert_outdir / f"{convert_source.stem}.pdf", output_path}:
+                        if partial_pdf.exists():
+                            partial_pdf.unlink()
+                    raise DocumentConversionError(
+                        f"Office to PDF conversion failed for {source_path}: "
+                        f"{result.stderr.strip()}"
+                    )
+                produced_pdf = convert_outdir / f"{convert_source.stem}.pdf"
+                if produced_pdf != output_path:
+                    if not produced_pdf.exists():
+                        raise DocumentConversionError(
+                            f"Office conversion did not create PDF: {produced_pdf}"
+                        )
+                    shutil.move(str(produced_pdf), str(output_path))
         except OSError as exc:
             raise DocumentConversionError(f"Office to PDF conversion failed: {source_path}") from exc
 
-        if result.returncode != 0:
-            raise DocumentConversionError(
-                f"Office to PDF conversion failed for {source_path}: {result.stderr.strip()}"
-            )
-
-        output_path = output_dir / f"{source_path.stem}.pdf"
         if not output_path.exists():
             raise DocumentConversionError(f"Office conversion did not create PDF: {output_path}")
         return output_path
@@ -117,11 +132,15 @@ class PdfPageRenderer:
 
         output_dir.mkdir(parents=True, exist_ok=True)
         pages: list[PageImage] = []
-        with fitz.open(pdf_path) as document:
-            for index, page in enumerate(document, start=1):
-                output_path = page_png_path(output_dir, index)
-                page.get_pixmap(dpi=self._dpi).save(output_path)
-                pages.append(PageImage(page_number=index, path=output_path))
+        previous_display_errors = fitz.TOOLS.mupdf_display_errors(False)
+        try:
+            with fitz.open(pdf_path) as document:
+                for index, page in enumerate(document, start=1):
+                    output_path = page_png_path(output_dir, index)
+                    page.get_pixmap(dpi=self._dpi).save(output_path)
+                    pages.append(PageImage(page_number=index, path=output_path))
+        finally:
+            fitz.TOOLS.mupdf_display_errors(previous_display_errors)
         return pages
 
 
@@ -170,6 +189,19 @@ def _has_cjk_text(text: str) -> bool:
         "\u3400" <= character <= "\u9fff" or "\uf900" <= character <= "\ufaff"
         for character in text
     )
+
+
+@contextmanager
+def _office_conversion_inputs(source_path: Path):
+    if len(str(source_path.resolve())) <= _LIBREOFFICE_MAX_SOURCE_PATH:
+        yield source_path, source_path.parent
+        return
+
+    with tempfile.TemporaryDirectory(prefix="kbsearch-lo-") as temp_dir:
+        temp_root = Path(temp_dir)
+        temp_source = temp_root / f"source{source_path.suffix.lower()}"
+        shutil.copy2(source_path, temp_source)
+        yield temp_source, temp_root
 
 
 def _wrap_text_line(

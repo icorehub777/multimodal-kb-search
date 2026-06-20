@@ -1,6 +1,7 @@
 ﻿import sys
 import unittest
 from pathlib import Path
+from subprocess import CompletedProcess
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
@@ -69,6 +70,42 @@ class ConversionTests(unittest.TestCase):
                     )
             self.assertEqual(run.call_args.args[0][0], "soffice")
 
+    def test_office_conversion_uses_short_temp_path_when_source_path_is_too_long(self):
+        converter = DocumentConverter()
+
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            long_name = (
+                "internal_"
+                + ("Bell Taih US CA Unshipped Order Status - 20260522" * 3)
+                + ".pptx"
+            )
+            source_dir = root / "work" / long_name.replace(".pptx", "-file-id")
+            source_dir.mkdir(parents=True)
+            source_path = source_dir / long_name
+            source_path.write_bytes(b"pptx")
+
+            def fake_run(command, **_kwargs):
+                convert_source = Path(command[-1])
+                convert_outdir = Path(command[-2])
+                self.assertEqual(convert_source.name, "source.pptx")
+                self.assertLessEqual(
+                    len(str(convert_source.resolve())),
+                    conversion._LIBREOFFICE_MAX_SOURCE_PATH,
+                )
+                (convert_outdir / "source.pdf").write_bytes(b"pdf")
+                return CompletedProcess(command, 0, "", "")
+
+            with patch("app.conversion.subprocess.run", side_effect=fake_run):
+                output_path = converter.convert_to_pdf(
+                    source_path,
+                    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                    source_dir,
+                )
+
+            self.assertEqual(output_path, source_dir / f"{source_path.stem}.pdf")
+            self.assertTrue(output_path.exists())
+
     def test_pdf_page_renderer_returns_numbered_page_images(self):
         class FakePage:
             def get_pixmap(self, dpi):
@@ -88,7 +125,14 @@ class ConversionTests(unittest.TestCase):
         renderer = PdfPageRenderer()
 
         with TemporaryDirectory() as temp_dir:
+            class FakeTools:
+                @staticmethod
+                def mupdf_display_errors(value):
+                    return not value
+
             class FakeFitz:
+                TOOLS = FakeTools()
+
                 @staticmethod
                 def open(_pdf_path):
                     return FakeDocument()
@@ -98,6 +142,36 @@ class ConversionTests(unittest.TestCase):
 
         self.assertEqual([page.page_number for page in pages], [1, 2])
         self.assertEqual([page.path.name for page in pages], ["0001.png", "0002.png"])
+
+    def test_pdf_page_renderer_suppresses_and_restores_mupdf_errors(self):
+        display_error_values = []
+
+        class FakeTools:
+            @staticmethod
+            def mupdf_display_errors(value):
+                display_error_values.append(value)
+                return True
+
+        class FakeDocument:
+            def __enter__(self):
+                return []
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+        class FakeFitz:
+            TOOLS = FakeTools()
+
+            @staticmethod
+            def open(_pdf_path):
+                return FakeDocument()
+
+        renderer = PdfPageRenderer()
+        with TemporaryDirectory() as temp_dir:
+            with patch.dict(sys.modules, {"fitz": FakeFitz}):
+                renderer.render_pages(Path("Spec.pdf"), Path(temp_dir))
+
+        self.assertEqual(display_error_values, [False, True])
 
     def test_image_page_renderer_normalizes_image_as_single_page_png(self):
         from app.conversion import PageImageRenderer
