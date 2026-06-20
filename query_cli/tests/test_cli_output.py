@@ -5,6 +5,7 @@ from pathlib import Path
 
 from kbsearch_cli.cli_output import build_query_success_payload, format_progress_message
 from kbsearch_cli.models import (
+    DownloadFailureResult,
     FullTextSearchResult,
     QueryResultBundle,
     QueryRunResult,
@@ -44,6 +45,7 @@ class CliOutputTests(unittest.TestCase):
                     FullTextSearchResult("file-1", "Alpha.pdf", "application/pdf", "")
                 ],
                 vector_results=[],
+                download_failures_path=bundle_dir / "download_failures.json",
             )
             result = QueryRunResult(
                 bundle=bundle,
@@ -53,6 +55,19 @@ class CliOutputTests(unittest.TestCase):
                 union_count=4,
                 download_count=3,
                 downloaded_files=[],
+                download_failure_count=1,
+                download_failures=[
+                    DownloadFailureResult(
+                        google_file_id="file-4",
+                        name="Broken.pdf",
+                        stage="process",
+                        error_type="DocumentRenderError",
+                        message="invalid PDF",
+                        google_drive_url="https://drive/file-4",
+                        vector_page_numbers=[3, 5],
+                        full_text_query="fullText contains 'broken'",
+                    )
+                ],
             )
 
             payload = build_query_success_payload(result)
@@ -60,11 +75,27 @@ class CliOutputTests(unittest.TestCase):
         self.assertEqual(
             payload,
             {
-                "status": "finished",
+                "status": "finished_with_errors",
                 "output_dir": bundle_dir.as_posix(),
                 "full_text_count": 1,
                 "vector_count": 4,
                 "download_count": 3,
+                "download_failure_count": 1,
+                "download_failures_path": (
+                    bundle_dir / "download_failures.json"
+                ).as_posix(),
+                "download_failures": [
+                    {
+                        "google_file_id": "file-4",
+                        "name": "Broken.pdf",
+                        "stage": "process",
+                        "error_type": "DocumentRenderError",
+                        "message": "invalid PDF",
+                        "google_drive_url": "https://drive/file-4",
+                        "vector_page_numbers": [3, 5],
+                        "full_text_query": "fullText contains 'broken'",
+                    }
+                ],
             },
         )
         json.dumps(payload)

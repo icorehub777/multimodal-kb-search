@@ -35,6 +35,7 @@ class CliTests(unittest.TestCase):
             vector_results_path=bundle_path / "vector_results.json",
             full_text_results=[],
             vector_results=[],
+            download_failures_path=bundle_path / "download_failures.json",
         )
         run_result = QueryRunResult(
             bundle=bundle,
@@ -54,6 +55,8 @@ class CliTests(unittest.TestCase):
                     page_paths=[bundle_path / "Alpha.pdf-file-1" / "0001.png"],
                 )
             ],
+            download_failure_count=0,
+            download_failures=[],
         )
 
         class FakeOrchestrator:
@@ -106,6 +109,8 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["full_text_count"], 1)
         self.assertEqual(payload["vector_count"], 2)
         self.assertEqual(payload["download_count"], 1)
+        self.assertEqual(payload["download_failure_count"], 0)
+        self.assertEqual(payload["download_failures"], [])
         self.assertIn("Query progress: phase=query status=started", stderr.getvalue())
 
     def test_render_pdf_pages_renders_selected_pages_without_loading_query_config(self):

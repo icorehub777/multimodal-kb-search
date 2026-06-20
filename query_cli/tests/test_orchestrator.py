@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+import json
 from pathlib import Path
 
 from kbsearch_cli.models import (
@@ -130,6 +131,190 @@ def _create_output_dir(root: str, name: str) -> Path:
 
 
 class QueryOrchestratorTests(unittest.TestCase):
+    def test_run_records_metadata_failure_and_continues(self):
+        class NoVectorBackendClient:
+            def search(self, query, image_paths, limit, min_score):
+                return []
+
+        class MissingMimeGoogleDriveClient(FakeGoogleDriveClient):
+            def search(self, drive_query, limit):
+                return [
+                    FullTextSearchResult("file-1", "Alpha.pdf", "", "https://drive/file-1"),
+                    FullTextSearchResult(
+                        "file-2",
+                        "Beta.pdf",
+                        "application/pdf",
+                        "https://drive/file-2",
+                    ),
+                ]
+
+            def get_file_metadata(self, file_id):
+                if file_id == "file-1":
+                    raise RuntimeError("metadata denied")
+                return super().get_file_metadata(file_id)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            orchestrator = QueryOrchestrator(
+                google_drive=MissingMimeGoogleDriveClient(),
+                backend=NoVectorBackendClient(),
+                result_writer=QueryResultWriter(),
+                document_processor=FakeDocumentProcessor(),
+            )
+
+            result = orchestrator.run(
+                output_dir=_create_output_dir(temp_dir, "metadata失敗"),
+                vector_query="alpha",
+                drive_query="fullText contains 'alpha' and trashed = false",
+                limit=10,
+                min_score=0.5,
+            )
+
+        self.assertEqual(result.download_failure_count, 1)
+        self.assertEqual(result.download_failures[0].stage, "metadata")
+        self.assertEqual(
+            result.download_failures[0].google_drive_url,
+            "https://drive/file-1",
+        )
+        self.assertEqual(result.download_failures[0].vector_page_numbers, [])
+        self.assertEqual(
+            result.download_failures[0].full_text_query,
+            "fullText contains 'alpha' and trashed = false",
+        )
+        self.assertEqual(result.download_count, 1)
+
+    def test_run_skips_failed_file_and_continues_processing_remaining_files(self):
+        class PartiallyFailingGoogleDriveClient(FakeGoogleDriveClient):
+            def download(self, file_id, name, mime_type, output_dir):
+                self.downloads.append((file_id, output_dir.name))
+                if file_id == "file-1":
+                    raise RuntimeError("download denied")
+                output_path = output_dir / safe_download_name(name)
+                output_path.write_bytes(b"pdf")
+                return output_path
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            google_drive = PartiallyFailingGoogleDriveClient()
+            processor = FakeDocumentProcessor()
+            orchestrator = QueryOrchestrator(
+                google_drive=google_drive,
+                backend=FakeBackendClient(),
+                result_writer=QueryResultWriter(),
+                document_processor=processor,
+            )
+            progress_events = []
+
+            result = orchestrator.run(
+                output_dir=_create_output_dir(temp_dir, "部分失敗"),
+                vector_query="alpha",
+                drive_query="fullText contains 'alpha' and trashed = false",
+                limit=10,
+                min_score=0.5,
+                progress=lambda phase, fields: progress_events.append((phase, fields)),
+            )
+
+            failures = json.loads(
+                result.bundle.download_failures_path.read_text(encoding="utf-8")
+            )
+
+        self.assertEqual(result.download_count, 1)
+        self.assertEqual(result.download_failure_count, 1)
+        self.assertEqual([item.google_file_id for item in result.downloaded_files], ["file-2"])
+        self.assertEqual(result.download_failures[0].google_file_id, "file-1")
+        self.assertEqual(result.download_failures[0].stage, "download")
+        self.assertEqual(result.download_failures[0].error_type, "RuntimeError")
+        self.assertIn("download denied", result.download_failures[0].message)
+        self.assertEqual(
+            result.download_failures[0].google_drive_url,
+            "https://drive/file-1",
+        )
+        self.assertEqual(result.download_failures[0].vector_page_numbers, [2])
+        self.assertEqual(
+            result.download_failures[0].full_text_query,
+            "fullText contains 'alpha' and trashed = false",
+        )
+        self.assertEqual(failures[0]["google_file_id"], "file-1")
+        self.assertEqual(failures[0]["vector_page_numbers"], [2])
+        self.assertEqual(processor.processed, [("Beta.pdf", [])])
+        self.assertTrue(
+            any(
+                phase == "download"
+                and fields["status"] == "failed"
+                and fields["file_id"] == "file-1"
+                for phase, fields in progress_events
+            )
+        )
+
+    def test_run_records_processing_stage_when_document_processing_fails(self):
+        class PartiallyFailingProcessor(FakeDocumentProcessor):
+            def process(self, source_path, output_dir, page_numbers):
+                if source_path.name == "Alpha.pdf":
+                    raise RuntimeError("invalid pdf")
+                return super().process(source_path, output_dir, page_numbers)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            orchestrator = QueryOrchestrator(
+                google_drive=FakeGoogleDriveClient(),
+                backend=FakeBackendClient(),
+                result_writer=QueryResultWriter(),
+                document_processor=PartiallyFailingProcessor(),
+            )
+
+            result = orchestrator.run(
+                output_dir=_create_output_dir(temp_dir, "處理失敗"),
+                vector_query="alpha",
+                drive_query="fullText contains 'alpha' and trashed = false",
+                limit=10,
+                min_score=0.5,
+            )
+
+        self.assertEqual(result.download_failure_count, 1)
+        self.assertEqual(result.download_failures[0].stage, "process")
+        self.assertEqual(result.download_count, 1)
+
+    def test_run_reports_vector_only_failure_with_drive_url_and_page_numbers(self):
+        class VectorOnlyBackendClient:
+            def search(self, query, image_paths, limit, min_score):
+                return [
+                    VectorFileSearchResult(
+                        "file-9",
+                        "Z.pdf",
+                        "Drive/Z.pdf",
+                        "https://drive/file-9",
+                        "1",
+                        "",
+                        0.9,
+                        [PageSearchResult(4, 0.9), PageSearchResult(7, 0.8)],
+                    )
+                ]
+
+        class FailingVectorDownloadClient(FakeGoogleDriveClient):
+            def search(self, drive_query, limit):
+                return []
+
+            def download(self, file_id, name, mime_type, output_dir):
+                raise RuntimeError("download failed")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            orchestrator = QueryOrchestrator(
+                google_drive=FailingVectorDownloadClient(),
+                backend=VectorOnlyBackendClient(),
+                result_writer=QueryResultWriter(),
+                document_processor=FakeDocumentProcessor(),
+            )
+
+            result = orchestrator.run(
+                output_dir=_create_output_dir(temp_dir, "純向量失敗"),
+                vector_query="find z",
+                drive_query="fullText contains 'z'",
+                limit=10,
+                min_score=0.5,
+            )
+
+        failure = result.download_failures[0]
+        self.assertEqual(failure.google_drive_url, "https://drive/file-9")
+        self.assertEqual(failure.vector_page_numbers, [4, 7])
+        self.assertIsNone(failure.full_text_query)
+
     def test_run_downloads_and_renders_union_of_full_text_and_vector_files(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             google_drive = FakeGoogleDriveClient()
@@ -173,6 +358,11 @@ class QueryOrchestratorTests(unittest.TestCase):
             self.assertEqual(
                 processor.processed,
                 [("Alpha.pdf", [2]), ("Beta.pdf", [])],
+            )
+            self.assertEqual(result.download_failure_count, 0)
+            self.assertEqual(
+                json.loads(bundle.download_failures_path.read_text(encoding="utf-8")),
+                [],
             )
 
     def test_run_keeps_spreadsheets_without_page_rendering(self):

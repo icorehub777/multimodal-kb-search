@@ -10,6 +10,7 @@ from typing import Protocol
 from kbsearch_cli.errors import QueryCliError
 from kbsearch_cli.logging_config import LOGGER_NAME
 from kbsearch_cli.models import (
+    DownloadFailureResult,
     DownloadedFileResult,
     FullTextSearchResult,
     ProcessedDocument,
@@ -66,6 +67,15 @@ class _DownloadTarget:
     google_file_id: str
     name: str
     mime_type: str
+    google_drive_url: str
+    vector_page_numbers: list[int]
+    full_text_query: str | None
+
+
+@dataclass(frozen=True)
+class _DownloadBatchResult:
+    downloaded_files: list[DownloadedFileResult]
+    failures: list[DownloadFailureResult]
 
 
 class QueryOrchestrator:
@@ -169,6 +179,7 @@ class QueryOrchestrator:
             full_text_results,
             vector_results,
             metadata_by_file_id,
+            drive_query,
         )
         union_breakdown = _union_breakdown(full_text_results, vector_results)
         bundle = self._result_writer.create_bundle(
@@ -222,24 +233,27 @@ class QueryOrchestrator:
                 union_breakdown.vector_only_count,
                 union_breakdown.both_count,
             )
-        downloaded_files = self._download_union_files(
+        download_batch = self._download_union_files(
             bundle.path,
             download_targets,
-            vector_results,
             progress=progress,
         )
+        self._result_writer.write_download_failures(bundle, download_batch.failures)
         logger.info(
-            "query phase=complete output_dir=%s union_count=%s download_count=%s",
+            "query phase=complete output_dir=%s union_count=%s download_count=%s "
+            "download_failure_count=%s",
             bundle.path,
             len(download_targets),
-            len(downloaded_files),
+            len(download_batch.downloaded_files),
+            len(download_batch.failures),
         )
         _report(
             progress,
             "complete",
             status="finished",
             union_count=len(download_targets),
-            download_count=len(downloaded_files),
+            download_count=len(download_batch.downloaded_files),
+            download_failure_count=len(download_batch.failures),
         )
         return QueryRunResult(
             bundle=bundle,
@@ -247,65 +261,98 @@ class QueryOrchestrator:
             vector_count=len(vector_candidates),
             vector_accessible_count=len(vector_results),
             union_count=len(download_targets),
-            download_count=len(downloaded_files),
-            downloaded_files=downloaded_files,
+            download_count=len(download_batch.downloaded_files),
+            downloaded_files=download_batch.downloaded_files,
+            download_failure_count=len(download_batch.failures),
+            download_failures=download_batch.failures,
         )
 
     def _download_union_files(
         self,
         bundle_path: Path,
         download_targets: list[_DownloadTarget],
-        vector_results: list[VectorFileSearchResult],
         *,
         progress: ProgressCallback | None = None,
-    ) -> list[DownloadedFileResult]:
+    ) -> _DownloadBatchResult:
         downloaded_files: list[DownloadedFileResult] = []
-        vector_pages_by_file_id = _vector_pages_by_file_id(vector_results)
+        failures: list[DownloadFailureResult] = []
         total = len(download_targets)
         for index, target in enumerate(download_targets, start=1):
             name = target.name
             mime_type = target.mime_type
-            if not mime_type:
-                metadata = self._google_drive.get_file_metadata(target.google_file_id)
-                name = metadata.name
-                mime_type = metadata.mime_type
-            file_dir = bundle_path / f"{safe_path_name(name)}-{safe_path_name(target.google_file_id)}"
-            file_dir.mkdir(parents=True, exist_ok=False)
-            _report(
-                progress,
-                "download",
-                status="started",
-                file_id=target.google_file_id,
-                name=name,
-                index=index,
-                total=total,
-            )
-            logger.info(
-                "query phase=download started file_id=%s name=%s",
-                target.google_file_id,
-                name,
-            )
+            stage = "metadata"
             try:
+                if not mime_type:
+                    metadata = self._google_drive.get_file_metadata(target.google_file_id)
+                    name = metadata.name
+                    mime_type = metadata.mime_type
+                stage = "prepare_directory"
+                file_dir = (
+                    bundle_path
+                    / f"{safe_path_name(name)}-{safe_path_name(target.google_file_id)}"
+                )
+                file_dir.mkdir(parents=True, exist_ok=False)
+                _report(
+                    progress,
+                    "download",
+                    status="started",
+                    file_id=target.google_file_id,
+                    name=name,
+                    index=index,
+                    total=total,
+                )
+                logger.info(
+                    "query phase=download started file_id=%s name=%s",
+                    target.google_file_id,
+                    name,
+                )
+                stage = "download"
                 source_path = self._google_drive.download(
                     file_id=target.google_file_id,
                     name=name,
                     mime_type=mime_type,
                     output_dir=file_dir,
                 )
+                stage = "process"
                 processed = self._document_processor.process(
                     source_path,
                     file_dir,
-                    vector_pages_by_file_id.get(target.google_file_id, []),
+                    target.vector_page_numbers,
                 )
             except Exception as exc:
                 logger.exception(
-                    "query phase=download failed file_id=%s name=%s error=%s message=%s",
+                    "query phase=download failed file_id=%s name=%s stage=%s "
+                    "error=%s message=%s",
                     target.google_file_id,
                     name,
+                    stage,
                     exc.__class__.__name__,
                     exc,
                 )
-                raise
+                failure = DownloadFailureResult(
+                    google_file_id=target.google_file_id,
+                    name=name,
+                    stage=stage,
+                    error_type=exc.__class__.__name__,
+                    message=str(exc) or exc.__class__.__name__,
+                    google_drive_url=target.google_drive_url,
+                    vector_page_numbers=target.vector_page_numbers,
+                    full_text_query=target.full_text_query,
+                )
+                failures.append(failure)
+                _report(
+                    progress,
+                    "download",
+                    status="failed",
+                    file_id=target.google_file_id,
+                    name=name,
+                    stage=stage,
+                    error_type=failure.error_type,
+                    message=failure.message,
+                    index=index,
+                    total=total,
+                )
+                continue
             logger.info(
                 "query phase=download finished file_id=%s name=%s text_page_count=%s "
                 "rendered_page_count=%s",
@@ -336,50 +383,56 @@ class QueryOrchestrator:
                     page_paths=processed.page_paths,
                 )
             )
-        return downloaded_files
+        return _DownloadBatchResult(
+            downloaded_files=downloaded_files,
+            failures=failures,
+        )
 
 
 def _build_download_targets(
     full_text_results: list[FullTextSearchResult],
     vector_results: list[VectorFileSearchResult],
     metadata_by_file_id: dict[str, FullTextSearchResult],
+    drive_query: str,
 ) -> list[_DownloadTarget]:
-    targets_by_id: dict[str, _DownloadTarget] = {}
-    for result in full_text_results:
-        targets_by_id[result.google_file_id] = _DownloadTarget(
-            google_file_id=result.google_file_id,
-            name=result.name,
-            mime_type=result.mime_type,
-        )
-    for result in vector_results:
-        if result.google_file_id in targets_by_id:
-            continue
-        metadata = metadata_by_file_id[result.google_file_id]
-        targets_by_id[result.google_file_id] = _DownloadTarget(
-            google_file_id=result.google_file_id,
-            name=metadata.name,
-            mime_type=metadata.mime_type,
-        )
+    full_text_by_id = {
+        result.google_file_id: result for result in full_text_results
+    }
+    vector_by_id = {
+        result.google_file_id: result for result in vector_results
+    }
     ordered_ids = list(
         dict.fromkeys(
             [result.google_file_id for result in full_text_results]
             + [result.google_file_id for result in vector_results]
         )
     )
-    return [targets_by_id[file_id] for file_id in ordered_ids if file_id in targets_by_id]
-
-
-def _vector_pages_by_file_id(
-    vector_results: list[VectorFileSearchResult],
-) -> dict[str, list[int]]:
-    pages_by_file_id: dict[str, set[int]] = {}
-    for result in vector_results:
-        pages = pages_by_file_id.setdefault(result.google_file_id, set())
-        pages.update(page.page_number for page in result.pages)
-    return {
-        file_id: sorted(page_numbers)
-        for file_id, page_numbers in pages_by_file_id.items()
-    }
+    targets: list[_DownloadTarget] = []
+    for file_id in ordered_ids:
+        full_text_result = full_text_by_id.get(file_id)
+        vector_result = vector_by_id.get(file_id)
+        metadata = metadata_by_file_id.get(file_id)
+        reference = full_text_result or metadata
+        if reference is None:
+            continue
+        google_drive_url = reference.web_url
+        if not google_drive_url and vector_result is not None:
+            google_drive_url = vector_result.source_url
+        targets.append(
+            _DownloadTarget(
+                google_file_id=file_id,
+                name=reference.name,
+                mime_type=reference.mime_type,
+                google_drive_url=google_drive_url,
+                vector_page_numbers=(
+                    sorted({page.page_number for page in vector_result.pages})
+                    if vector_result is not None
+                    else []
+                ),
+                full_text_query=drive_query if full_text_result is not None else None,
+            )
+        )
+    return targets
 
 
 @dataclass(frozen=True)

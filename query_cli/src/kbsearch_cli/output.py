@@ -5,7 +5,12 @@ import re
 from pathlib import Path
 
 from kbsearch_cli.errors import QueryCliError
-from kbsearch_cli.models import FullTextSearchResult, QueryResultBundle, VectorFileSearchResult
+from kbsearch_cli.models import (
+    DownloadFailureResult,
+    FullTextSearchResult,
+    QueryResultBundle,
+    VectorFileSearchResult,
+)
 
 
 INVALID_FILENAME_PATTERN = re.compile(r'[<>:"/\\\\|?*]+')
@@ -28,17 +33,30 @@ class QueryResultWriter:
         query_plan_path = output_dir / "query_plan.json"
         full_text_path = output_dir / "full_text_results.json"
         vector_path = output_dir / "vector_results.json"
+        download_failures_path = output_dir / "download_failures.json"
         _write_json(query_plan_path, query_plan)
         _write_json(full_text_path, [result.to_dict() for result in full_text_results])
         _write_json(vector_path, [result.to_dict() for result in vector_results])
+        _write_json(download_failures_path, [])
 
         return QueryResultBundle(
             path=output_dir,
             query_plan_path=query_plan_path,
             full_text_results_path=full_text_path,
             vector_results_path=vector_path,
+            download_failures_path=download_failures_path,
             full_text_results=full_text_results,
             vector_results=vector_results,
+        )
+
+    def write_download_failures(
+        self,
+        bundle: QueryResultBundle,
+        failures: list[DownloadFailureResult],
+    ) -> None:
+        _write_json(
+            bundle.download_failures_path,
+            [failure.to_dict() for failure in failures],
         )
 
 

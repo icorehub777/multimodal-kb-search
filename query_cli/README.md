@@ -95,32 +95,53 @@ kbsearch query `
 
 ```json
 {
-  "status": "finished",
+  "status": "finished_with_errors",
   "output_dir": "C:/path/to/task/query_results/20260613-131500-manual-test",
   "full_text_count": 1,
   "vector_count": 4,
-  "download_count": 4
+  "download_count": 3,
+  "download_failure_count": 1,
+  "download_failures_path": "C:/path/to/task/query_results/20260613-131500-manual-test/download_failures.json",
+  "download_failures": [
+    {
+      "google_file_id": "file-4",
+      "name": "Broken.pdf",
+      "stage": "process",
+      "error_type": "DocumentRenderError",
+      "message": "PDF text extraction failed",
+      "google_drive_url": "https://drive.google.com/file/d/file-4/view",
+      "vector_page_numbers": [3, 5],
+      "full_text_query": "fullText contains 'Broken' and trashed = false"
+    }
+  ]
 }
 ```
+
+所有檔案皆成功時，`status` 為 `finished` 且 `download_failure_count` 為 `0`。若單一檔案在 metadata 補查、產物目錄建立、下載或文件處理階段失敗，該檔案會被略過，其餘檔案繼續處理；此時指令仍以成功 exit code 完成，但 `status` 為 `finished_with_errors`。
+
+每筆失敗包含 `google_file_id`、檔名、失敗階段、錯誤類型、訊息與 `google_drive_url`，讓使用者可直接到 Google Drive 查看原檔。若檔案來自向量搜尋，`vector_page_numbers` 會列出命中頁碼；若來自全文搜尋，`full_text_query` 會保留本次查詢條件。同時命中兩種搜尋時兩組資訊都會提供。完整清單同時寫入 `download_failures.json`。失敗檔案已建立的部分產物會保留供排錯。
 
 查詢開始前會以不可覆蓋既有目錄的方式建立 `output_dir`；若路徑已存在，指令會在實際查詢前失敗。查詢途中失敗時，已建立的目錄與部分產物會保留，不得重用相同路徑。詳細清單與下載檔案見該資料夾內的 JSON 與子目錄。
 
 設定成功載入後，查詢過程與失敗資訊會記錄於 `KBSEARCH_QUERY_LOGS_ROOT` 下的 `kbsearch_cli.log`。失敗訊息會附上 log 路徑，供 Agent 或人員排查問題。
 
-每個下載檔案子資料夾會保留下載檔，並依格式產生：
+查詢結果資料夾會包含失敗清單；每個成功下載的檔案子資料夾會保留下載檔，並依格式產生：
 
 ```text
-<safe_file_name>-<google_file_id>/
-  <downloaded file>
-  pdf/
-    document.pdf
-  text/
-    0001.txt
-    0002.txt
-  pages/
-    0003.png
+<output_dir>/
+  download_failures.json
+  <safe_file_name>-<google_file_id>/
+    <downloaded file>
+    pdf/
+      document.pdf
+    text/
+      0001.txt
+      0002.txt
+    pages/
+      0003.png
 ```
 
+- `download_count` 是成功完成下載與處理的檔案數量，不包含 `download_failure_count`。
 - PDF、Word、PowerPoint、TXT、MD 會產生固定路徑 `pdf/document.pdf` 與逐頁 UTF-8 TXT。
 - `pages/` 只包含向量搜尋命中的頁面。
 - Excel 與 Google Sheets 只保留 XLS/XLSX。
