@@ -4,22 +4,22 @@
 
 ## 子專案邊界
 
-- `query_cli/` 提供 `kbsearch` 指令給終端人類員工與 Agent 使用；目前含 `query` 等子指令，後續可擴充，但本文件規範的是**所有子指令共用**的邊界與分層。
-- 阿里雲 embedding model 存取與 Qdrant vector store 操作必須透過 `secure_backend` FastAPI 服務。
-- 不在 `query_cli/` 中實作後端 indexing、Qdrant 寫入、DashScope SDK 呼叫或高權限 Google Workspace indexing credential 流程。
+- `query_cli/` 提供終端使用者與 Agent 使用的 CLI；本文件僅規範所有子指令共用的邊界與分層。
+- 受保護的後端能力必須透過既有 backend client 存取。
+- 不在 `query_cli/` 中實作後端 indexing、受保護資源寫入或高權限背景同步流程。
 
 ## 分層與依賴方向
 
 - CLI layer 負責解析命令列、載入設定、組裝依賴、處理 exit code 與 terminal 輸出；library layer 不得呼叫 `sys.exit()`。
-- 各子指令的核心流程應以 protocol 或注入物件接收外部能力（Google Drive、`secure_backend`、檔案處理、結果輸出等），核心邏輯不得依賴 argparse、terminal 格式或 Agent 文字格式。
+- 各子指令的核心流程應以 protocol 或注入物件接收外部能力，核心邏輯不得依賴 argparse、terminal 格式或 Agent 文字格式。
 - 外部服務呼叫應包在 client / adapter 中；核心流程不得直接依賴 HTTP library 的 response 物件。
-- Google Drive OAuth、Drive API 操作應集中在 query CLI 專用 client；使用者 Drive 認證只能使用 OAuth 2.0 授權碼流程。
-- `secure_backend` base URL、OAuth 路徑與 log 位置等環境設定應集中在設定層讀取；預設為目前工作目錄的 `config/.env`。新增或變更設定時需同步更新 config model、README 與測試。
+- 認證與外部 API 操作應集中在專用 client。
+- 環境設定應集中在設定層讀取；新增或變更設定時需同步更新 config model、README 與測試。
 
 ## 檔案與路徑
 
 - 使用 `pathlib.Path`；設定中的相對路徑相對於 CLI 執行時的目前工作目錄解析。
-- 由外部輸入（指令參數、檔名、Google file ID 等）組合本機路徑時，必須避免路徑穿越與非法檔名。
+- 由指令參數、檔名、外部識別碼或其他外部輸入組合本機路徑時，必須避免路徑穿越與非法檔名。
 - 由呼叫端指定的產物目錄應視為該次指令的寫入邊界，不得寫出指定目錄之外。
 - 產物目錄是否必須新建、是否可使用既有目錄，以及同名檔案是否覆蓋，皆屬各子指令契約，須在 README 中明確定義並以測試保護。
 
@@ -27,12 +27,12 @@
 
 - **stderr**：錯誤訊息與長時間操作的即時進度；訊息須說明哪個設定、路徑或服務出問題，供 Agent 與人類判斷原因。
 - **stdout**：成功時輸出該子指令的**可解析結果**（格式由各指令文件定義）；失敗時 exit code 為 `1`。
-- 可預期失敗須轉成明確 domain error（`ConfigError`、`ExternalServiceError`、`DocumentRenderError`、`QueryCliError` 等），保留排錯資訊；不得讓第三方 library 原始 exception 直接外洩到 terminal。
+- 可預期失敗須轉成明確 domain error，保留排錯資訊；不得讓第三方 library 原始 exception 直接外洩到 terminal。
 - 若 logging 已初始化，失敗訊息應附 log 檔絕對路徑；設定尚未載入成功、無法得知 log 根目錄時，僅 stderr 輸出，不得改用其他預設 log 路徑。
 
 ## Logging
 
-- log 僅在設定載入成功後初始化；寫入 `KBSEARCH_QUERY_LOGS_ROOT`，並以每日切割保留。
+- log 僅在設定載入成功後初始化，並寫入設定層指定的位置。
 - library 與 CLI 共用同一 logger；各子指令在 library 內分階段寫 log，不另建 ad hoc logger。
 - log 應覆蓋**該次指令**自開始到結束的生命週期（含前置檢查、主要階段、完成或失敗），各階段須有足以追蹤進度與結果的計數或摘要。
 - 步驟被跳過、權限或存取不足、外部服務或檔案處理失敗時，log 須說明原因與定位問題所需的識別資訊，不得 silent。
@@ -40,10 +40,10 @@
 
 ## 測試
 
-- 單元測試不得依賴真實 Google OAuth token、`secure_backend` service 或外部服務 credential。
-- 需要真實 OAuth 或 `secure_backend` 的探查或驗收測試必須明確命名，並與離線單元測試分開。
+- 單元測試不得依賴真實外部服務、token 或 credential。
+- 需要真實外部服務的探查或驗收測試必須明確命名，並與離線單元測試分開。
 - 探查測試不得輸出 token、credential 或個人敏感資料。
 
 ## 文件維護
 
-- 新增或修改子指令、CLI 參數、設定、OAuth 流程、client contract、輸出目錄或 terminal 契約時，須同步更新 README、設計文件與測試；**子指令專屬細節不寫入本 AGENTS.md**。
+- 新增或修改子指令、CLI 參數、設定、client contract、輸出目錄或 terminal 契約時，須同步更新 README、設計文件與測試；**子指令專屬細節不寫入本 AGENTS.md**。
