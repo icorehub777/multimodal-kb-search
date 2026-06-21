@@ -6,6 +6,7 @@ RUN apt-get update \
         libreoffice-impress \
         libreoffice-calc \
         fonts-noto-cjk \
+        fonts-wqy-zenhei \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -15,7 +16,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY main.py .
 COPY app/ app/
-
-ENV KBSEARCH_CJK_FONT_PATH=/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc
 
 CMD ["python", "main.py"]

@@ -194,7 +194,14 @@ importer/
 ```
 
 參考 `開發測試環境準備` 中的設定檔複製/調整與其他建置環境準備的內容準備正式環境。
-其中 `QDRANT_URL` 的設定要改成 `http://qdrant:6333`
+其中：
+
+- `QDRANT_URL` 必須改成 `http://qdrant:6333`。
+- 測試環境使用 Windows 字型；正式環境為 Linux image，`KBSEARCH_CJK_FONT_PATH` 必須改為：
+
+```env
+KBSEARCH_CJK_FONT_PATH=/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc
+```
 
 
 ### 手動測試
