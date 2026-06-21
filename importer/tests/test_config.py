@@ -24,11 +24,15 @@ _BASE_ENV = "\n".join(
         "DASHSCOPE_API_KEY=secret",
         "DASHSCOPE_EMBEDDING_MODEL=qwen3-vl-embedding",
         "DASHSCOPE_VECTOR_SIZE=2560",
+        "DASHSCOPE_IMAGE_MAX_BYTES=9728000",
+        "DASHSCOPE_JPEG_QUALITY=95",
         "QDRANT_URL=http://127.0.0.1:6333",
         "QDRANT_API_KEY=",
         "QDRANT_COLLECTION=kbsearch",
         "QDRANT_VECTOR_SIZE=2560",
         "KBSEARCH_CJK_FONT_PATH=C:\\Windows\\Fonts\\msjh.ttc",
+        "IMPORTER_PDF_RENDER_TARGET_DPI=200",
+        "IMPORTER_PDF_RENDER_MAX_PIXELS=80000000",
     ]
 )
 
@@ -148,6 +152,33 @@ class ConfigTests(unittest.TestCase):
 
         self.assertFalse(config.keep_success_work_files)
         self.assertTrue(config.keep_failed_work_files)
+
+    def test_load_importer_config_reads_pdf_render_and_dashscope_image_settings(self) -> None:
+        with self._config_context(
+            "IMPORTER_PDF_RENDER_TARGET_DPI=240",
+            "IMPORTER_PDF_RENDER_MAX_PIXELS=70000000",
+            "DASHSCOPE_IMAGE_MAX_BYTES=9000000",
+            "DASHSCOPE_JPEG_QUALITY=90",
+        ) as (env_file, source_config):
+            config = load_importer_config(env_file)
+
+        self.assertEqual(config.pdf_render_target_dpi, 240)
+        self.assertEqual(config.pdf_render_max_pixels, 70_000_000)
+        self.assertEqual(config.dashscope_image_max_bytes, 9_000_000)
+        self.assertEqual(config.dashscope_jpeg_quality, 90)
+
+    def test_load_importer_config_rejects_image_settings_outside_safe_ranges(self) -> None:
+        invalid_settings = (
+            "IMPORTER_PDF_RENDER_TARGET_DPI=71",
+            "IMPORTER_PDF_RENDER_MAX_PIXELS=90000000",
+            "DASHSCOPE_IMAGE_MAX_BYTES=10485761",
+            "DASHSCOPE_JPEG_QUALITY=101",
+        )
+        for invalid_setting in invalid_settings:
+            with self.subTest(invalid_setting=invalid_setting):
+                with self._config_context(invalid_setting) as (env_file, source_config):
+                    with self.assertRaises(ConfigError):
+                        load_importer_config(env_file)
 
     def test_load_importer_config_reads_log_retention_days(self) -> None:
         with self._config_context("IMPORTER_LOG_RETENTION_DAYS=30") as (env_file, source_config):

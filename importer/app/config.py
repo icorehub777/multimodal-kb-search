@@ -30,11 +30,15 @@ class ImporterConfig:
     dashscope_api_key: str
     dashscope_embedding_model: str
     dashscope_vector_size: int
+    dashscope_image_max_bytes: int
+    dashscope_jpeg_quality: int
     qdrant_url: str
     qdrant_api_key: str | None
     qdrant_collection: str
     qdrant_vector_size: int
     cjk_font_path: Path
+    pdf_render_target_dpi: int
+    pdf_render_max_pixels: int
     keep_success_work_files: bool
     keep_failed_work_files: bool
     log_retention_days: int
@@ -78,11 +82,35 @@ def load_importer_config(env_file: str | Path | None = DEFAULT_ENV_FILE) -> Impo
         dashscope_api_key=_required_str("DASHSCOPE_API_KEY"),
         dashscope_embedding_model=_required_str("DASHSCOPE_EMBEDDING_MODEL"),
         dashscope_vector_size=_required_int("DASHSCOPE_VECTOR_SIZE"),
+        dashscope_image_max_bytes=_optional_int_in_range(
+            "DASHSCOPE_IMAGE_MAX_BYTES",
+            9_728_000,
+            minimum=1,
+            maximum=10_485_760,
+        ),
+        dashscope_jpeg_quality=_optional_int_in_range(
+            "DASHSCOPE_JPEG_QUALITY",
+            95,
+            minimum=1,
+            maximum=100,
+        ),
         qdrant_url=_required_str("QDRANT_URL"),
         qdrant_api_key=_optional_str("QDRANT_API_KEY"),
         qdrant_collection=_required_str("QDRANT_COLLECTION"),
         qdrant_vector_size=_required_int("QDRANT_VECTOR_SIZE"),
         cjk_font_path=_required_absolute_path("KBSEARCH_CJK_FONT_PATH"),
+        pdf_render_target_dpi=_optional_int_in_range(
+            "IMPORTER_PDF_RENDER_TARGET_DPI",
+            200,
+            minimum=72,
+            maximum=600,
+        ),
+        pdf_render_max_pixels=_optional_int_in_range(
+            "IMPORTER_PDF_RENDER_MAX_PIXELS",
+            80_000_000,
+            minimum=1,
+            maximum=89_000_000,
+        ),
         keep_success_work_files=_optional_bool("IMPORTER_KEEP_SUCCESS_WORK_FILES", True),
         keep_failed_work_files=_optional_bool("IMPORTER_KEEP_FAILED_WORK_FILES", True),
         log_retention_days=_optional_int("IMPORTER_LOG_RETENTION_DAYS", 14),
@@ -215,4 +243,17 @@ def _optional_int(name: str, default: int) -> int:
         raise ConfigError(f"Config {name} must be an integer.") from exc
     if parsed < 0:
         raise ConfigError(f"Config {name} must be zero or a positive integer.")
+    return parsed
+
+
+def _optional_int_in_range(
+    name: str,
+    default: int,
+    *,
+    minimum: int,
+    maximum: int,
+) -> int:
+    parsed = _optional_int(name, default)
+    if parsed < minimum or parsed > maximum:
+        raise ConfigError(f"Config {name} must be between {minimum} and {maximum}.")
     return parsed

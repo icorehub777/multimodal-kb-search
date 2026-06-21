@@ -110,6 +110,8 @@ class ConversionTests(unittest.TestCase):
 
     def test_pdf_page_renderer_returns_numbered_page_images(self):
         class FakePage:
+            rect = type("Rect", (), {"width": 612, "height": 792})()
+
             def get_pixmap(self, dpi):
                 class Pixmap:
                     def save(self, path):
@@ -144,6 +146,47 @@ class ConversionTests(unittest.TestCase):
 
         self.assertEqual([page.page_number for page in pages], [1, 2])
         self.assertEqual([page.path.name for page in pages], ["0001.png", "0002.png"])
+
+    def test_pdf_page_renderer_reduces_dpi_to_stay_within_max_pixels(self):
+        seen_dpi = []
+
+        class FakePage:
+            rect = type("Rect", (), {"width": 11_480, "height": 5_149})()
+
+            def get_pixmap(self, dpi):
+                seen_dpi.append(dpi)
+
+                class Pixmap:
+                    def save(self, path):
+                        Path(path).write_bytes(b"png")
+
+                return Pixmap()
+
+        class FakeDocument:
+            def __enter__(self):
+                return [FakePage()]
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+        class FakeTools:
+            @staticmethod
+            def mupdf_display_errors(value):
+                return not value
+
+        class FakeFitz:
+            TOOLS = FakeTools()
+
+            @staticmethod
+            def open(_pdf_path):
+                return FakeDocument()
+
+        renderer = PdfPageRenderer(target_dpi=200, max_pixels=80_000_000)
+        with TemporaryDirectory() as temp_dir:
+            with patch.dict(sys.modules, {"fitz": FakeFitz}):
+                renderer.render_pages(Path("oversized.pdf"), Path(temp_dir))
+
+        self.assertEqual(seen_dpi, [83])
 
     def test_pdf_page_renderer_suppresses_and_restores_mupdf_errors(self):
         display_error_values = []

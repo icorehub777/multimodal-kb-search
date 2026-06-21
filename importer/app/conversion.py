@@ -2,6 +2,7 @@
 
 import codecs
 import logging
+import math
 import shutil
 import subprocess
 import tempfile
@@ -158,8 +159,15 @@ def _read_text(source_path: Path) -> tuple[str, str]:
 
 
 class PdfPageRenderer:
-    def __init__(self, dpi: int = 200) -> None:
-        self._dpi = dpi
+    def __init__(
+        self,
+        target_dpi: int = 200,
+        max_pixels: int = 80_000_000,
+        logger: logging.Logger | None = None,
+    ) -> None:
+        self._target_dpi = target_dpi
+        self._max_pixels = max_pixels
+        self._logger = logger or logging.getLogger(LOGGER_NAME)
 
     def render_pages(self, pdf_path: Path, output_dir: Path) -> list[PageImage]:
         if pdf_path.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp"}:
@@ -177,11 +185,44 @@ class PdfPageRenderer:
             with fitz.open(pdf_path) as document:
                 for index, page in enumerate(document, start=1):
                     output_path = page_png_path(output_dir, index)
-                    page.get_pixmap(dpi=self._dpi).save(output_path)
+                    render_dpi = _page_render_dpi(
+                        page.rect.width,
+                        page.rect.height,
+                        self._target_dpi,
+                        self._max_pixels,
+                    )
+                    self._logger.info(
+                        "pdf_render page=%s target_dpi=%s render_dpi=%s "
+                        "page_width_points=%s page_height_points=%s max_pixels=%s",
+                        index,
+                        self._target_dpi,
+                        render_dpi,
+                        page.rect.width,
+                        page.rect.height,
+                        self._max_pixels,
+                    )
+                    page.get_pixmap(dpi=render_dpi).save(output_path)
                     pages.append(PageImage(page_number=index, path=output_path))
         finally:
             fitz.TOOLS.mupdf_display_errors(previous_display_errors)
         return pages
+
+
+def _page_render_dpi(
+    width_points: float,
+    height_points: float,
+    target_dpi: int,
+    max_pixels: int,
+) -> int:
+    target_pixels = (
+        width_points * target_dpi / 72
+    ) * (
+        height_points * target_dpi / 72
+    )
+    if target_pixels <= max_pixels:
+        return target_dpi
+    scale = math.sqrt(max_pixels / target_pixels)
+    return max(1, math.floor(target_dpi * scale))
 
 
 class PageImageRenderer:

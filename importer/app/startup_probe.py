@@ -62,6 +62,8 @@ def _probe_dashscope(config: ImporterConfig) -> int:
         api_key=config.dashscope_api_key,
         model=config.dashscope_embedding_model,
         dimension=config.dashscope_vector_size,
+        image_max_bytes=config.dashscope_image_max_bytes,
+        jpeg_quality=config.dashscope_jpeg_quality,
     )
     try:
         with TemporaryDirectory() as temp_dir:

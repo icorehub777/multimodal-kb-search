@@ -45,6 +45,9 @@ def create_page_embedder(config: ImporterConfig) -> DashScopePageEmbedder:
             api_key=config.dashscope_api_key,
             model=config.dashscope_embedding_model,
             dimension=config.dashscope_vector_size,
+            image_max_bytes=config.dashscope_image_max_bytes,
+            jpeg_quality=config.dashscope_jpeg_quality,
+            logger=logging.getLogger(LOGGER_NAME),
         ),
         expected_dimension=config.dashscope_vector_size,
     )
@@ -61,8 +64,13 @@ def create_sync_orchestrator(config: ImporterConfig) -> SyncOrchestrator:
             downloader=GoogleDriveDownloader(drive_service),
             converter=DocumentConverter(
                 cjk_font_path=config.cjk_font_path,
+                logger=logger,
             ),
-            renderer=PdfPageRenderer(),
+            renderer=PdfPageRenderer(
+                target_dpi=config.pdf_render_target_dpi,
+                max_pixels=config.pdf_render_max_pixels,
+                logger=logger,
+            ),
             embedder=create_page_embedder(config),
             qdrant_index=qdrant_index,
             work_dir=config.app_root / "work",

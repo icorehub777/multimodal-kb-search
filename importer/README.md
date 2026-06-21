@@ -58,17 +58,25 @@ importer/
 | `DASHSCOPE_API_KEY` | DashScope API key |
 | `DASHSCOPE_EMBEDDING_MODEL` | Embedding 模型 |
 | `DASHSCOPE_VECTOR_SIZE` | 向量維度（須與 `QDRANT_VECTOR_SIZE` 相同） |
+| `DASHSCOPE_IMAGE_MAX_BYTES` | 送入 Qwen embedding API 的圖片上限；範圍 1–10,485,760 bytes，預設 9,728,000，低於 API 的 10,240 KB 硬限制以保留傳輸餘裕 |
+| `DASHSCOPE_JPEG_QUALITY` | 圖片超過上限時轉 JPEG 的起始品質；範圍 1–100，預設 95，以保留 embedding 所需細節 |
 | `QDRANT_URL` | 本機測試時用 `http://127.0.0.1:6333`；docker 部署時用 `http://qdrant:6333` |
 | `QDRANT_API_KEY` | 選填；地端預設不啟用 API key，雲端託管時再填 |
 | `QDRANT_COLLECTION` | Collection 名稱 |
 | `QDRANT_VECTOR_SIZE` | Collection 向量維度 |
 | `KBSEARCH_CJK_FONT_PATH` | CJK 字型絕對路徑 |
+| `IMPORTER_PDF_RENDER_TARGET_DPI` | PDF 一般頁面的目標渲染解析度；範圍 72–600，預設 200；極大頁面為符合像素上限會降低實際 DPI |
+| `IMPORTER_PDF_RENDER_MAX_PIXELS` | PDF 單頁渲染像素上限；範圍 1–89,000,000，預設 80,000,000，避免巨型 PNG 觸發 Pillow 安全限制或大量記憶體用量 |
 | `IMPORTER_KEEP_SUCCESS_WORK_FILES` | 檔案匯入成功後是否保留 `work/` 暫存 |
 | `IMPORTER_KEEP_FAILED_WORK_FILES` | 檔案匯入失敗後是否保留 `work/` 暫存 |
 | `IMPORTER_LOG_RETENTION_DAYS` | 執行 log 保留天數；每次啟動會刪除較舊的 `logs/importer-*.log`；設 `0` 表示不自動清理 |
 
 
 Google 存取的認證方式為 Service Account JSON + Domain-Wide Delegation（`signJwt`）。
+
+### Qwen 圖片前處理
+
+PDF 頁面通常依 `IMPORTER_PDF_RENDER_TARGET_DPI` 轉成 PNG；只有預估像素超過 `IMPORTER_PDF_RENDER_MAX_PIXELS` 時，才會降低該頁實際 DPI。送入 `qwen3-vl-embedding` 時，小於 `DASHSCOPE_IMAGE_MAX_BYTES` 的圖片保持原檔並由 DashScope SDK 上傳；超過時先維持尺寸降低 JPEG 品質，仍超限才等比例縮小。這些限制是配合 Qwen API 的 10,240 KB 圖片硬限制，並避免 Pillow 在巨型圖片上觸發 decompression-bomb 保護。
 
 執行 log：每次執行寫入 `logs/importer-YYYYMMDD-HHMMSS-ffffff-pPID.log`，並同時輸出 stdout；依 `IMPORTER_LOG_RETENTION_DAYS` 清理舊 log（預設 14 天）。清理失敗時會記錄錯誤並中止匯入。
 
