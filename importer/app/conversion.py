@@ -1,5 +1,7 @@
 ﻿from __future__ import annotations
 
+import codecs
+import logging
 import shutil
 import subprocess
 import tempfile
@@ -9,6 +11,7 @@ from pathlib import Path
 from app.document_importer import PageImage
 from app.document_processing import classify_document_type, page_png_path
 from app.errors import DocumentConversionError
+from app.logging_config import LOGGER_NAME
 
 CJK_TEXT_FONT_NAME = "KBSearchTextCJK"
 _LIBREOFFICE_MAX_SOURCE_PATH = 240
@@ -16,8 +19,13 @@ SOFFICE_EXECUTABLE = "soffice"
 
 
 class DocumentConverter:
-    def __init__(self, cjk_font_path: Path | None = None) -> None:
+    def __init__(
+        self,
+        cjk_font_path: Path | None = None,
+        logger: logging.Logger | None = None,
+    ) -> None:
         self._cjk_font_path = cjk_font_path
+        self._logger = logger or logging.getLogger(LOGGER_NAME)
 
     def convert_to_pdf(self, source_path: Path, mime_type: str, output_dir: Path) -> Path:
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -87,7 +95,9 @@ class DocumentConverter:
             raise DocumentConversionError("reportlab is required for TXT/MD conversion.") from exc
 
         output_path = output_dir / f"{source_path.stem}.pdf"
-        text = source_path.read_text(encoding="utf-8").expandtabs(4)
+        text, encoding = _read_text(source_path)
+        self._logger.info("text_decode path=%s encoding=%s", source_path, encoding)
+        text = text.expandtabs(4)
         font_name = _text_pdf_font_name(text, self._cjk_font_path)
         pdf = canvas.Canvas(str(output_path), pagesize=A4)
         width, height = A4
@@ -115,6 +125,36 @@ class DocumentConverter:
                 y -= line_height
         pdf.save()
         return output_path
+
+
+def _read_text(source_path: Path) -> tuple[str, str]:
+    data = source_path.read_bytes()
+    bom_encodings = (
+        (codecs.BOM_UTF8, "utf-8-sig"),
+        (codecs.BOM_UTF32_LE, "utf-32"),
+        (codecs.BOM_UTF32_BE, "utf-32"),
+        (codecs.BOM_UTF16_LE, "utf-16"),
+        (codecs.BOM_UTF16_BE, "utf-16"),
+    )
+    for bom, encoding in bom_encodings:
+        if data.startswith(bom):
+            try:
+                return data.decode(encoding), encoding
+            except UnicodeDecodeError as exc:
+                raise DocumentConversionError(
+                    f"Text decoding failed for {source_path} with BOM encoding {encoding}."
+                ) from exc
+
+    for encoding in ("utf-8", "cp950"):
+        try:
+            return data.decode(encoding), encoding
+        except UnicodeDecodeError:
+            continue
+
+    raise DocumentConversionError(
+        f"Text decoding failed for {source_path}. "
+        "Supported encodings: UTF-8, UTF-16/32 with BOM, CP950."
+    )
 
 
 class PdfPageRenderer:

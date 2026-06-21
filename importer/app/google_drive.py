@@ -1,13 +1,18 @@
 ﻿from __future__ import annotations
 
 import io
+import logging
 import re
 from collections import deque
 from pathlib import Path
 from typing import Any
 
 from app.config import GoogleDriveSource
-from app.document_processing import UnsupportedDocumentTypeError
+from app.document_processing import (
+    UnsupportedDocumentTypeError,
+    is_supported_document_mime_type,
+)
+from app.logging_config import LOGGER_NAME
 from app.models import WorkspaceDocument
 
 GOOGLE_NATIVE_EXPORT_MIME_TYPES = {
@@ -34,9 +39,15 @@ UNSUPPORTED_DOWNLOAD_MIME_TYPES = {
 
 
 class GoogleDriveScanner:
-    def __init__(self, drive_service: Any, sources: tuple[GoogleDriveSource, ...]) -> None:
+    def __init__(
+        self,
+        drive_service: Any,
+        sources: tuple[GoogleDriveSource, ...],
+        logger: logging.Logger | None = None,
+    ) -> None:
         self._drive_service = drive_service
         self._sources = sources
+        self._logger = logger or logging.getLogger(LOGGER_NAME)
 
     def list_documents(self) -> list[WorkspaceDocument]:
         documents: list[WorkspaceDocument] = []
@@ -68,7 +79,7 @@ class GoogleDriveScanner:
                         item,
                         _item_location(source.name, item, folder_paths),
                     )
-                    for item in items
+                    for item in self._supported_items(source, items)
                 ]
 
     def _list_folder_source_documents(self, source: GoogleDriveSource) -> list[WorkspaceDocument]:
@@ -80,7 +91,7 @@ class GoogleDriveScanner:
         while pending_folders:
             folder_id, folder_path = pending_folders.popleft()
             file_query = f"'{_escape_query_term(folder_id)}' in parents and {DRIVE_FILE_QUERY}"
-            for item in self._list_items(source, file_query):
+            for item in self._supported_items(source, self._list_items(source, file_query)):
                 documents.append(_workspace_document_from_item(item, f"{folder_path}/{item['name']}"))
 
             folder_query = f"'{_escape_query_term(folder_id)}' in parents and {DRIVE_FOLDER_QUERY}"
@@ -88,6 +99,27 @@ class GoogleDriveScanner:
                 pending_folders.append((item["id"], f"{folder_path}/{item['name']}"))
 
         return documents
+
+    def _supported_items(
+        self,
+        source: GoogleDriveSource,
+        items: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        supported: list[dict[str, Any]] = []
+        for item in items:
+            mime_type = str(item.get("mimeType", ""))
+            if is_supported_document_mime_type(mime_type):
+                supported.append(item)
+                continue
+            self._logger.info(
+                "file_id=%s name=%s mime_type=%s source=%s "
+                "action=skip reason=unsupported_mime_type",
+                item.get("id", ""),
+                item.get("name", ""),
+                mime_type,
+                source.name,
+            )
+        return supported
 
     def _shared_drive_folder_paths(self, source: GoogleDriveSource) -> dict[str, str]:
         folder_items = {

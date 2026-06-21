@@ -29,6 +29,10 @@ _EXCEL_MIME_TYPES = {
 }
 
 
+def is_supported_document_mime_type(mime_type: str) -> bool:
+    return mime_type in _MIME_TYPE_TO_DOCUMENT_TYPE
+
+
 def classify_document_type(mime_type: str) -> str:
     if mime_type in _EXCEL_MIME_TYPES:
         raise UnsupportedDocumentTypeError(

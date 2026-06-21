@@ -1,4 +1,6 @@
 ﻿import unittest
+from io import StringIO
+import logging
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -79,6 +81,49 @@ class GoogleDriveTests(unittest.TestCase):
         self.assertIn(
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             service.files_resource.list_calls[0]["q"],
+        )
+
+    def test_scanner_skips_unsupported_mime_types_and_logs_reason(self):
+        service = FakeDriveService()
+        service.files_resource.responses = [
+            {
+                "files": [
+                    {
+                        "id": "supported",
+                        "name": "Spec.pdf",
+                        "mimeType": "application/pdf",
+                        "version": "1",
+                        "modifiedTime": "2026-05-24T00:00:00Z",
+                    },
+                    {
+                        "id": "unsupported",
+                        "name": "Drawing.dwg",
+                        "mimeType": "image/vnd.dwg",
+                        "version": "1",
+                        "modifiedTime": "2026-05-24T00:00:00Z",
+                    },
+                ]
+            },
+            {"files": []},
+        ]
+        stream = StringIO()
+        logger = logging.getLogger("app.tests.google_drive.mime")
+        logger.handlers = [logging.StreamHandler(stream)]
+        logger.setLevel(logging.INFO)
+        logger.propagate = False
+        scanner = GoogleDriveScanner(
+            drive_service=service,
+            sources=(GoogleDriveSource(name="shared", type="shared_drive", drive_id="drive-1"),),
+            logger=logger,
+        )
+
+        documents = scanner.list_documents()
+
+        self.assertEqual([document.file_id for document in documents], ["supported"])
+        self.assertIn(
+            "file_id=unsupported name=Drawing.dwg mime_type=image/vnd.dwg "
+            "source=shared action=skip reason=unsupported_mime_type",
+            stream.getvalue(),
         )
 
     def test_scanner_builds_shared_drive_nested_source_location(self):

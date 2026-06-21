@@ -1,5 +1,7 @@
 ﻿import sys
 import unittest
+from io import StringIO
+import logging
 from pathlib import Path
 from subprocess import CompletedProcess
 from tempfile import TemporaryDirectory
@@ -215,6 +217,56 @@ class ConversionTests(unittest.TestCase):
         self.assertIn("\u4e2d\u6587\u6e2c\u8a66", text)
         self.assertIn("\u6587\u4ef6\u532f\u5165", text)
         self.assertNotIn("\x00", text)
+
+    def test_text_to_pdf_supports_cp950_and_logs_selected_encoding(self):
+        try:
+            import fitz
+        except ImportError:
+            self.skipTest("PyMuPDF is required for PDF text extraction.")
+
+        cjk_font_path = _available_cjk_font_path()
+        if cjk_font_path is None:
+            self.skipTest("Configured CJK font is not available.")
+
+        stream = StringIO()
+        logger = logging.getLogger("app.tests.conversion.encoding")
+        logger.handlers = [logging.StreamHandler(stream)]
+        logger.setLevel(logging.INFO)
+        logger.propagate = False
+        converter = DocumentConverter(cjk_font_path=cjk_font_path, logger=logger)
+        with TemporaryDirectory() as temp_dir:
+            source = Path(temp_dir) / "legacy.txt"
+            source.write_bytes("繁體中文測試".encode("cp950"))
+
+            output = converter.convert_to_pdf(source, "text/plain", Path(temp_dir) / "pdf")
+
+            with fitz.open(output) as document:
+                text = document[0].get_text("text")
+
+        self.assertIn("繁體中文測試", text)
+        self.assertIn("encoding=cp950", stream.getvalue())
+
+    def test_text_to_pdf_honors_utf16_bom(self):
+        try:
+            import fitz
+        except ImportError:
+            self.skipTest("PyMuPDF is required for PDF text extraction.")
+
+        cjk_font_path = _available_cjk_font_path()
+        if cjk_font_path is None:
+            self.skipTest("Configured CJK font is not available.")
+
+        converter = DocumentConverter(cjk_font_path=cjk_font_path)
+        with TemporaryDirectory() as temp_dir:
+            source = Path(temp_dir) / "utf16.txt"
+            source.write_bytes("UTF-16 中文".encode("utf-16"))
+
+            output = converter.convert_to_pdf(source, "text/plain", Path(temp_dir) / "pdf")
+
+            with fitz.open(output) as document:
+                text = document[0].get_text("text")
+
+        self.assertIn("UTF-16 中文", text)
 
     def test_text_to_pdf_wraps_long_chinese_lines(self):
         try:

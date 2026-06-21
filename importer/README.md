@@ -4,6 +4,10 @@
 
 同步以 Google file ID 與 Drive `version` 比對：新增完整匯入、刪除清向量、異動先刪後匯、未變更略過。
 
+掃描時會針對子資料夾內容遞迴掃描，且只將支援的 Google Drive MIME type 納入同步：PDF、Google Docs、Google Slides、Word、PowerPoint、TXT、Markdown、PNG、JPEG、WebP。不支援的 MIME type 會寫入 skip log，不下載、不轉換，也不計為匯入失敗。
+
+目前支援的 MIME type 中，只有 TXT／Markdown 文字檔會碰到潛在的編碼問題，因此在程式處理上會依序支援帶 BOM 的 UTF-8、UTF-16、UTF-32，以及無 BOM 的 UTF-8、CP950。實際採用的文字編碼會寫入 importer log；無法使用上述編碼嚴格解碼時，該文件匯入失敗，不會以替代字元修改內容。
+
 ## 目錄與設定
 
 ### 開發用 repo 目錄
