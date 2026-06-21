@@ -83,8 +83,8 @@ kbsearch query `
 參數說明：
 
 - `--output-dir`：本次查詢結果的輸出資料夾路徑，必須使用尚不存在的新路徑；父目錄不存在時會自動建立。
-- `--vector-query`：語意查詢文字；若有附圖，在此描述問題與圖片內容，連同 `--image` 一併送給 `secure_backend` 做向量搜尋。
-- `--drive-query`：Google Drive API `q` 語法，原樣送出，用於全文／檔名搜尋。
+- `--vector-query`：語意查詢文字；若有附圖，在此描述問題與圖片內容，連同 `--image` 一併送給 `secure_backend` 做向量搜尋。向量搜尋僅涵蓋 importer 已同步的文件。
+- `--drive-query`：Google Drive API `q` 語法，原樣送出，用於全文／檔名搜尋。搜尋範圍依目前使用者的 Drive 權限決定，不受 importer 同步來源資料夾限制。
 - `--image`：本機圖片路徑（PNG/JPEG 等），可重複指定；省略則僅以文字做向量搜尋。
 - `--limit`：向量與 Drive 搜尋各別的結果筆數上限，預設 `10`。
 - `--min-score`：向量相似度下限；省略則不過濾低分結果。
