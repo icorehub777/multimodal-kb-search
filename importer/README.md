@@ -2,7 +2,7 @@
 
 掃描 Google Workspace 指定來源，下載或 export 文件，轉頁後產生多模態 embedding，寫入 Qdrant。
 
-同步以 Google file ID 與 Drive `version` 比對：新增完整匯入、刪除清向量、異動先刪後匯、未變更略過。
+同步以 Google file ID 與 Drive `modifiedTime` 比對：新增完整匯入、刪除清向量、異動先刪後匯、未變更略過。Drive `version` 僅保留於向量 metadata 供排錯，不參與異動判斷。
 
 掃描時會針對子資料夾內容遞迴掃描，且只將支援的 Google Drive MIME type 納入同步：PDF、Google Docs、Google Slides、Word、PowerPoint、TXT、Markdown、PNG、JPEG、WebP。不支援的 MIME type 會寫入 skip log，不下載、不轉換，也不計為匯入失敗。
 

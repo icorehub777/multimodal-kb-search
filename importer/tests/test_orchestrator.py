@@ -17,7 +17,7 @@ def workspace_doc(file_id: str, version: str) -> WorkspaceDocument:
         location=f"/source/{file_id}.pdf",
         web_url=f"https://drive.google.com/file/d/{file_id}",
         version=version,
-        modified_time="2026-05-24T00:00:00Z",
+        modified_time=f"2026-05-24T00:00:0{version}Z",
         mime_type="application/pdf",
     )
 
@@ -37,9 +37,9 @@ class FakeWorkspaceScanner:
 class FakeQdrantIndex:
     def __init__(self) -> None:
         self.documents = [
-            QdrantDocument(file_id="deleted", version="1"),
-            QdrantDocument(file_id="changed", version="1"),
-            QdrantDocument(file_id="same", version="1"),
+            QdrantDocument(file_id="deleted", modified_time="2026-05-24T00:00:01Z"),
+            QdrantDocument(file_id="changed", modified_time="2026-05-24T00:00:01Z"),
+            QdrantDocument(file_id="same", modified_time="2026-05-24T00:00:01Z"),
         ]
         self.deleted: list[str] = []
 

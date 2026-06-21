@@ -66,11 +66,11 @@ class QdrantIndexAdapter:
             for record in records:
                 payload = record.payload or {}
                 file_id = payload.get("google_file_id")
-                version = payload.get("google_drive_version")
-                if file_id and version:
+                modified_time = payload.get("google_drive_modified_time")
+                if file_id and modified_time:
                     documents_by_id[str(file_id)] = QdrantDocument(
                         file_id=str(file_id),
-                        version=str(version),
+                        modified_time=str(modified_time),
                     )
             if offset is None:
                 return [documents_by_id[file_id] for file_id in sorted(documents_by_id)]

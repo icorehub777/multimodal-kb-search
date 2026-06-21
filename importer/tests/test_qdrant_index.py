@@ -21,8 +21,8 @@ class FakeQdrantClient:
         if self.scroll_calls == 1:
             return (
                 [
-                    type("Record", (), {"payload": {"google_file_id": "file-1", "google_drive_version": "7"}})(),
-                    type("Record", (), {"payload": {"google_file_id": "file-1", "google_drive_version": "7"}})(),
+                    type("Record", (), {"payload": {"google_file_id": "file-1", "google_drive_modified_time": "2026-05-24T00:00:00Z"}})(),
+                    type("Record", (), {"payload": {"google_file_id": "file-1", "google_drive_modified_time": "2026-05-24T00:00:00Z"}})(),
                 ],
                 None,
             )
@@ -39,7 +39,10 @@ class QdrantIndexTests(unittest.TestCase):
     def test_list_documents_summarizes_by_google_file_id(self):
         index = QdrantIndexAdapter(client=FakeQdrantClient(), collection="kbsearch")
 
-        self.assertEqual(index.list_documents(), [QdrantDocument(file_id="file-1", version="7")])
+        self.assertEqual(
+            index.list_documents(),
+            [QdrantDocument(file_id="file-1", modified_time="2026-05-24T00:00:00Z")],
+        )
 
     def test_delete_document_deletes_by_google_file_id(self):
         client = FakeQdrantClient()

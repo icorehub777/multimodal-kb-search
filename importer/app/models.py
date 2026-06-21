@@ -16,7 +16,7 @@ class WorkspaceDocument:
 @dataclass(frozen=True)
 class QdrantDocument:
     file_id: str
-    version: str
+    modified_time: str
 
 
 @dataclass(frozen=True)

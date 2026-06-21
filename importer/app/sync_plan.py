@@ -50,7 +50,7 @@ def plan_sync(
                 )
             )
         elif workspace_document is not None and qdrant_document is not None:
-            if workspace_document.version != qdrant_document.version:
+            if workspace_document.modified_time != qdrant_document.modified_time:
                 decisions.append(
                     SyncDecision(
                         file_id=file_id,
