@@ -1,33 +1,52 @@
 from __future__ import annotations
 
 import logging
-from logging.handlers import TimedRotatingFileHandler
+from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
+from uuid import uuid4
 
 LOGGER_NAME = "kbsearch_cli"
-LOG_FILE_NAME = "kbsearch_cli.log"
 
 
-def query_log_file_path(log_root: Path) -> Path:
-    return log_root.resolve() / LOG_FILE_NAME
+@dataclass(frozen=True)
+class QueryLogContext:
+    run_id: str
+    log_path: Path
 
 
-def configure_query_cli_logging(log_root: Path) -> logging.Logger:
-    log_root.mkdir(parents=True, exist_ok=True)
+def new_query_run_id() -> str:
+    return uuid4().hex[:8]
+
+
+def create_query_log_context(
+    log_root: Path,
+    *,
+    run_id: str,
+    timestamp: str | None = None,
+) -> QueryLogContext:
+    resolved_timestamp = timestamp or datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+    return QueryLogContext(
+        run_id=run_id,
+        log_path=log_root.resolve() / f"kbsearch-{resolved_timestamp}-{run_id}.log",
+    )
+
+
+def configure_query_cli_logging(context: QueryLogContext) -> logging.Logger:
+    context.log_path.parent.mkdir(parents=True, exist_ok=True)
     logger = logging.getLogger(LOGGER_NAME)
     logger.setLevel(logging.INFO)
     logger.propagate = False
-    formatter = logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s")
+    formatter = logging.Formatter(
+        f"%(asctime)s %(levelname)s %(name)s run_id={context.run_id} %(message)s"
+    )
 
-    log_file_path = query_log_file_path(log_root)
-    for handler in logger.handlers:
-        if isinstance(handler, TimedRotatingFileHandler) and Path(handler.baseFilename) == log_file_path:
-            return logger
+    for existing_handler in list(logger.handlers):
+        logger.removeHandler(existing_handler)
+        existing_handler.close()
 
-    handler = TimedRotatingFileHandler(
-        log_file_path,
-        when="midnight",
-        backupCount=30,
+    handler = logging.FileHandler(
+        context.log_path,
         encoding="utf-8",
         delay=True,
     )

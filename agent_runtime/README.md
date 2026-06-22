@@ -17,7 +17,7 @@ agent_runtime/
       oauth_client.json           # Google OAuth Desktop 用戶端憑證（不納版控）
       token_cache.json            # 首次授權後由程式寫入（不納版控）
     packages/                     # kbsearch_cli wheel
-    logs/                         # kbsearch_cli.log 等
+    logs/                         # 每次 query 的獨立 kbsearch-<日期時間>-<run_id>.log
 ```
 
 ---
@@ -120,7 +120,7 @@ cd agent_runtime\_internal
 
 `--output-dir` 與 `--image` 可使用絕對路徑，或使用相對 `_internal/` 工作目錄的路徑。Agent 依目前目錄結構使用相對路徑，例如 `../tasks/<任務資料夾>/query_results/<查詢資料夾>` 與 `../tasks/<任務資料夾>/user-01.png`。`--image` 可重複指定多次。
 
-完成時 **stdout** 輸出 JSON，含 `output_dir`。若部分檔案下載或處理失敗，狀態為 `finished_with_errors`，並提供失敗數量、Google Drive 原檔連結、向量命中頁碼或全文查詢條件，以及 `download_failures.json` 路徑；其他成功檔案仍會保留。Log 寫入 `agent_runtime\_internal\logs\kbsearch_cli.log`。
+完成時 **stdout** 輸出 JSON，含 `run_id`、`log_path` 與 `output_dir`。若部分檔案下載或處理失敗，狀態為 `finished_with_errors`，並提供失敗數量、Google Drive 原檔連結、向量命中頁碼或全文查詢條件，以及 `download_failures.json` 路徑；其他成功檔案仍會保留。每次 query 會在 `agent_runtime\_internal\logs\` 建立獨立的 `kbsearch-<日期時間>-<run_id>.log`。
 
 需要補充產生指定頁面的 PNG 時，同樣在 `agent_runtime\_internal` 工作目錄執行：
 

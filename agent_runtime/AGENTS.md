@@ -22,10 +22,10 @@ repo_root/
       oauth_client.json           # Google OAuth Desktop 用戶端憑證
       token_cache.json            # 首次授權後由程式寫入
     packages/                     # kbsearch_cli wheel
-    logs/                         # kbsearch_cli.log
+    logs/                         # 每次 query 的獨立 kbsearch-<日期時間>-<run_id>.log
 ```
 
-`_internal/` 是內部執行資料夾。Agent 不得修改其中的設定、套件、虛擬環境或認證資料；允許在查詢失敗時讀取 `_internal/logs/kbsearch_cli.log` 進行排錯。
+`_internal/` 是內部執行資料夾。Agent 不得修改其中的設定、套件、虛擬環境或認證資料；允許讀取 query 在 stderr 回報的該次專屬 log 以監看進度或排錯。
 
 ---
 
@@ -79,8 +79,12 @@ repo_root/
 - 使用者附圖：將圖片存至目前任務資料夾中（檔名建議 `user-01.png`、`user-02.png`），再以 `--image` 傳入相對 `_internal/` 的路徑（例如 `../tasks/<任務資料夾>/user-01.png`）；多張圖可重複指定 `--image`。
 - 執行前須依日期時間與查詢目的產生新的查詢結果路徑。若指令回報路徑已存在，不得覆蓋、刪除或重用該資料夾，應改用新的查詢結果路徑重新執行。
 - 執行查詢時必須直接以 sandbox 外部同意方式執行。因在 sandbox 內執行時，無法正確開啟給使用者登入的瀏覽器頁面。
+- 預期查詢可能長時間下載或轉檔時，應以背景程序執行，並將 stdout、stderr 重新導向至系統暫存檔，避免呼叫端結束後關閉 pipe。背景啟動與每次狀態檢查只設定短 timeout，不為整批 query 設定固定總 timeout。
+- 啟動後先從 stderr 取得 `run_id` 與 `log` 路徑，再以短間隔輪詢該次專屬 log 與背景程序狀態，並依新進度持續向使用者更新。不得只輪詢共用 log，也不得因一段時間沒有新訊息就判定完成。
+- 每次 query 正常結束時，stderr 必須出現 `phase=query` 的 `status=finished`、`status=finished_with_errors` 或 `status=failed`，專屬 log 也必須有相同終態。成功或部分成功時另須讀取 stdout JSON；失敗時須讀取 stderr 錯誤摘要。
+- 只有在看到終態且背景程序已結束後，才可判定 query 完成。若程序已結束但沒有終態，視為異常中止，須讀取該次專屬 log 與暫存 stderr 排錯。完成判讀後需刪除重新導向用的 stdout、stderr 暫存檔；正式 application log 不得刪除。
 - 查詢結果資料夾一旦建立，不論查詢成功或失敗均不得刪除或供後續查詢重用；查詢失敗時應保留其中的部分產物供排錯。
-- 查詢失敗時，先閱讀 stderr 的錯誤訊息與 `_internal/logs/kbsearch_cli.log`。可自行處理的路徑、查詢參數或任務檔案問題應先修正後重試；涉及權限、外部服務、部署環境或其他無法處理的問題，再向使用者說明原因與所需處理方式。
+- 查詢失敗時，先閱讀 stderr 的錯誤訊息與該次 `run_id` 對應的專屬 log。可自行處理的路徑、查詢參數或任務檔案問題應先修正後重試；涉及權限、外部服務、部署環境或其他無法處理的問題，再向使用者說明原因與所需處理方式。
 
 
 ## 查詢結果結構

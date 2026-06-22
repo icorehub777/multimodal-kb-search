@@ -70,12 +70,18 @@ class CliOutputTests(unittest.TestCase):
                 ],
             )
 
-            payload = build_query_success_payload(result)
+            payload = build_query_success_payload(
+                result,
+                run_id="run12345",
+                log_path=Path("C:/tmp/logs/kbsearch-run12345.log"),
+            )
 
         self.assertEqual(
             payload,
             {
                 "status": "finished_with_errors",
+                "run_id": "run12345",
+                "log_path": "C:/tmp/logs/kbsearch-run12345.log",
                 "output_dir": bundle_dir.as_posix(),
                 "full_text_count": 1,
                 "vector_count": 4,

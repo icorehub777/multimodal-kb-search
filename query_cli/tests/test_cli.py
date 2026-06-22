@@ -4,14 +4,19 @@ import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
-from logging.handlers import TimedRotatingFileHandler
+from logging import FileHandler
 from pathlib import Path
 from unittest.mock import patch
 
 from kbsearch_cli.__main__ import _emit_progress, main
 from kbsearch_cli.config import ConfigError
 from kbsearch_cli.errors import QueryCliError
-from kbsearch_cli.logging_config import LOGGER_NAME, configure_query_cli_logging
+from kbsearch_cli.logging_config import (
+    LOGGER_NAME,
+    QueryLogContext,
+    configure_query_cli_logging,
+    create_query_log_context,
+)
 from kbsearch_cli.models import DownloadedFileResult, QueryResultBundle, QueryRunResult
 
 
@@ -65,6 +70,10 @@ class CliTests(unittest.TestCase):
                 return run_result
 
         fake_orchestrator = FakeOrchestrator()
+        log_context = QueryLogContext(
+            run_id="run12345",
+            log_path=Path("C:/tmp/logs/kbsearch-20260622-083000-run12345.log"),
+        )
         with patch("kbsearch_cli.__main__.load_query_cli_config") as load_config, patch(
             "kbsearch_cli.__main__.reserve_output_directory",
         ) as reserve_output_directory, patch(
@@ -73,6 +82,12 @@ class CliTests(unittest.TestCase):
             "kbsearch_cli.__main__.create_query_orchestrator",
             return_value=fake_orchestrator,
         ) as create_orchestrator, patch(
+            "kbsearch_cli.__main__.new_query_run_id",
+            return_value="run12345",
+        ), patch(
+            "kbsearch_cli.__main__.create_query_log_context",
+            return_value=log_context,
+        ), patch(
             "kbsearch_cli.__main__.configure_query_cli_logging",
         ) as configure_logging, redirect_stdout(StringIO()) as stdout, redirect_stderr(
             StringIO()
@@ -97,21 +112,30 @@ class CliTests(unittest.TestCase):
                 0,
             )
 
-        configure_logging.assert_called_once_with(Path("C:/tmp/logs"))
+        configure_logging.assert_called_once_with(log_context)
         reserve_output_directory.assert_called_once_with(bundle_path)
         run_startup_probe.assert_called_once()
         create_orchestrator.assert_called_once_with(load_config.return_value)
         self.assertEqual(fake_orchestrator.kwargs["output_dir"], bundle_path)
-        self.assertIs(fake_orchestrator.kwargs["progress"], _emit_progress)
+        self.assertIsNotNone(fake_orchestrator.kwargs["progress"])
         payload = json.loads(stdout.getvalue())
         self.assertEqual(payload["status"], "finished")
+        self.assertEqual(payload["run_id"], "run12345")
+        self.assertEqual(payload["log_path"], log_context.log_path.as_posix())
         self.assertEqual(payload["output_dir"], bundle_path.as_posix())
         self.assertEqual(payload["full_text_count"], 1)
         self.assertEqual(payload["vector_count"], 2)
         self.assertEqual(payload["download_count"], 1)
         self.assertEqual(payload["download_failure_count"], 0)
         self.assertEqual(payload["download_failures"], [])
-        self.assertIn("Query progress: phase=query status=started", stderr.getvalue())
+        self.assertIn(
+            "Query progress: phase=query status=started run_id=run12345",
+            stderr.getvalue(),
+        )
+        self.assertIn(
+            "Query progress: phase=query status=finished run_id=run12345",
+            stderr.getvalue(),
+        )
 
     def test_render_pdf_pages_renders_selected_pages_without_loading_query_config(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -193,13 +217,23 @@ class CliTests(unittest.TestCase):
             log_root = Path(temp_dir) / "configured-logs"
             config = type("Config", (), {"query_logs_root": log_root})()
             output_dir = Path(temp_dir) / "new-query"
+            log_context = QueryLogContext(
+                run_id="run12345",
+                log_path=log_root / "kbsearch-20260622-083000-run12345.log",
+            )
             try:
                 with patch("kbsearch_cli.__main__.load_query_cli_config", return_value=config), patch(
                     "kbsearch_cli.__main__._run_startup_probe",
                     side_effect=QueryCliError("Secure backend unreachable"),
                 ), patch(
+                    "kbsearch_cli.__main__.new_query_run_id",
+                    return_value="run12345",
+                ), patch(
+                    "kbsearch_cli.__main__.create_query_log_context",
+                    return_value=log_context,
+                ), patch(
                     "kbsearch_cli.__main__.configure_query_cli_logging",
-                    side_effect=lambda root: configure_query_cli_logging(root),
+                    side_effect=lambda context: configure_query_cli_logging(context),
                 ), redirect_stderr(StringIO()) as stderr:
                     exit_code = main(
                         [
@@ -218,8 +252,13 @@ class CliTests(unittest.TestCase):
             self.assertEqual(exit_code, 1)
             self.assertIn("Secure backend unreachable", stderr.getvalue())
             self.assertIn("log=", stderr.getvalue())
-            log_text = (log_root / "kbsearch_cli.log").read_text(encoding="utf-8")
+            self.assertIn(
+                "Query progress: phase=query status=failed run_id=run12345",
+                stderr.getvalue(),
+            )
+            log_text = log_context.log_path.read_text(encoding="utf-8")
             self.assertIn("query failed", log_text)
+            self.assertIn("run_id=run12345", log_text)
             self.assertTrue(output_dir.exists())
 
     def test_query_rejects_existing_output_dir_before_startup_probe_and_logs_error(self):
@@ -229,14 +268,24 @@ class CliTests(unittest.TestCase):
             output_dir.mkdir()
             log_root = root / "logs"
             config = type("Config", (), {"query_logs_root": log_root})()
+            log_context = QueryLogContext(
+                run_id="run12345",
+                log_path=log_root / "kbsearch-20260622-083000-run12345.log",
+            )
 
             with patch("kbsearch_cli.__main__.load_query_cli_config", return_value=config), patch(
                 "kbsearch_cli.__main__._run_startup_probe",
             ) as run_startup_probe, patch(
                 "kbsearch_cli.__main__.create_query_orchestrator",
             ) as create_orchestrator, patch(
+                "kbsearch_cli.__main__.new_query_run_id",
+                return_value="run12345",
+            ), patch(
+                "kbsearch_cli.__main__.create_query_log_context",
+                return_value=log_context,
+            ), patch(
                 "kbsearch_cli.__main__.configure_query_cli_logging",
-                side_effect=lambda path: configure_query_cli_logging(path),
+                side_effect=lambda context: configure_query_cli_logging(context),
             ), redirect_stderr(StringIO()) as stderr:
                 exit_code = main(
                     [
@@ -256,26 +305,49 @@ class CliTests(unittest.TestCase):
             self.assertIn("already exists", stderr.getvalue())
             self.assertIn(
                 "output directory already exists",
-                (log_root / "kbsearch_cli.log").read_text(encoding="utf-8"),
+                log_context.log_path.read_text(encoding="utf-8"),
             )
             _close_query_cli_log_handlers()
 
-    def test_configure_query_cli_logging_uses_daily_rotating_file_in_configured_log_root(self):
-        log_root = Path("C:/tmp/kbsearch-query-logs")
-        with patch("pathlib.Path.mkdir") as mkdir:
-            logger = configure_query_cli_logging(log_root)
-
-        handler = next(
-            handler
-            for handler in logger.handlers
-            if isinstance(handler, TimedRotatingFileHandler)
+    def test_create_query_log_context_uses_timestamp_and_run_id(self):
+        context = create_query_log_context(
+            Path("C:/tmp/kbsearch-query-logs"),
+            run_id="run12345",
+            timestamp="20260622-083000-123456",
         )
-        self.assertEqual(Path(handler.baseFilename), log_root / "kbsearch_cli.log")
-        self.assertEqual(handler.when, "MIDNIGHT")
-        mkdir.assert_called_once_with(parents=True, exist_ok=True)
-        logger.removeHandler(handler)
-        handler.close()
-        _close_query_cli_log_handlers()
+
+        self.assertEqual(context.run_id, "run12345")
+        self.assertEqual(
+            context.log_path,
+            Path("C:/tmp/kbsearch-query-logs/kbsearch-20260622-083000-123456-run12345.log"),
+        )
+
+    def test_configure_query_cli_logging_uses_run_specific_file(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            context = QueryLogContext(
+                run_id="run12345",
+                log_path=Path(temp_dir) / "kbsearch-20260622-083000-run12345.log",
+            )
+            logger = configure_query_cli_logging(context)
+            logger.info("query finished status=finished")
+            for handler in logger.handlers:
+                handler.flush()
+
+            handler = next(
+                handler
+                for handler in logger.handlers
+                if isinstance(handler, FileHandler)
+            )
+            self.assertEqual(Path(handler.baseFilename), context.log_path)
+            log_text = context.log_path.read_text(encoding="utf-8")
+            self.assertIn("run_id=run12345", log_text)
+            self.assertIn("query finished status=finished", log_text)
+            _close_query_cli_log_handlers()
+
+    def test_progress_output_failure_does_not_fail_query(self):
+        logger = logging.getLogger(LOGGER_NAME)
+        with patch("builtins.print", side_effect=OSError(22, "Invalid argument")):
+            _emit_progress("download", {"status": "started"}, logger=logger)
 
 
 if __name__ == "__main__":

@@ -4,24 +4,63 @@ import argparse
 import json
 import logging
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 from kbsearch_cli.cli_output import format_progress_message, format_query_success_output
 from kbsearch_cli.config import ConfigError, load_query_cli_config
 from kbsearch_cli.errors import QueryCliError
 from kbsearch_cli.factories import create_query_orchestrator
-from kbsearch_cli.logging_config import configure_query_cli_logging, query_log_file_path
+from kbsearch_cli.logging_config import (
+    configure_query_cli_logging,
+    create_query_log_context,
+    new_query_run_id,
+)
 from kbsearch_cli.output import reserve_output_directory
 from kbsearch_cli.rendering import DocumentPageRenderer, parse_page_numbers
 from kbsearch_cli.startup_probe import probe_startup_environment
 
 
-def _emit_progress(phase: str, fields: dict[str, object]) -> None:
-    print(format_progress_message(phase, fields), file=sys.stderr)
+ProgressCallback = Callable[[str, dict[str, object]], None]
 
 
-def _run_startup_probe(config, logger: logging.Logger) -> None:
-    _emit_progress("startup_probe", {"status": "started"})
+def _write_terminal(
+    message: str,
+    *,
+    stream,
+    logger: logging.Logger | None = None,
+) -> None:
+    try:
+        print(message, file=stream, flush=True)
+    except OSError as exc:
+        if logger is not None:
+            logger.warning(
+                "terminal output unavailable stream=%s error=%s message=%s",
+                "stderr" if stream is sys.stderr else "stdout",
+                exc,
+                message,
+            )
+
+
+def _emit_progress(
+    phase: str,
+    fields: dict[str, object],
+    *,
+    logger: logging.Logger | None = None,
+) -> None:
+    _write_terminal(
+        format_progress_message(phase, fields),
+        stream=sys.stderr,
+        logger=logger,
+    )
+
+
+def _run_startup_probe(
+    config,
+    logger: logging.Logger,
+    progress: ProgressCallback,
+) -> None:
+    progress("startup_probe", {"status": "started"})
     logger.info(
         "startup_probe started secure_backend_base_url=%s oauth_client=%s token_cache=%s "
         "cjk_font_path=%s",
@@ -49,7 +88,7 @@ def _run_startup_probe(config, logger: logging.Logger) -> None:
         result.google_oauth_token_cache,
         result.cjk_font_path,
     )
-    _emit_progress(
+    progress(
         "startup_probe",
         {
             "status": "finished",
@@ -62,11 +101,15 @@ def _run_startup_probe(config, logger: logging.Logger) -> None:
         )
 
 
-def _print_query_failure(exc: Exception, log_path: Path | None) -> None:
+def _print_query_failure(
+    exc: Exception,
+    log_path: Path | None,
+    logger: logging.Logger | None,
+) -> None:
     message = f"Query failed: {exc}"
     if log_path is not None:
         message = f"{message} log={log_path.resolve()}"
-    print(message, file=sys.stderr)
+    _write_terminal(message, stream=sys.stderr, logger=logger)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -131,16 +174,45 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "query":
         logger: logging.Logger | None = None
         log_path: Path | None = None
+        run_id = new_query_run_id()
+
+        def progress(phase: str, fields: dict[str, object]) -> None:
+            progress_fields: dict[str, object] = {}
+            if "status" in fields:
+                progress_fields["status"] = fields["status"]
+            progress_fields["run_id"] = run_id
+            progress_fields.update(
+                (key, value)
+                for key, value in fields.items()
+                if key != "status"
+            )
+            _emit_progress(
+                phase,
+                progress_fields,
+                logger=logger,
+            )
+
         try:
             config = load_query_cli_config()
-            log_path = query_log_file_path(config.query_logs_root)
-            logger = configure_query_cli_logging(config.query_logs_root)
+            log_context = create_query_log_context(
+                config.query_logs_root,
+                run_id=run_id,
+            )
+            log_path = log_context.log_path
+            logger = configure_query_cli_logging(log_context)
             output_dir = Path(args.output_dir)
             logger.info("query started output_dir=%s", output_dir)
-            _emit_progress("query", {"status": "started", "output_dir": output_dir})
+            progress(
+                "query",
+                {
+                    "status": "started",
+                    "output_dir": output_dir,
+                    "log": log_path,
+                },
+            )
             reserve_output_directory(output_dir)
             logger.info("query output directory reserved output_dir=%s", output_dir)
-            _run_startup_probe(config, logger)
+            _run_startup_probe(config, logger, progress)
             result = create_query_orchestrator(config).run(
                 output_dir=output_dir,
                 vector_query=args.vector_query,
@@ -148,7 +220,7 @@ def main(argv: list[str] | None = None) -> int:
                 image_paths=[Path(path) for path in args.image],
                 limit=args.limit,
                 min_score=args.min_score,
-                progress=_emit_progress,
+                progress=progress,
             )
         except (ConfigError, QueryCliError, RuntimeError) as exc:
             if logger is not None:
@@ -157,7 +229,15 @@ def main(argv: list[str] | None = None) -> int:
                     exc.__class__.__name__,
                     exc,
                 )
-            _print_query_failure(exc, log_path)
+            progress(
+                "query",
+                {
+                    "status": "failed",
+                    "error_type": exc.__class__.__name__,
+                    "log": log_path or "",
+                },
+            )
+            _print_query_failure(exc, log_path, logger)
             return 1
         except Exception as exc:
             if logger is not None:
@@ -166,9 +246,41 @@ def main(argv: list[str] | None = None) -> int:
                     exc.__class__.__name__,
                     exc,
                 )
-            _print_query_failure(exc, log_path)
+            progress(
+                "query",
+                {
+                    "status": "failed",
+                    "error_type": exc.__class__.__name__,
+                    "log": log_path or "",
+                },
+            )
+            _print_query_failure(exc, log_path, logger)
             return 1
-        print(format_query_success_output(result))
+        final_status = "finished_with_errors" if result.download_failures else "finished"
+        logger.info(
+            "query finished status=%s output_dir=%s download_count=%s download_failure_count=%s",
+            final_status,
+            result.bundle.path,
+            result.download_count,
+            result.download_failure_count,
+        )
+        progress(
+            "query",
+            {
+                "status": final_status,
+                "output_dir": result.bundle.path,
+                "log": log_path,
+            },
+        )
+        _write_terminal(
+            format_query_success_output(
+                result,
+                run_id=run_id,
+                log_path=log_path,
+            ),
+            stream=sys.stdout,
+            logger=logger,
+        )
         return 0
 
     parser.error(f"Unsupported command: {args.command}")
