@@ -81,6 +81,7 @@ repo_root/
 - 執行查詢時必須直接以 sandbox 外部同意方式執行。因在 sandbox 內執行時，無法正確開啟給使用者登入的瀏覽器頁面。
 - 預期查詢可能長時間下載或轉檔時，應以背景程序執行，並將 stdout、stderr 重新導向至系統暫存檔，避免呼叫端結束後關閉 pipe。背景啟動與每次狀態檢查只設定短 timeout，不為整批 query 設定固定總 timeout。
 - 啟動後先從 stderr 取得 `run_id` 與 `log` 路徑，再以短間隔輪詢該次專屬 log 與背景程序狀態，並依新進度持續向使用者更新。不得只輪詢共用 log，也不得因一段時間沒有新訊息就判定完成。
+- query 啟動時會依 `KBSEARCH_QUERY_LOG_RETENTION_DAYS` 清理過期的 `kbsearch-*.log`；清理失敗會讓 query 以失敗終態結束，Agent 應依 stderr 與該次專屬 log 回報原因。
 - 每次 query 正常結束時，stderr 必須出現 `phase=query` 的 `status=finished`、`status=finished_with_errors` 或 `status=failed`，專屬 log 也必須有相同終態。成功或部分成功時另須讀取 stdout JSON；失敗時須讀取 stderr 錯誤摘要。
 - 只有在看到終態且背景程序已結束後，才可判定 query 完成。若程序已結束但沒有終態，視為異常中止，須讀取該次專屬 log 與暫存 stderr 排錯。完成判讀後需刪除重新導向用的 stdout、stderr 暫存檔；正式 application log 不得刪除。
 - 查詢結果資料夾一旦建立，不論查詢成功或失敗均不得刪除或供後續查詢重用；查詢失敗時應保留其中的部分產物供排錯。

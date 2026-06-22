@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
 
 LOGGER_NAME = "kbsearch_cli"
+QUERY_RUN_LOG_PATTERN = "kbsearch-*.log"
 
 
 @dataclass(frozen=True)
@@ -30,6 +31,28 @@ def create_query_log_context(
         run_id=run_id,
         log_path=log_root.resolve() / f"kbsearch-{resolved_timestamp}-{run_id}.log",
     )
+
+
+def cleanup_old_query_log_files(
+    log_root: Path,
+    retention_days: int,
+    *,
+    now: datetime | None = None,
+) -> int:
+    if retention_days <= 0:
+        return 0
+
+    log_root.mkdir(parents=True, exist_ok=True)
+    cutoff = (now or datetime.now()) - timedelta(days=retention_days)
+    removed = 0
+    for path in log_root.glob(QUERY_RUN_LOG_PATTERN):
+        if not path.is_file():
+            continue
+        modified_at = datetime.fromtimestamp(path.stat().st_mtime)
+        if modified_at < cutoff:
+            path.unlink()
+            removed += 1
+    return removed
 
 
 def configure_query_cli_logging(context: QueryLogContext) -> logging.Logger:

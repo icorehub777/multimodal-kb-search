@@ -55,6 +55,7 @@ KBSEARCH_SECURE_BACKEND_BASE_URL=http://127.0.0.1:8000
 GOOGLE_OAUTH_CLIENT_CONFIG=config/oauth_client.json
 GOOGLE_OAUTH_TOKEN_CACHE=config/token_cache.json
 KBSEARCH_QUERY_LOGS_ROOT=logs
+KBSEARCH_QUERY_LOG_RETENTION_DAYS=14
 KBSEARCH_CJK_FONT_PATH=C:\Windows\Fonts\msjh.ttc
 ```
 
@@ -134,6 +135,8 @@ Query progress: phase=query status=failed run_id=a1b2c3d4 ...
 查詢開始前會以不可覆蓋既有目錄的方式建立 `output_dir`；若路徑已存在，指令會在實際查詢前失敗。查詢途中失敗時，已建立的目錄與部分產物會保留，不得重用相同路徑。詳細清單與下載檔案見該資料夾內的 JSON 與子目錄。
 
 設定成功載入後，每次查詢會在 `KBSEARCH_QUERY_LOGS_ROOT` 建立獨立 log，檔名格式為 `kbsearch-<日期時間>-<run_id>.log`。每行均包含 `run_id`，且最後記錄成功、部分成功或失敗終態。stderr 與成功 stdout 也會提供該次 log 絕對路徑。
+
+`KBSEARCH_QUERY_LOG_RETENTION_DAYS` 控制 per-run log 保留天數，預設 `14`。每次 query 啟動時會刪除較舊的 `kbsearch-*.log`；設為 `0` 可停用自動清理。清理失敗時該次 query 會記錄錯誤並停止。
 
 查詢結果資料夾會包含失敗清單；每個成功下載的檔案子資料夾會保留下載檔，並依格式產生：
 

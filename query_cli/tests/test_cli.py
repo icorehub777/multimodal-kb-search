@@ -1,12 +1,14 @@
 import json
 import logging
+import os
 import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
+from datetime import datetime, timedelta
 from io import StringIO
 from logging import FileHandler
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import ANY, patch
 
 from kbsearch_cli.__main__ import _emit_progress, main
 from kbsearch_cli.config import ConfigError
@@ -16,6 +18,7 @@ from kbsearch_cli.logging_config import (
     QueryLogContext,
     configure_query_cli_logging,
     create_query_log_context,
+    cleanup_old_query_log_files,
 )
 from kbsearch_cli.models import DownloadedFileResult, QueryResultBundle, QueryRunResult
 
@@ -89,10 +92,14 @@ class CliTests(unittest.TestCase):
             return_value=log_context,
         ), patch(
             "kbsearch_cli.__main__.configure_query_cli_logging",
-        ) as configure_logging, redirect_stdout(StringIO()) as stdout, redirect_stderr(
+        ) as configure_logging, patch(
+            "kbsearch_cli.__main__.cleanup_old_query_log_files",
+            return_value=2,
+        ) as cleanup_logs, redirect_stdout(StringIO()) as stdout, redirect_stderr(
             StringIO()
         ) as stderr:
             load_config.return_value.query_logs_root = Path("C:/tmp/logs")
+            load_config.return_value.query_log_retention_days = 14
             self.assertEqual(
                 main(
                     [
@@ -113,6 +120,11 @@ class CliTests(unittest.TestCase):
             )
 
         configure_logging.assert_called_once_with(log_context)
+        cleanup_logs.assert_called_once_with(
+            Path("C:/tmp/logs"),
+            14,
+            now=ANY,
+        )
         reserve_output_directory.assert_called_once_with(bundle_path)
         run_startup_probe.assert_called_once()
         create_orchestrator.assert_called_once_with(load_config.return_value)
@@ -215,7 +227,11 @@ class CliTests(unittest.TestCase):
     def test_query_failure_after_logging_started_includes_log_path(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             log_root = Path(temp_dir) / "configured-logs"
-            config = type("Config", (), {"query_logs_root": log_root})()
+            config = type(
+                "Config",
+                (),
+                {"query_logs_root": log_root, "query_log_retention_days": 14},
+            )()
             output_dir = Path(temp_dir) / "new-query"
             log_context = QueryLogContext(
                 run_id="run12345",
@@ -267,7 +283,11 @@ class CliTests(unittest.TestCase):
             output_dir = root / "existing-query"
             output_dir.mkdir()
             log_root = root / "logs"
-            config = type("Config", (), {"query_logs_root": log_root})()
+            config = type(
+                "Config",
+                (),
+                {"query_logs_root": log_root, "query_log_retention_days": 14},
+            )()
             log_context = QueryLogContext(
                 run_id="run12345",
                 log_path=log_root / "kbsearch-20260622-083000-run12345.log",
@@ -309,6 +329,53 @@ class CliTests(unittest.TestCase):
             )
             _close_query_cli_log_handlers()
 
+    def test_query_stops_when_log_cleanup_fails(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            log_root = Path(temp_dir) / "logs"
+            config = type(
+                "Config",
+                (),
+                {"query_logs_root": log_root, "query_log_retention_days": 14},
+            )()
+            log_context = QueryLogContext(
+                run_id="run12345",
+                log_path=log_root / "kbsearch-20260622-083000-run12345.log",
+            )
+
+            with patch("kbsearch_cli.__main__.load_query_cli_config", return_value=config), patch(
+                "kbsearch_cli.__main__.new_query_run_id",
+                return_value="run12345",
+            ), patch(
+                "kbsearch_cli.__main__.create_query_log_context",
+                return_value=log_context,
+            ), patch(
+                "kbsearch_cli.__main__.configure_query_cli_logging",
+                side_effect=lambda context: configure_query_cli_logging(context),
+            ), patch(
+                "kbsearch_cli.__main__.cleanup_old_query_log_files",
+                side_effect=OSError("cleanup failed"),
+            ), patch(
+                "kbsearch_cli.__main__._run_startup_probe",
+            ) as run_startup_probe, redirect_stderr(StringIO()) as stderr:
+                exit_code = main(
+                    [
+                        "query",
+                        "--output-dir",
+                        str(Path(temp_dir) / "query"),
+                        "--vector-query",
+                        "alpha",
+                        "--drive-query",
+                        "fullText contains 'alpha'",
+                    ]
+                )
+
+            self.assertEqual(exit_code, 1)
+            run_startup_probe.assert_not_called()
+            self.assertIn("status=failed", stderr.getvalue())
+            log_text = log_context.log_path.read_text(encoding="utf-8")
+            self.assertIn("log_cleanup_failed", log_text)
+            _close_query_cli_log_handlers()
+
     def test_create_query_log_context_uses_timestamp_and_run_id(self):
         context = create_query_log_context(
             Path("C:/tmp/kbsearch-query-logs"),
@@ -321,6 +388,46 @@ class CliTests(unittest.TestCase):
             context.log_path,
             Path("C:/tmp/kbsearch-query-logs/kbsearch-20260622-083000-123456-run12345.log"),
         )
+
+    def test_cleanup_old_query_log_files_removes_only_expired_query_logs(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            log_root = Path(temp_dir)
+            old_log = log_root / "kbsearch-20260101-000000-old.log"
+            recent_log = log_root / "kbsearch-20260621-000000-recent.log"
+            unrelated_log = log_root / "other.log"
+            old_log.write_text("old", encoding="utf-8")
+            recent_log.write_text("recent", encoding="utf-8")
+            unrelated_log.write_text("other", encoding="utf-8")
+            old_time = (datetime(2026, 6, 22) - timedelta(days=30)).timestamp()
+            recent_time = (datetime(2026, 6, 22) - timedelta(days=1)).timestamp()
+            os.utime(old_log, (old_time, old_time))
+            os.utime(recent_log, (recent_time, recent_time))
+
+            removed = cleanup_old_query_log_files(
+                log_root,
+                14,
+                now=datetime(2026, 6, 22),
+            )
+
+            self.assertEqual(removed, 1)
+            self.assertFalse(old_log.exists())
+            self.assertTrue(recent_log.exists())
+            self.assertTrue(unrelated_log.exists())
+
+    def test_cleanup_old_query_log_files_skips_when_retention_is_zero(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            log_root = Path(temp_dir)
+            old_log = log_root / "kbsearch-20260101-000000-old.log"
+            old_log.write_text("old", encoding="utf-8")
+
+            removed = cleanup_old_query_log_files(
+                log_root,
+                0,
+                now=datetime(2026, 6, 22),
+            )
+
+            self.assertEqual(removed, 0)
+            self.assertTrue(old_log.exists())
 
     def test_configure_query_cli_logging_uses_run_specific_file(self):
         with tempfile.TemporaryDirectory() as temp_dir:

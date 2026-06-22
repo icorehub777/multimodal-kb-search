@@ -5,6 +5,7 @@ import json
 import logging
 import sys
 from collections.abc import Callable
+from datetime import datetime
 from pathlib import Path
 
 from kbsearch_cli.cli_output import format_progress_message, format_query_success_output
@@ -14,6 +15,7 @@ from kbsearch_cli.factories import create_query_orchestrator
 from kbsearch_cli.logging_config import (
     configure_query_cli_logging,
     create_query_log_context,
+    cleanup_old_query_log_files,
     new_query_run_id,
 )
 from kbsearch_cli.output import reserve_output_directory
@@ -194,14 +196,36 @@ def main(argv: list[str] | None = None) -> int:
 
         try:
             config = load_query_cli_config()
+            started_at = datetime.now()
             log_context = create_query_log_context(
                 config.query_logs_root,
                 run_id=run_id,
+                timestamp=started_at.strftime("%Y%m%d-%H%M%S-%f"),
             )
             log_path = log_context.log_path
             logger = configure_query_cli_logging(log_context)
             output_dir = Path(args.output_dir)
-            logger.info("query started output_dir=%s", output_dir)
+            try:
+                removed_logs = cleanup_old_query_log_files(
+                    config.query_logs_root,
+                    config.query_log_retention_days,
+                    now=started_at,
+                )
+            except OSError as exc:
+                logger.exception(
+                    "log_cleanup_failed log_dir=%s retention_days=%s error=%s message=%s",
+                    config.query_logs_root,
+                    config.query_log_retention_days,
+                    exc.__class__.__name__,
+                    exc,
+                )
+                raise
+            logger.info(
+                "query started output_dir=%s log_retention_days=%s removed_old_logs=%s",
+                output_dir,
+                config.query_log_retention_days,
+                removed_logs,
+            )
             progress(
                 "query",
                 {
