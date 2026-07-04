@@ -1,6 +1,6 @@
 # KBSearch Query CLI
 
-`query_cli/` 提供 `kbsearch` 指令給 Agent 使用。它負責查詢流程、Google Drive 全文搜尋、文件下載與查詢結果檔案整理；embedding 與 Qdrant 查詢透過 `secure_backend` HTTP API 完成。
+`query_cli/` 提供 `kbsearch` 指令給 Agent 使用。它負責查詢流程、Google Drive 關鍵字搜尋、文件下載與查詢結果檔案整理；embedding 與 Qdrant 查詢透過 `secure_backend` HTTP API 完成。
 
 ## 開發測試環境準備
 
@@ -85,7 +85,7 @@ kbsearch query `
 
 - `--output-dir`：本次查詢結果的輸出資料夾路徑，必須使用尚不存在的新路徑；父目錄不存在時會自動建立。
 - `--vector-query`：語意查詢文字；若有附圖，在此描述問題與圖片內容，連同 `--image` 一併送給 `secure_backend` 做向量搜尋。向量搜尋僅涵蓋 importer 已同步的文件。
-- `--drive-query`：Google Drive API `q` 語法，原樣送出，用於全文／檔名搜尋。搜尋範圍依目前使用者的 Drive 權限決定，不受 importer 同步來源資料夾限制。
+- `--drive-query`：Google Drive API `q` 語法，原樣送出，用於檔名、全文或 metadata 的關鍵字搜尋。搜尋範圍依目前使用者的 Drive 權限決定，不受 importer 同步來源資料夾限制。
 - `--image`：本機圖片路徑（PNG/JPEG 等），可重複指定；省略則僅以文字做向量搜尋。
 - `--limit`：向量與 Drive 搜尋各別的結果筆數上限，預設 `10`。
 - `--min-score`：向量相似度下限；省略則不過濾低分結果。
@@ -130,7 +130,7 @@ Query progress: phase=query status=failed run_id=a1b2c3d4 ...
 
 所有檔案皆成功時，`status` 為 `finished` 且 `download_failure_count` 為 `0`。若單一檔案在 metadata 補查、產物目錄建立、下載或文件處理階段失敗，該檔案會被略過，其餘檔案繼續處理；此時指令仍以成功 exit code 完成，但 `status` 為 `finished_with_errors`。
 
-每筆失敗包含 `google_file_id`、檔名、失敗階段、錯誤類型、訊息與 `google_drive_url`，讓使用者可直接到 Google Drive 查看原檔。若檔案來自向量搜尋，`vector_page_numbers` 會列出命中頁碼；若來自全文搜尋，`full_text_query` 會保留本次查詢條件。同時命中兩種搜尋時兩組資訊都會提供。完整清單同時寫入 `download_failures.json`。失敗檔案已建立的部分產物會保留供排錯。
+每筆失敗包含 `google_file_id`、檔名、失敗階段、錯誤類型、訊息與 `google_drive_url`，讓使用者可直接到 Google Drive 查看原檔。若檔案來自向量搜尋，`vector_page_numbers` 會列出命中頁碼；若來自關鍵字搜尋，`full_text_query` 會保留本次查詢條件。同時命中兩種搜尋時兩組資訊都會提供。完整清單同時寫入 `download_failures.json`。失敗檔案已建立的部分產物會保留供排錯。
 
 查詢開始前會以不可覆蓋既有目錄的方式建立 `output_dir`；若路徑已存在，指令會在實際查詢前失敗。查詢途中失敗時，已建立的目錄與部分產物會保留，不得重用相同路徑。詳細清單與下載檔案見該資料夾內的 JSON 與子目錄。
 

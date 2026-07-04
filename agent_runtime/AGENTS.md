@@ -54,7 +54,7 @@ repo_root/
 - `--vector-query` 必填，送給 vector search。
 - `--drive-query` 必填，直接送給 Google Drive API `files().list(q=...)`。
 - `--image` 可重複指定多次；路徑須為相對 `_internal/` 工作目錄的本機圖檔路徑（例如 `../tasks/<任務資料夾>/user-01.png`）。
-- `--limit` 控制全文搜尋與向量搜尋各自回傳的候選數量，由 Agent 依照狀況自行決定。
+- `--limit` 控制關鍵字搜尋與向量搜尋各自回傳的候選數量，由 Agent 依照狀況自行決定。
 - `--min-score` 是向量搜尋最低分數門檻，未指定時不套用最低分數，原則上不建議 Agent 指定此值。
 
 需要將查詢結果中的 PDF 額外頁面轉成 PNG 時，工作目錄同樣必須為 `_internal/`：
@@ -118,7 +118,7 @@ repo_root/
 - 針對 Google Drive 查詢結果清單與相似度查詢結果清單的聯集檔案清單（`file_id` 去重） 中的每個檔案，都建立一個以 `<safe_file_name>-<google_file_id>` 命名的檔案子資料夾。
 - 每個檔案子資料夾會保留該檔案自 Google Drive 下載的檔案；Google Docs 與 Google Slides 由 Drive API 匯出為 PDF，Google Sheet 匯出為 XLSX。
 - PDF、Word、PowerPoint、TXT、MD 另提供固定路徑 `pdf/document.pdf` 與逐頁 UTF-8 TXT；原始檔本身為 PDF 時仍會保留下載檔。
-- `pages/` 只包含向量搜尋命中的頁面，不會預先渲染全文搜尋結果或整份文件。
+- `pages/` 只包含向量搜尋命中的頁面，不會預先渲染關鍵字搜尋結果或整份文件。
 - XLS/XLSX 不產生 PDF、逐頁 TXT 或 PNG。圖片不產生 PDF 或 TXT；向量命中時提供 `pages/0001.png`。
 
 ---
@@ -127,16 +127,16 @@ repo_root/
 
 - Agent 閱讀與回覆時，應以本次查詢結果清單、逐頁文字、命中頁 PNG 與已下載檔案為依據。
 - stdout 的 `status` 若為 `finished_with_errors`，查詢結果仍可使用，但 Agent 必須先讀取 `download_failures` 或 `download_failures.json`，並在回答中明確告知使用者哪些檔案未能下載或處理及其原因；不得將結果描述為完整成功。
-- 告知失敗檔案時須附上 `google_drive_url`，請使用者直接到 Google Drive 查看原檔。若 `vector_page_numbers` 非空，須告知向量搜尋命中的頁碼；若 `full_text_query` 有值，須告知全文搜尋使用的查詢條件，協助使用者自行在原檔中查找。
+- 告知失敗檔案時須附上 `google_drive_url`，請使用者直接到 Google Drive 查看原檔。若 `vector_page_numbers` 非空，須告知向量搜尋命中的頁碼；若 `full_text_query` 有值，須告知關鍵字搜尋使用的查詢條件，協助使用者自行在原檔中查找。
 - PDF、Word、PowerPoint、TXT、MD 統一以 `text/*.txt` 進行內容定位，使用 `rg` 的固定文字、大小寫、regex、前後文與檔案篩選能力搜尋；TXT 檔名即對應 PDF 頁碼。
 - 確定需閱讀的頁碼後，優先使用既有 `pages/*.png`；尚未產生的頁面使用 `render-pdf-pages` 從該檔案的 `pdf/document.pdf` 轉出至同一文件資料夾的 `pages/`。
 - XLS/XLSX 使用 Spreadsheets Skill。圖片直接檢視原圖或既有 `pages/0001.png`。
-- Google Sheets 由 query CLI 匯出為 XLSX，與 Drive 上原有的 XLS/XLSX 一樣使用 Spreadsheets Skill 讀取與解析；試算表不會出現在向量搜尋結果中，但可能由全文搜尋命中。
+- Google Sheets 由 query CLI 匯出為 XLSX，與 Drive 上原有的 XLS/XLSX 一樣使用 Spreadsheets Skill 讀取與解析；試算表不會出現在向量搜尋結果中，但可能由關鍵字搜尋命中。
 - 閱讀向量搜尋命中頁面時，先依 `vector_results.json` 標示的頁碼讀取查詢結果已產生的 PNG。若相關頁內容不完整，可使用 `render-pdf-pages` 取得相鄰頁。
-- 若是只有全文搜尋命中的檔案，先以 `rg` 搜尋逐頁 TXT 定位頁碼，再按需將命中頁及必要相鄰頁轉成 PNG。逐頁 TXT 無法包含掃描文字、圖片、圖表或完整表格版面，因此最終內容確認仍以 PNG 為準。
-- 同一檔案同時出現在全文與向量結果時，優先參考向量命中頁，並用全文關鍵字結果補足可能相關頁。
+- 若是只有關鍵字搜尋命中的檔案，先以 `rg` 搜尋逐頁 TXT 定位頁碼，再按需將命中頁及必要相鄰頁轉成 PNG。逐頁 TXT 無法包含掃描文字、圖片、圖表或完整表格版面，因此最終內容確認仍以 PNG 為準。
+- 同一檔案同時出現在關鍵字與向量結果時，優先參考向量命中頁，並用關鍵字搜尋結果補足可能相關頁。
 - 若同一問題有多份來源，應比對時間、版本與適用範圍；若資料互相矛盾，應指出衝突點並說明各來源差異，不要自行選擇一方當成唯一真相。
-- 回答使用者時，除非使用者要求說明搜尋方法，否則不要標示或強調內容來自全文搜尋或向量搜尋；搜尋類型只作為 Agent 內部閱讀排序與定位依據。對外應以文件名稱、頁碼、版本、日期、Google Drive 路徑與內容重點描述來源。
+- 回答使用者時，除非使用者要求說明搜尋方法，否則不要標示或強調內容來自關鍵字搜尋或向量搜尋；搜尋類型只作為 Agent 內部閱讀排序與定位依據。對外應以文件名稱、頁碼、版本、日期、Google Drive 路徑與內容重點描述來源。
 - 回答時除了參考此頁的 PNG 內容進行回答外，需嵌入實際用來回答的頁面 PNG (不得貼出所有查詢結果頁面)，並需呈現文件名稱、頁碼、版本、日期、Google Drive 路徑與內容回答。
 - 若查詢結果不足以回答使用者問題，可透過調整查詢或擴大回傳之查詢結果進行下一輪查詢。
 

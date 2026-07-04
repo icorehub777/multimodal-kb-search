@@ -17,7 +17,7 @@
 |---|---|---|
 | Google Docs | 由 `query_cli` 匯出為 PDF，再使用 PDF Skill | 不以 Google Docs 原生格式交給 Documents Skill |
 | Google Slides | 由 `query_cli` 匯出為 PDF，再使用 PDF Skill | 若取得的是原始 PPTX，才使用 Presentations Skill |
-| Google Sheets | 由 `query_cli` 匯出為 XLSX，再使用 Spreadsheets Skill | 不納入向量化，但可能由全文搜尋命中 |
+| Google Sheets | 由 `query_cli` 匯出為 XLSX，再使用 Spreadsheets Skill | 不納入向量化，但可能由關鍵字搜尋命中 |
 | PDF | PDF Skill | 可先抽取文字，再視需要渲染頁面 |
 | DOCX | Documents Skill | 可讀取結構；視覺檢查需渲染 |
 | PPTX | Presentations Skill | 使用 `@oai/artifact-tool` 讀取與渲染 |
