@@ -1,3 +1,4 @@
+import importlib.util
 import tempfile
 import unittest
 from pathlib import Path
@@ -10,6 +11,18 @@ from kbsearch_cli.rendering import DocumentPageRenderer, parse_page_numbers
 
 
 class RenderingTests(unittest.TestCase):
+    def test_document_mime_support_stays_aligned_with_importer(self):
+        importer_document_processing = _load_importer_document_processing()
+
+        self.assertEqual(
+            rendering._MIME_TYPE_TO_DOCUMENT_TYPE,
+            importer_document_processing._MIME_TYPE_TO_DOCUMENT_TYPE,
+        )
+        self.assertEqual(
+            rendering._SPREADSHEET_MIME_TYPES,
+            importer_document_processing._EXCEL_MIME_TYPES,
+        )
+
     def test_parse_page_numbers_supports_lists_ranges_and_deduplication(self):
         self.assertEqual(parse_page_numbers("3,5,8-10,5"), [3, 5, 8, 9, 10])
 
@@ -261,6 +274,20 @@ def _available_cjk_font_path() -> Path | None:
         if font_path.exists():
             return font_path
     return None
+
+
+def _load_importer_document_processing():
+    repo_root = Path(__file__).resolve().parents[2]
+    module_path = repo_root / "importer" / "app" / "document_processing.py"
+    spec = importlib.util.spec_from_file_location(
+        "kbsearch_importer_document_processing_for_test",
+        module_path,
+    )
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"Unable to load importer document processing module: {module_path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def _create_pdf(path: Path, page_texts: list[str]) -> None:

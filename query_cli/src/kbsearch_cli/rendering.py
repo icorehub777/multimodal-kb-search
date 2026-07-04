@@ -12,6 +12,7 @@ from kbsearch_cli.models import ProcessedDocument
 CJK_TEXT_FONT_NAME = "KBSearchTextCJK"
 _LIBREOFFICE_MAX_SOURCE_PATH = 240
 SOFFICE_EXECUTABLE = "soffice"
+# Keep this map aligned with importer/app/document_processing.py.
 _MIME_TYPE_TO_DOCUMENT_TYPE = {
     "application/pdf": "pdf",
     "application/vnd.google-apps.document": "pdf",
@@ -26,6 +27,7 @@ _MIME_TYPE_TO_DOCUMENT_TYPE = {
     "image/jpeg": "image",
     "image/webp": "image",
 }
+# Keep this set aligned with importer/app/document_processing.py.
 _SPREADSHEET_MIME_TYPES = {
     "application/vnd.ms-excel",
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

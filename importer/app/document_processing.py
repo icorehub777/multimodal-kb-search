@@ -7,6 +7,7 @@ class UnsupportedDocumentTypeError(ValueError):
     """Raised when importer receives a document type outside the supported set."""
 
 
+# Keep this map aligned with query_cli/src/kbsearch_cli/rendering.py.
 _MIME_TYPE_TO_DOCUMENT_TYPE = {
     "application/pdf": "pdf",
     "application/vnd.google-apps.document": "pdf",
@@ -22,6 +23,7 @@ _MIME_TYPE_TO_DOCUMENT_TYPE = {
     "image/webp": "image",
 }
 
+# Keep this set aligned with query_cli/src/kbsearch_cli/rendering.py.
 _EXCEL_MIME_TYPES = {
     "application/vnd.ms-excel",
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
