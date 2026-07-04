@@ -13,7 +13,7 @@ from kbsearch_cli.errors import QueryCliError
 from kbsearch_cli.orchestrator import QueryOrchestrator
 from kbsearch_cli.output import QueryResultWriter
 from kbsearch_cli.google_drive import safe_download_name
-from kbsearch_cli.rendering import DocumentPageRenderer
+from kbsearch_cli.rendering import DocumentPageRenderer, classify_document_type
 
 
 class FakeGoogleDriveClient:
@@ -107,7 +107,7 @@ class FakeDocumentProcessor:
 
     def process(self, source_path, mime_type, output_dir, page_numbers):
         self.processed.append((source_path.name, mime_type, list(page_numbers)))
-        if source_path.suffix.lower() in {".xls", ".xlsx"}:
+        if classify_document_type(mime_type) in {"spreadsheet", "download_only"}:
             return ProcessedDocument(None, [], [])
         pdf_path = source_path
         text_dir = output_dir / "text"
