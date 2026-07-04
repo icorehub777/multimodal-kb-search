@@ -321,6 +321,15 @@ class QueryOrchestrator:
                     file_dir,
                     target.vector_page_numbers,
                 )
+                if target.vector_page_numbers and not processed.page_paths:
+                    logger.warning(
+                        "query phase=process warning=vector_pages_unrendered "
+                        "file_id=%s name=%s mime_type=%s vector_page_numbers=%s",
+                        target.google_file_id,
+                        name,
+                        mime_type,
+                        target.vector_page_numbers,
+                    )
             except Exception as exc:
                 logger.exception(
                     "query phase=download failed file_id=%s name=%s stage=%s "

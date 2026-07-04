@@ -465,6 +465,74 @@ class QueryOrchestratorTests(unittest.TestCase):
             self.assertEqual(result.downloaded_files[0].text_paths, [])
             self.assertEqual(result.downloaded_files[0].page_paths, [])
 
+    def test_run_logs_warning_when_vector_pages_are_not_rendered(self):
+        class VectorOnlyBackendClient:
+            def search(self, query, image_paths, limit, min_score):
+                return [
+                    VectorFileSearchResult(
+                        google_file_id="file-4",
+                        source_name="Archive.zip",
+                        source_location="Drive/Archive.zip",
+                        source_url="https://drive/file-4",
+                        google_drive_version="9",
+                        google_drive_modified_time="2026-05-24T00:00:00Z",
+                        score=0.95,
+                        pages=[
+                            PageSearchResult(
+                                page_number=3,
+                                score=0.95,
+                            )
+                        ],
+                    )
+                ]
+
+        class UnsupportedVectorMimeGoogleDriveClient(FakeGoogleDriveClient):
+            def search(self, drive_query, limit):
+                return []
+
+            def get_file_metadata(self, file_id):
+                return FullTextSearchResult(
+                    google_file_id=file_id,
+                    name="Archive.zip",
+                    mime_type="application/zip",
+                    web_url=f"https://drive/{file_id}",
+                )
+
+            def download(self, file_id, name, mime_type, output_dir):
+                output_path = output_dir / safe_download_name(name)
+                output_path.write_bytes(b"zip")
+                return output_path
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            orchestrator = QueryOrchestrator(
+                google_drive=UnsupportedVectorMimeGoogleDriveClient(),
+                backend=VectorOnlyBackendClient(),
+                result_writer=QueryResultWriter(),
+                document_processor=FakeDocumentProcessor(),
+            )
+
+            with self.assertLogs("kbsearch_cli", level="WARNING") as logs:
+                result = orchestrator.run(
+                    output_dir=_create_output_dir(temp_dir, "unrendered-vector"),
+                    vector_query="archive",
+                    drive_query="name contains 'archive' and trashed = false",
+                    limit=10,
+                    min_score=0.5,
+                )
+
+        self.assertEqual(result.download_count, 1)
+        self.assertEqual(result.download_failure_count, 0)
+        self.assertEqual(result.downloaded_files[0].page_paths, [])
+        self.assertTrue(
+            any(
+                "warning=vector_pages_unrendered" in record
+                and "file_id=file-4" in record
+                and "mime_type=application/zip" in record
+                and "vector_page_numbers=[3]" in record
+                for record in logs.output
+            )
+        )
+
     def test_run_uses_file_id_suffix_when_normalized_file_names_collide(self):
         class CollidingGoogleDriveClient(FakeGoogleDriveClient):
             def search(self, drive_query, limit):
