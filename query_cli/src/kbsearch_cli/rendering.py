@@ -99,8 +99,6 @@ class DocumentPageRenderer:
 
     def _render_source_path(self, source_path: Path, mime_type: str, output_dir: Path) -> Path:
         document_type = classify_document_type(mime_type)
-        if document_type in {"pdf", "image"}:
-            return source_path
         if document_type in {"word", "powerpoint"}:
             return self._convert_office_to_pdf(source_path, output_dir)
         if document_type in {"txt", "md"}:

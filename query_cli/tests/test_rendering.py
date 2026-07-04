@@ -226,6 +226,16 @@ class RenderingTests(unittest.TestCase):
             self.assertEqual([path.name for path in vector_hit.page_paths], ["0001.png"])
             self.assertFalse((root / "pdf").exists())
 
+    def test_prepare_pdf_rejects_image_mime_type(self):
+        renderer = DocumentPageRenderer()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source_path = root / "photo.jpg"
+            source_path.write_bytes(b"image")
+
+            with self.assertRaisesRegex(DocumentRenderError, "Unsupported document MIME type"):
+                renderer.prepare_pdf(source_path, "image/jpeg", root)
+
     def test_process_uses_mime_type_for_pdf_without_extension(self):
         renderer = DocumentPageRenderer(dpi=72)
         with tempfile.TemporaryDirectory() as temp_dir:
