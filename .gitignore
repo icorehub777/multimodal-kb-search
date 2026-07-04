@@ -32,6 +32,7 @@ env/
 
 # Personal / local notes
 docs/TODO.md
+agent_runtime/memory.md
 .claude/
 
 # Local outputs

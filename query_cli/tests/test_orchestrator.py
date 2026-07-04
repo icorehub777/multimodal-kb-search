@@ -104,8 +104,8 @@ class FakeDocumentProcessor:
     def __init__(self):
         self.processed = []
 
-    def process(self, source_path, output_dir, page_numbers):
-        self.processed.append((source_path.name, list(page_numbers)))
+    def process(self, source_path, mime_type, output_dir, page_numbers):
+        self.processed.append((source_path.name, mime_type, list(page_numbers)))
         if source_path.suffix.lower() in {".xls", ".xlsx"}:
             return ProcessedDocument(None, [], [])
         pdf_path = source_path
@@ -234,7 +234,7 @@ class QueryOrchestratorTests(unittest.TestCase):
         )
         self.assertEqual(failures[0]["google_file_id"], "file-1")
         self.assertEqual(failures[0]["vector_page_numbers"], [2])
-        self.assertEqual(processor.processed, [("Beta.pdf", [])])
+        self.assertEqual(processor.processed, [("Beta.pdf", "application/pdf", [])])
         self.assertTrue(
             any(
                 phase == "download"
@@ -246,10 +246,10 @@ class QueryOrchestratorTests(unittest.TestCase):
 
     def test_run_records_processing_stage_when_document_processing_fails(self):
         class PartiallyFailingProcessor(FakeDocumentProcessor):
-            def process(self, source_path, output_dir, page_numbers):
+            def process(self, source_path, mime_type, output_dir, page_numbers):
                 if source_path.name == "Alpha.pdf":
                     raise RuntimeError("invalid pdf")
-                return super().process(source_path, output_dir, page_numbers)
+                return super().process(source_path, mime_type, output_dir, page_numbers)
 
         with tempfile.TemporaryDirectory() as temp_dir:
             orchestrator = QueryOrchestrator(
@@ -357,7 +357,10 @@ class QueryOrchestratorTests(unittest.TestCase):
             self.assertEqual(bundle.query_plan_path.read_text(encoding="utf-8").count(image_path.as_posix()), 1)
             self.assertEqual(
                 processor.processed,
-                [("Alpha.pdf", [2]), ("Beta.pdf", [])],
+                [
+                    ("Alpha.pdf", "application/pdf", [2]),
+                    ("Beta.pdf", "application/pdf", []),
+                ],
             )
             self.assertEqual(result.download_failure_count, 0)
             self.assertEqual(
@@ -403,7 +406,13 @@ class QueryOrchestratorTests(unittest.TestCase):
 
             self.assertTrue((result.bundle.path / "Orders-sheet-1" / "Orders.xlsx").exists())
             self.assertEqual(result.downloaded_files[0].page_paths, [])
-            self.assertEqual(processor.processed, [("Orders.xlsx", []), ("file-1.pdf", [2])])
+            self.assertEqual(
+                processor.processed,
+                [
+                    ("Orders.xlsx", "application/vnd.google-apps.spreadsheet", []),
+                    ("file-1.pdf", "application/pdf", [2]),
+                ],
+            )
 
     def test_run_uses_file_id_suffix_when_normalized_file_names_collide(self):
         class CollidingGoogleDriveClient(FakeGoogleDriveClient):

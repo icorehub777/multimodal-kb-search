@@ -56,6 +56,7 @@ class DocumentProcessor(Protocol):
     def process(
         self,
         source_path: Path,
+        mime_type: str,
         output_dir: Path,
         page_numbers: list[int],
     ) -> ProcessedDocument:
@@ -316,6 +317,7 @@ class QueryOrchestrator:
                 stage = "process"
                 processed = self._document_processor.process(
                     source_path,
+                    mime_type,
                     file_dir,
                     target.vector_page_numbers,
                 )

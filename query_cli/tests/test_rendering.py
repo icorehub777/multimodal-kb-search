@@ -148,6 +148,7 @@ class RenderingTests(unittest.TestCase):
 
             processed = renderer.process(
                 copied_source,
+                "application/pdf",
                 output_dir,
                 [1],
             )
@@ -165,7 +166,12 @@ class RenderingTests(unittest.TestCase):
             source_path = root / "orders.xlsx"
             source_path.write_bytes(b"xlsx")
 
-            processed = renderer.process(source_path, root, [])
+            processed = renderer.process(
+                source_path,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                root,
+                [],
+            )
 
             self.assertIsNone(processed.pdf_path)
             self.assertEqual(processed.text_paths, [])
@@ -181,12 +187,41 @@ class RenderingTests(unittest.TestCase):
             source_path = root / "photo.jpg"
             Image.new("RGB", (2, 2), color=(255, 0, 0)).save(source_path)
 
-            full_text_only = renderer.process(source_path, root, [])
-            vector_hit = renderer.process(source_path, root, [1])
+            full_text_only = renderer.process(source_path, "image/jpeg", root, [])
+            vector_hit = renderer.process(source_path, "image/jpeg", root, [1])
 
             self.assertEqual(full_text_only.page_paths, [])
             self.assertEqual([path.name for path in vector_hit.page_paths], ["0001.png"])
             self.assertFalse((root / "pdf").exists())
+
+    def test_process_uses_mime_type_for_pdf_without_extension(self):
+        renderer = DocumentPageRenderer(dpi=72)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source_path = root / "downloaded"
+            _create_pdf(source_path, ["first page"])
+            output_dir = root / "result"
+
+            processed = renderer.process(source_path, "application/pdf", output_dir, [1])
+
+            self.assertEqual(processed.pdf_path, output_dir / "pdf" / "document.pdf")
+            self.assertEqual([path.name for path in processed.text_paths], ["0001.txt"])
+            self.assertEqual([path.name for path in processed.page_paths], ["0001.png"])
+
+    def test_process_uses_mime_type_for_image_without_extension(self):
+        from PIL import Image
+
+        renderer = DocumentPageRenderer()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source_path = root / "downloaded"
+            Image.new("RGB", (2, 2), color=(255, 0, 0)).save(source_path, format="JPEG")
+
+            processed = renderer.process(source_path, "image/jpeg", root, [1])
+
+            self.assertEqual(processed.pdf_path, None)
+            self.assertEqual(processed.text_paths, [])
+            self.assertEqual([path.name for path in processed.page_paths], ["0001.png"])
 
     def test_render_pdf_pages_only_renders_requested_pages(self):
         renderer = DocumentPageRenderer(dpi=72)

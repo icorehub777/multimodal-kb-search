@@ -138,7 +138,7 @@ Query progress: phase=query status=failed run_id=a1b2c3d4 ...
 
 `KBSEARCH_QUERY_LOG_RETENTION_DAYS` 控制 per-run log 保留天數，預設 `14`。每次 query 啟動時會刪除較舊的 `kbsearch-*.log`；設為 `0` 可停用自動清理。清理失敗時該次 query 會記錄錯誤並停止。
 
-查詢結果資料夾會包含失敗清單；每個成功下載的檔案子資料夾會保留下載檔，並依格式產生：
+查詢結果資料夾會包含失敗清單；每個成功下載的檔案子資料夾會保留下載檔，並依 Google Drive MIME type 與匯出結果產生：
 
 ```text
 <output_dir>/

@@ -12,8 +12,35 @@ from kbsearch_cli.models import ProcessedDocument
 CJK_TEXT_FONT_NAME = "KBSearchTextCJK"
 _LIBREOFFICE_MAX_SOURCE_PATH = 240
 SOFFICE_EXECUTABLE = "soffice"
-IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
-SPREADSHEET_EXTENSIONS = {".xls", ".xlsx"}
+_MIME_TYPE_TO_DOCUMENT_TYPE = {
+    "application/pdf": "pdf",
+    "application/vnd.google-apps.document": "pdf",
+    "application/vnd.google-apps.presentation": "pdf",
+    "application/msword": "word",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "word",
+    "application/vnd.ms-powerpoint": "powerpoint",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation": "powerpoint",
+    "text/plain": "txt",
+    "text/markdown": "md",
+    "image/png": "image",
+    "image/jpeg": "image",
+    "image/webp": "image",
+}
+_SPREADSHEET_MIME_TYPES = {
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.google-apps.spreadsheet",
+}
+
+
+def classify_document_type(mime_type: str) -> str:
+    if mime_type in _SPREADSHEET_MIME_TYPES:
+        return "spreadsheet"
+
+    document_type = _MIME_TYPE_TO_DOCUMENT_TYPE.get(mime_type)
+    if document_type is None:
+        raise DocumentRenderError(f"Unsupported document MIME type: {mime_type}")
+    return document_type
 
 
 class DocumentPageRenderer:
@@ -28,13 +55,14 @@ class DocumentPageRenderer:
     def process(
         self,
         source_path: Path,
+        mime_type: str,
         output_dir: Path,
         page_numbers: list[int],
     ) -> ProcessedDocument:
-        suffix = source_path.suffix.lower()
-        if suffix in SPREADSHEET_EXTENSIONS:
+        document_type = classify_document_type(mime_type)
+        if document_type == "spreadsheet":
             return ProcessedDocument(pdf_path=None, text_paths=[], page_paths=[])
-        if suffix in IMAGE_EXTENSIONS:
+        if document_type == "image":
             if not page_numbers:
                 return ProcessedDocument(pdf_path=None, text_paths=[], page_paths=[])
             if set(page_numbers) != {1}:
@@ -45,7 +73,7 @@ class DocumentPageRenderer:
                 page_paths=self._render_image(source_path, output_dir / "pages"),
             )
 
-        pdf_path = self.prepare_pdf(source_path, output_dir)
+        pdf_path = self.prepare_pdf(source_path, mime_type, output_dir)
         text_paths = self.extract_pdf_text(pdf_path, output_dir / "text")
         page_paths = self.render_pdf_pages(pdf_path, output_dir / "pages", page_numbers)
         return ProcessedDocument(
@@ -54,28 +82,28 @@ class DocumentPageRenderer:
             page_paths=page_paths,
         )
 
-    def prepare_pdf(self, source_path: Path, output_dir: Path) -> Path:
+    def prepare_pdf(self, source_path: Path, mime_type: str, output_dir: Path) -> Path:
         pdf_dir = output_dir / "pdf"
         pdf_dir.mkdir(parents=True, exist_ok=True)
         output_path = pdf_dir / "document.pdf"
-        if source_path.suffix.lower() == ".pdf":
+        if classify_document_type(mime_type) == "pdf":
             shutil.copy2(source_path, output_path)
             return output_path
 
-        converted_path = self._render_source_path(source_path, output_dir)
+        converted_path = self._render_source_path(source_path, mime_type, output_dir)
         if converted_path.resolve() != output_path.resolve():
             shutil.move(str(converted_path), str(output_path))
         return output_path
 
-    def _render_source_path(self, source_path: Path, output_dir: Path) -> Path:
-        suffix = source_path.suffix.lower()
-        if suffix in {".pdf", ".png", ".jpg", ".jpeg", ".webp"}:
+    def _render_source_path(self, source_path: Path, mime_type: str, output_dir: Path) -> Path:
+        document_type = classify_document_type(mime_type)
+        if document_type in {"pdf", "image"}:
             return source_path
-        if suffix in {".doc", ".docx", ".ppt", ".pptx"}:
+        if document_type in {"word", "powerpoint"}:
             return self._convert_office_to_pdf(source_path, output_dir)
-        if suffix in {".txt", ".md"}:
+        if document_type in {"txt", "md"}:
             return self._convert_text_to_pdf(source_path, output_dir)
-        raise DocumentRenderError(f"Unsupported document extension: {source_path.suffix}")
+        raise DocumentRenderError(f"Unsupported document MIME type: {mime_type}")
 
     def _convert_office_to_pdf(self, source_path: Path, output_dir: Path) -> Path:
         output_path = output_dir / f"{source_path.stem}.pdf"
