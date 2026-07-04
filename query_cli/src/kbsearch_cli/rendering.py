@@ -41,7 +41,7 @@ def classify_document_type(mime_type: str) -> str:
 
     document_type = _MIME_TYPE_TO_DOCUMENT_TYPE.get(mime_type)
     if document_type is None:
-        raise DocumentRenderError(f"Unsupported document MIME type: {mime_type}")
+        return "download_only"
     return document_type
 
 
@@ -62,7 +62,7 @@ class DocumentPageRenderer:
         page_numbers: list[int],
     ) -> ProcessedDocument:
         document_type = classify_document_type(mime_type)
-        if document_type == "spreadsheet":
+        if document_type in {"spreadsheet", "download_only"}:
             return ProcessedDocument(pdf_path=None, text_paths=[], page_paths=[])
         if document_type == "image":
             if not page_numbers:

@@ -13,6 +13,7 @@ from kbsearch_cli.errors import QueryCliError
 from kbsearch_cli.orchestrator import QueryOrchestrator
 from kbsearch_cli.output import QueryResultWriter
 from kbsearch_cli.google_drive import safe_download_name
+from kbsearch_cli.rendering import DocumentPageRenderer
 
 
 class FakeGoogleDriveClient:
@@ -413,6 +414,56 @@ class QueryOrchestratorTests(unittest.TestCase):
                     ("file-1.pdf", "application/pdf", [2]),
                 ],
             )
+
+    def test_run_counts_unsupported_full_text_mime_as_downloaded_file(self):
+        class UnsupportedMimeGoogleDriveClient(FakeGoogleDriveClient):
+            def search(self, drive_query, limit):
+                return [
+                    FullTextSearchResult(
+                        google_file_id="csv-1",
+                        name="Orders.csv",
+                        mime_type="text/csv",
+                        web_url="https://drive/csv-1",
+                    )
+                ]
+
+            def download(self, file_id, name, mime_type, output_dir):
+                output_path = output_dir / safe_download_name(name)
+                output_path.write_text("id,name\n1,Alice\n", encoding="utf-8")
+                return output_path
+
+        class NoVectorBackendClient:
+            def search(self, query, image_paths, limit, min_score):
+                return []
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            orchestrator = QueryOrchestrator(
+                google_drive=UnsupportedMimeGoogleDriveClient(),
+                backend=NoVectorBackendClient(),
+                result_writer=QueryResultWriter(),
+                document_processor=DocumentPageRenderer(),
+            )
+
+            result = orchestrator.run(
+                output_dir=_create_output_dir(temp_dir, "csv-download-only"),
+                vector_query="orders",
+                drive_query="fullText contains 'orders' and trashed = false",
+                limit=10,
+                min_score=0.5,
+            )
+
+            csv_dir = result.bundle.path / "Orders.csv-csv-1"
+            failures = json.loads(
+                result.bundle.download_failures_path.read_text(encoding="utf-8")
+            )
+
+            self.assertEqual(result.download_count, 1)
+            self.assertEqual(result.download_failure_count, 0)
+            self.assertEqual(failures, [])
+            self.assertTrue((csv_dir / "Orders.csv").exists())
+            self.assertIsNone(result.downloaded_files[0].pdf_path)
+            self.assertEqual(result.downloaded_files[0].text_paths, [])
+            self.assertEqual(result.downloaded_files[0].page_paths, [])
 
     def test_run_uses_file_id_suffix_when_normalized_file_names_collide(self):
         class CollidingGoogleDriveClient(FakeGoogleDriveClient):

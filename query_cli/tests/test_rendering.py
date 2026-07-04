@@ -191,6 +191,25 @@ class RenderingTests(unittest.TestCase):
             self.assertEqual(processed.page_paths, [])
             self.assertFalse((root / "pdf").exists())
 
+    def test_process_keeps_unsupported_mime_without_derived_files(self):
+        renderer = DocumentPageRenderer()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source_path = root / "archive.zip"
+            source_path.write_bytes(b"zip")
+
+            processed = renderer.process(
+                source_path,
+                "application/zip",
+                root,
+                [],
+            )
+
+            self.assertIsNone(processed.pdf_path)
+            self.assertEqual(processed.text_paths, [])
+            self.assertEqual(processed.page_paths, [])
+            self.assertFalse((root / "pdf").exists())
+
     def test_process_only_normalizes_vector_hit_image(self):
         from PIL import Image
 

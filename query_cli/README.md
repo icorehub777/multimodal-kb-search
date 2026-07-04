@@ -154,11 +154,11 @@ Query progress: phase=query status=failed run_id=a1b2c3d4 ...
       0003.png
 ```
 
-- `download_count` 是成功完成下載與處理的檔案數量，不包含 `download_failure_count`。
+- `download_count` 是成功下載的檔案數量，不包含 `download_failure_count`。
 - PDF、Word、PowerPoint、TXT、MD 會產生固定路徑 `pdf/document.pdf` 與逐頁 UTF-8 TXT。
 - `pages/` 只包含向量搜尋命中的頁面。
-- Excel 與 Google Sheets 只保留 XLS/XLSX。
 - 圖片只在向量搜尋命中時產生 `pages/0001.png`。
+- 其他不支援文件處理的 MIME type 只保留原始下載檔或匯出檔，不列為下載失敗；其中 Google Sheets 會匯出為 XLSX，其他檔案保留原始下載格式。
 
 ## 指定 PDF 頁面轉圖
 
