@@ -1,2 +1,3 @@
+*.py text eol=lf
 importer/*.py whitespace=cr-at-eol
 importer/**/*.py whitespace=cr-at-eol

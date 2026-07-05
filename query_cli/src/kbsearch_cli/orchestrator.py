@@ -259,6 +259,7 @@ class QueryOrchestrator:
             union_count=len(download_targets),
             download_count=len(download_batch.downloaded_files),
             download_failure_count=len(download_batch.failures),
+            warning_count=len(download_batch.warnings),
         )
         return QueryRunResult(
             bundle=bundle,

@@ -510,6 +510,7 @@ class QueryOrchestratorTests(unittest.TestCase):
                 result_writer=QueryResultWriter(),
                 document_processor=FakeDocumentProcessor(),
             )
+            progress_events = []
 
             with self.assertLogs("kbsearch_cli", level="WARNING") as logs:
                 result = orchestrator.run(
@@ -518,6 +519,7 @@ class QueryOrchestratorTests(unittest.TestCase):
                     drive_query="name contains 'archive' and trashed = false",
                     limit=10,
                     min_score=0.5,
+                    progress=lambda phase, fields: progress_events.append((phase, fields)),
                 )
             warnings_json = json.loads(
                 result.bundle.warnings_path.read_text(encoding="utf-8")
@@ -557,6 +559,14 @@ class QueryOrchestratorTests(unittest.TestCase):
                 and "mime_type=application/zip" in record
                 and "vector_page_numbers=[3]" in record
                 for record in logs.output
+            )
+        )
+        self.assertTrue(
+            any(
+                phase == "complete"
+                and fields["status"] == "finished"
+                and fields["warning_count"] == 1
+                for phase, fields in progress_events
             )
         )
 
