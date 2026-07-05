@@ -69,6 +69,20 @@ class DownloadFailureResult:
 
 
 @dataclass(frozen=True)
+class QueryWarningResult:
+    code: str
+    google_file_id: str
+    name: str
+    mime_type: str
+    google_drive_url: str
+    vector_page_numbers: list[int]
+    message: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
 class ProcessedDocument:
     pdf_path: Path | None
     text_paths: list[Path]
@@ -86,6 +100,8 @@ class QueryRunResult:
     downloaded_files: list[DownloadedFileResult]
     download_failure_count: int
     download_failures: list[DownloadFailureResult]
+    warning_count: int
+    warnings: list[QueryWarningResult]
 
 
 @dataclass(frozen=True)
@@ -95,5 +111,6 @@ class QueryResultBundle:
     full_text_results_path: Path
     vector_results_path: Path
     download_failures_path: Path
+    warnings_path: Path
     full_text_results: list[FullTextSearchResult]
     vector_results: list[VectorFileSearchResult]

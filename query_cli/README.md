@@ -105,6 +105,8 @@ kbsearch query `
   "download_count": 3,
   "download_failure_count": 1,
   "download_failures_path": "C:/path/to/task/query_results/20260613-131500-manual-test/download_failures.json",
+  "warning_count": 1,
+  "warnings_path": "C:/path/to/task/query_results/20260613-131500-manual-test/warnings.json",
   "download_failures": [
     {
       "google_file_id": "file-4",
@@ -115,6 +117,17 @@ kbsearch query `
       "google_drive_url": "https://drive.google.com/file/d/file-4/view",
       "vector_page_numbers": [3, 5],
       "full_text_query": "fullText contains 'Broken' and trashed = false"
+    }
+  ],
+  "warnings": [
+    {
+      "code": "vector_pages_unrendered",
+      "google_file_id": "file-5",
+      "name": "Archive.zip",
+      "mime_type": "application/zip",
+      "google_drive_url": "https://drive.google.com/file/d/file-5/view",
+      "vector_page_numbers": [7],
+      "message": "Vector search matched pages, but no page images were rendered for this file."
     }
   ]
 }
@@ -132,6 +145,8 @@ Query progress: phase=query status=failed run_id=a1b2c3d4 ...
 
 每筆失敗包含 `google_file_id`、檔名、失敗階段、錯誤類型、訊息與 `google_drive_url`，讓使用者可直接到 Google Drive 查看原檔。若檔案來自向量搜尋，`vector_page_numbers` 會列出命中頁碼；若來自關鍵字搜尋，`full_text_query` 會保留本次查詢條件。同時命中兩種搜尋時兩組資訊都會提供。完整清單同時寫入 `download_failures.json`。失敗檔案已建立的部分產物會保留供排錯。
 
+`warnings` 記錄非失敗但會影響閱讀完整性的狀況，完整清單同時寫入 `warnings.json`。例如 `vector_pages_unrendered` 表示向量搜尋命中頁碼存在，但該檔案沒有產生對應的 `pages/*.png`；常見原因是 Drive 上同一個 `file_id` 的檔案在同步後變成不支援文件處理的 MIME type。此時檔案仍算下載成功，但 Agent 應改以原始下載檔或其他工具能力判讀，並在必要時向使用者說明該向量命中頁面無法直接閱讀。
+
 查詢開始前會以不可覆蓋既有目錄的方式建立 `output_dir`；若路徑已存在，指令會在實際查詢前失敗。查詢途中失敗時，已建立的目錄與部分產物會保留，不得重用相同路徑。詳細清單與下載檔案見該資料夾內的 JSON 與子目錄。
 
 設定成功載入後，每次查詢會在 `KBSEARCH_QUERY_LOGS_ROOT` 建立獨立 log，檔名格式為 `kbsearch-<日期時間>-<run_id>.log`。每行均包含 `run_id`，且最後記錄成功、部分成功或失敗終態。stderr 與成功 stdout 也會提供該次 log 絕對路徑。
@@ -143,6 +158,7 @@ Query progress: phase=query status=failed run_id=a1b2c3d4 ...
 ```text
 <output_dir>/
   download_failures.json
+  warnings.json
   <safe_file_name>-<google_file_id>/
     <downloaded file>
     pdf/

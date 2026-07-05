@@ -44,6 +44,7 @@ class CliTests(unittest.TestCase):
             full_text_results=[],
             vector_results=[],
             download_failures_path=bundle_path / "download_failures.json",
+            warnings_path=bundle_path / "warnings.json",
         )
         run_result = QueryRunResult(
             bundle=bundle,
@@ -65,6 +66,8 @@ class CliTests(unittest.TestCase):
             ],
             download_failure_count=0,
             download_failures=[],
+            warning_count=0,
+            warnings=[],
         )
 
         class FakeOrchestrator:
@@ -140,6 +143,9 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["download_count"], 1)
         self.assertEqual(payload["download_failure_count"], 0)
         self.assertEqual(payload["download_failures"], [])
+        self.assertEqual(payload["warning_count"], 0)
+        self.assertEqual(payload["warnings_path"], (bundle_path / "warnings.json").as_posix())
+        self.assertEqual(payload["warnings"], [])
         self.assertIn(
             "Query progress: phase=query status=started run_id=run12345",
             stderr.getvalue(),
@@ -148,6 +154,7 @@ class CliTests(unittest.TestCase):
             "Query progress: phase=query status=finished run_id=run12345",
             stderr.getvalue(),
         )
+        self.assertIn("warning_count=0", stderr.getvalue())
 
     def test_render_pdf_pages_renders_selected_pages_without_loading_query_config(self):
         with tempfile.TemporaryDirectory() as temp_dir:

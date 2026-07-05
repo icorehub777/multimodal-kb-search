@@ -9,6 +9,7 @@ from kbsearch_cli.models import (
     FullTextSearchResult,
     QueryResultBundle,
     QueryRunResult,
+    QueryWarningResult,
 )
 
 
@@ -46,6 +47,7 @@ class CliOutputTests(unittest.TestCase):
                 ],
                 vector_results=[],
                 download_failures_path=bundle_dir / "download_failures.json",
+                warnings_path=bundle_dir / "warnings.json",
             )
             result = QueryRunResult(
                 bundle=bundle,
@@ -66,6 +68,21 @@ class CliOutputTests(unittest.TestCase):
                         google_drive_url="https://drive/file-4",
                         vector_page_numbers=[3, 5],
                         full_text_query="fullText contains 'broken'",
+                    )
+                ],
+                warning_count=1,
+                warnings=[
+                    QueryWarningResult(
+                        code="vector_pages_unrendered",
+                        google_file_id="file-5",
+                        name="Archive.zip",
+                        mime_type="application/zip",
+                        google_drive_url="https://drive/file-5",
+                        vector_page_numbers=[7],
+                        message=(
+                            "Vector search matched pages, but no page images were "
+                            "rendered for this file."
+                        ),
                     )
                 ],
             )
@@ -90,6 +107,8 @@ class CliOutputTests(unittest.TestCase):
                 "download_failures_path": (
                     bundle_dir / "download_failures.json"
                 ).as_posix(),
+                "warning_count": 1,
+                "warnings_path": (bundle_dir / "warnings.json").as_posix(),
                 "download_failures": [
                     {
                         "google_file_id": "file-4",
@@ -100,6 +119,20 @@ class CliOutputTests(unittest.TestCase):
                         "google_drive_url": "https://drive/file-4",
                         "vector_page_numbers": [3, 5],
                         "full_text_query": "fullText contains 'broken'",
+                    }
+                ],
+                "warnings": [
+                    {
+                        "code": "vector_pages_unrendered",
+                        "google_file_id": "file-5",
+                        "name": "Archive.zip",
+                        "mime_type": "application/zip",
+                        "google_drive_url": "https://drive/file-5",
+                        "vector_page_numbers": [7],
+                        "message": (
+                            "Vector search matched pages, but no page images were "
+                            "rendered for this file."
+                        ),
                     }
                 ],
             },

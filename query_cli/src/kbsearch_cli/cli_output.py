@@ -41,7 +41,10 @@ def build_query_success_payload(
         "download_count": result.download_count,
         "download_failure_count": result.download_failure_count,
         "download_failures_path": result.bundle.download_failures_path.as_posix(),
+        "warning_count": result.warning_count,
+        "warnings_path": result.bundle.warnings_path.as_posix(),
         "download_failures": [
             failure.to_dict() for failure in result.download_failures
         ],
+        "warnings": [warning.to_dict() for warning in result.warnings],
     }

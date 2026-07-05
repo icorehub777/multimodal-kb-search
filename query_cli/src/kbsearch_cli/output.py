@@ -9,6 +9,7 @@ from kbsearch_cli.models import (
     DownloadFailureResult,
     FullTextSearchResult,
     QueryResultBundle,
+    QueryWarningResult,
     VectorFileSearchResult,
 )
 
@@ -34,10 +35,12 @@ class QueryResultWriter:
         full_text_path = output_dir / "full_text_results.json"
         vector_path = output_dir / "vector_results.json"
         download_failures_path = output_dir / "download_failures.json"
+        warnings_path = output_dir / "warnings.json"
         _write_json(query_plan_path, query_plan)
         _write_json(full_text_path, [result.to_dict() for result in full_text_results])
         _write_json(vector_path, [result.to_dict() for result in vector_results])
         _write_json(download_failures_path, [])
+        _write_json(warnings_path, [])
 
         return QueryResultBundle(
             path=output_dir,
@@ -45,6 +48,7 @@ class QueryResultWriter:
             full_text_results_path=full_text_path,
             vector_results_path=vector_path,
             download_failures_path=download_failures_path,
+            warnings_path=warnings_path,
             full_text_results=full_text_results,
             vector_results=vector_results,
         )
@@ -57,6 +61,16 @@ class QueryResultWriter:
         _write_json(
             bundle.download_failures_path,
             [failure.to_dict() for failure in failures],
+        )
+
+    def write_warnings(
+        self,
+        bundle: QueryResultBundle,
+        warnings: list[QueryWarningResult],
+    ) -> None:
+        _write_json(
+            bundle.warnings_path,
+            [warning.to_dict() for warning in warnings],
         )
 
 

@@ -519,10 +519,37 @@ class QueryOrchestratorTests(unittest.TestCase):
                     limit=10,
                     min_score=0.5,
                 )
+            warnings_json = json.loads(
+                result.bundle.warnings_path.read_text(encoding="utf-8")
+            )
 
         self.assertEqual(result.download_count, 1)
         self.assertEqual(result.download_failure_count, 0)
         self.assertEqual(result.downloaded_files[0].page_paths, [])
+        self.assertEqual(result.warning_count, 1)
+        self.assertEqual(result.warnings[0].code, "vector_pages_unrendered")
+        self.assertEqual(result.warnings[0].google_file_id, "file-4")
+        self.assertEqual(result.warnings[0].name, "Archive.zip")
+        self.assertEqual(result.warnings[0].mime_type, "application/zip")
+        self.assertEqual(result.warnings[0].google_drive_url, "https://drive/file-4")
+        self.assertEqual(result.warnings[0].vector_page_numbers, [3])
+        self.assertEqual(
+            warnings_json,
+            [
+                {
+                    "code": "vector_pages_unrendered",
+                    "google_file_id": "file-4",
+                    "name": "Archive.zip",
+                    "mime_type": "application/zip",
+                    "google_drive_url": "https://drive/file-4",
+                    "vector_page_numbers": [3],
+                    "message": (
+                        "Vector search matched pages, but no page images were "
+                        "rendered for this file."
+                    ),
+                }
+            ],
+        )
         self.assertTrue(
             any(
                 "warning=vector_pages_unrendered" in record

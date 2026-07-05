@@ -100,6 +100,7 @@ repo_root/
   full_text_results.json
   vector_results.json
   download_failures.json
+  warnings.json
   <safe_file_name>-<google_file_id>/
     <downloaded original file>
     pdf/
@@ -115,6 +116,7 @@ repo_root/
 - `full_text_results.json` 是此使用者有權限存取的檔案的 Google Drive 查詢結果清單，屬於檔案層級結果。
 - `vector_results.json` 是此使用者有權限存取的檔案的圖文向量庫的相似度查詢結果清單，屬於檔案與頁面層級結果，頁面結果會包含 `page_number` 與相似度分數。
 - `download_failures.json` 記錄無法完成 metadata 補查、產物目錄建立、下載或文件處理的檔案；沒有失敗時內容為空陣列。
+- `warnings.json` 記錄非失敗但會影響閱讀完整性的狀況；沒有警告時內容為空陣列。
 - 針對 Google Drive 查詢結果清單與相似度查詢結果清單的聯集檔案清單（`file_id` 去重） 中的每個檔案，都建立一個以 `<safe_file_name>-<google_file_id>` 命名的檔案子資料夾。
 - 每個檔案子資料夾會保留該檔案自 Google Drive 下載的檔案；Google Docs 與 Google Slides 由 Drive API 匯出為 PDF，Google Sheet 匯出為 XLSX。
 - PDF、Word、PowerPoint、TXT、MD 另提供固定路徑 `pdf/document.pdf` 與逐頁 UTF-8 TXT；原始檔本身為 PDF 時仍會保留下載檔。
@@ -128,6 +130,7 @@ repo_root/
 - Agent 閱讀與回覆時，應以本次查詢結果清單、逐頁文字、命中頁 PNG 與已下載檔案為依據。
 - stdout 的 `status` 若為 `finished_with_errors`，查詢結果仍可使用，但 Agent 必須先讀取 `download_failures` 或 `download_failures.json`，並在回答中明確告知使用者哪些檔案未能下載或處理及其原因；不得將結果描述為完整成功。
 - 告知失敗檔案時須附上 `google_drive_url`，請使用者直接到 Google Drive 查看原檔。若 `vector_page_numbers` 非空，須告知向量搜尋命中的頁碼；若 `full_text_query` 有值，須告知關鍵字搜尋使用的查詢條件，協助使用者自行在原檔中查找。
+- stdout 的 `warning_count` 若大於 `0`，Agent 必須讀取 `warnings` 或 `warnings.json`。若警告 `code` 為 `vector_pages_unrendered`，代表向量搜尋命中頁碼存在，但該檔案沒有產生對應的 `pages/*.png`；Agent 不得假設該向量命中頁面已可直接閱讀，應改以原始下載檔或其他工具能力判讀，並在必要時向使用者說明該檔案的向量命中頁面無法產生圖片、結果可能不完整。
 - PDF、Word、PowerPoint、TXT、MD 統一以 `text/*.txt` 進行內容定位，使用 `rg` 的固定文字、大小寫、regex、前後文與檔案篩選能力搜尋；TXT 檔名即對應 PDF 頁碼。
 - 確定需閱讀的頁碼後，優先使用既有 `pages/*.png`；尚未產生的頁面使用 `render-pdf-pages` 從該檔案的 `pdf/document.pdf` 轉出至同一文件資料夾的 `pages/`。
 - XLS/XLSX 使用 Spreadsheets Skill。圖片直接檢視原圖或既有 `pages/0001.png`。

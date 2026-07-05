@@ -58,10 +58,12 @@ class QueryOutputTests(unittest.TestCase):
             full_text_json = json.loads((bundle.path / "full_text_results.json").read_text(encoding="utf-8"))
             vector_json = json.loads((bundle.path / "vector_results.json").read_text(encoding="utf-8"))
             query_plan_json = json.loads((bundle.path / "query_plan.json").read_text(encoding="utf-8"))
+            warnings_json = json.loads((bundle.path / "warnings.json").read_text(encoding="utf-8"))
 
         self.assertEqual(full_text_json[0]["google_file_id"], "file-1")
         self.assertEqual(vector_json[0]["pages"][0]["page_number"], 1)
         self.assertEqual(query_plan_json["drive_query"], "fullText contains 'spec' and trashed = false")
+        self.assertEqual(warnings_json, [])
 
     def test_reserve_output_directory_creates_parents_and_rejects_existing_directory(self):
         from kbsearch_cli.errors import QueryCliError

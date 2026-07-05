@@ -16,6 +16,7 @@ from kbsearch_cli.models import (
     ProcessedDocument,
     QueryResultBundle,
     QueryRunResult,
+    QueryWarningResult,
     VectorFileSearchResult,
 )
 from kbsearch_cli.output import QueryResultWriter, safe_path_name
@@ -77,6 +78,7 @@ class _DownloadTarget:
 class _DownloadBatchResult:
     downloaded_files: list[DownloadedFileResult]
     failures: list[DownloadFailureResult]
+    warnings: list[QueryWarningResult]
 
 
 class QueryOrchestrator:
@@ -240,13 +242,15 @@ class QueryOrchestrator:
             progress=progress,
         )
         self._result_writer.write_download_failures(bundle, download_batch.failures)
+        self._result_writer.write_warnings(bundle, download_batch.warnings)
         logger.info(
             "query phase=complete output_dir=%s union_count=%s download_count=%s "
-            "download_failure_count=%s",
+            "download_failure_count=%s warning_count=%s",
             bundle.path,
             len(download_targets),
             len(download_batch.downloaded_files),
             len(download_batch.failures),
+            len(download_batch.warnings),
         )
         _report(
             progress,
@@ -266,6 +270,8 @@ class QueryOrchestrator:
             downloaded_files=download_batch.downloaded_files,
             download_failure_count=len(download_batch.failures),
             download_failures=download_batch.failures,
+            warning_count=len(download_batch.warnings),
+            warnings=download_batch.warnings,
         )
 
     def _download_union_files(
@@ -277,6 +283,7 @@ class QueryOrchestrator:
     ) -> _DownloadBatchResult:
         downloaded_files: list[DownloadedFileResult] = []
         failures: list[DownloadFailureResult] = []
+        warnings: list[QueryWarningResult] = []
         total = len(download_targets)
         for index, target in enumerate(download_targets, start=1):
             name = target.name
@@ -322,6 +329,19 @@ class QueryOrchestrator:
                     target.vector_page_numbers,
                 )
                 if target.vector_page_numbers and not processed.page_paths:
+                    warning = QueryWarningResult(
+                        code="vector_pages_unrendered",
+                        google_file_id=target.google_file_id,
+                        name=name,
+                        mime_type=mime_type,
+                        google_drive_url=target.google_drive_url,
+                        vector_page_numbers=target.vector_page_numbers,
+                        message=(
+                            "Vector search matched pages, but no page images were "
+                            "rendered for this file."
+                        ),
+                    )
+                    warnings.append(warning)
                     logger.warning(
                         "query phase=process warning=vector_pages_unrendered "
                         "file_id=%s name=%s mime_type=%s vector_page_numbers=%s",
@@ -397,6 +417,7 @@ class QueryOrchestrator:
         return _DownloadBatchResult(
             downloaded_files=downloaded_files,
             failures=failures,
+            warnings=warnings,
         )
 
 

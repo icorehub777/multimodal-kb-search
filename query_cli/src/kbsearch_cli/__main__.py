@@ -282,11 +282,13 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         final_status = "finished_with_errors" if result.download_failures else "finished"
         logger.info(
-            "query finished status=%s output_dir=%s download_count=%s download_failure_count=%s",
+            "query finished status=%s output_dir=%s download_count=%s "
+            "download_failure_count=%s warning_count=%s",
             final_status,
             result.bundle.path,
             result.download_count,
             result.download_failure_count,
+            result.warning_count,
         )
         progress(
             "query",
@@ -294,6 +296,7 @@ def main(argv: list[str] | None = None) -> int:
                 "status": final_status,
                 "output_dir": result.bundle.path,
                 "log": log_path,
+                "warning_count": result.warning_count,
             },
         )
         _write_terminal(
