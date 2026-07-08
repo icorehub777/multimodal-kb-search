@@ -589,11 +589,7 @@ def _build_unique_file_dir_name(
     start_length: int = 5,
 ) -> str:
     safe_file_name = safe_path_name(file_name).strip(" .")
-    if not safe_file_name:
-        safe_file_name = "file"
     safe_file_id = safe_path_name(google_file_id).strip(" .")
-    if not safe_file_id:
-        safe_file_id = "file"
     prefix_length = min(start_length, len(safe_file_id))
     while True:
         id_prefix = safe_file_id[:prefix_length].strip(" .")
