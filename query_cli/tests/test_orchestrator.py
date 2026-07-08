@@ -694,6 +694,116 @@ class QueryOrchestratorTests(unittest.TestCase):
             self.assertTrue((bundle.path / "Z.pdf-file-9").exists())
             self.assertEqual(len(google_drive.downloads), 3)
 
+    def test_run_skips_drive_search_when_drive_query_is_none(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            google_drive = FakeGoogleDriveClient()
+            backend = FakeBackendClient()
+            orchestrator = QueryOrchestrator(
+                google_drive=google_drive,
+                backend=backend,
+                result_writer=QueryResultWriter(),
+                document_processor=FakeDocumentProcessor(),
+            )
+
+            result = orchestrator.run(
+                output_dir=_create_output_dir(temp_dir, "skip-drive"),
+                vector_query="semantic alpha",
+                drive_query=None,
+                limit=5,
+                min_score=None,
+            )
+            plan = json.loads(result.bundle.query_plan_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(google_drive.drive_queries, [])
+        self.assertEqual(len(backend.calls), 1)
+        self.assertEqual(result.full_text_count, 0)
+        self.assertGreaterEqual(result.vector_count, 1)
+        self.assertIsNone(plan["drive_query"])
+        self.assertEqual(plan["vector_query"], "semantic alpha")
+
+    def test_run_skips_backend_when_vector_query_is_none(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            google_drive = FakeGoogleDriveClient()
+            backend = FakeBackendClient()
+            orchestrator = QueryOrchestrator(
+                google_drive=google_drive,
+                backend=backend,
+                result_writer=QueryResultWriter(),
+                document_processor=FakeDocumentProcessor(),
+            )
+
+            result = orchestrator.run(
+                output_dir=_create_output_dir(temp_dir, "skip-vector"),
+                vector_query=None,
+                drive_query="fullText contains 'alpha' and trashed = false",
+                limit=5,
+                min_score=None,
+            )
+            plan = json.loads(result.bundle.query_plan_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(backend.calls, [])
+        self.assertEqual(
+            google_drive.drive_queries,
+            ["fullText contains 'alpha' and trashed = false"],
+        )
+        self.assertEqual(result.vector_count, 0)
+        self.assertIsNone(plan["vector_query"])
+        self.assertIsNone(plan["image_paths"])
+        self.assertEqual(
+            plan["drive_query"],
+            "fullText contains 'alpha' and trashed = false",
+        )
+
+    def test_run_rejects_when_no_search_route_provided(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            orchestrator = QueryOrchestrator(
+                google_drive=FakeGoogleDriveClient(),
+                backend=FakeBackendClient(),
+                result_writer=QueryResultWriter(),
+                document_processor=FakeDocumentProcessor(),
+            )
+
+            with self.assertRaisesRegex(QueryCliError, "vector_query"):
+                orchestrator.run(
+                    output_dir=_create_output_dir(temp_dir, "no-route"),
+                    vector_query=None,
+                    drive_query=None,
+                    limit=5,
+                    min_score=None,
+                )
+
+    def test_run_uses_backend_with_empty_query_when_only_image_provided(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            google_drive = FakeGoogleDriveClient()
+            backend = FakeBackendClient()
+            image_path = Path(temp_dir) / "sample.png"
+            image_path.write_bytes(b"png")
+            orchestrator = QueryOrchestrator(
+                google_drive=google_drive,
+                backend=backend,
+                result_writer=QueryResultWriter(),
+                document_processor=FakeDocumentProcessor(),
+            )
+
+            result = orchestrator.run(
+                output_dir=_create_output_dir(temp_dir, "image-only"),
+                vector_query=None,
+                drive_query=None,
+                limit=5,
+                min_score=None,
+                image_paths=[image_path],
+            )
+            plan = json.loads(result.bundle.query_plan_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(google_drive.drive_queries, [])
+        self.assertEqual(len(backend.calls), 1)
+        self.assertEqual(backend.calls[0][0], "")
+        self.assertEqual(backend.calls[0][1], [image_path])
+        self.assertGreaterEqual(result.vector_count, 1)
+        self.assertIsNone(plan["vector_query"])
+        self.assertIsNone(plan["drive_query"])
+        self.assertEqual(plan["image_paths"], [image_path.as_posix()])
+
     def test_run_rejects_missing_image_paths(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             orchestrator = QueryOrchestrator(

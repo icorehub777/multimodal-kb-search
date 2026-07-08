@@ -47,13 +47,14 @@ repo_root/
 執行知識庫搜尋指令時，工作目錄必須為 `_internal/`。以下為指令執行參數：
 
 ```powershell
-.\.venv\Scripts\kbsearch.exe query --output-dir "../tasks/<任務資料夾>/query_results/<yyyyMMdd-HHmmss>-<safe_query_name>" --vector-query "<向量查詢文字>" --drive-query "<Google Drive q 查詢語法>" [--image <圖片路徑>] [--limit <數量>] [--min-score <分數>]
+.\.venv\Scripts\kbsearch.exe query --output-dir "../tasks/<任務資料夾>/query_results/<yyyyMMdd-HHmmss>-<safe_query_name>" [--vector-query "<向量查詢文字>"] [--drive-query "<Google Drive q 查詢語法>"] [--image <圖片路徑>] [--limit <數量>] [--min-score <分數>]
 ```
 
 - `--output-dir` 必填，由 Agent 指定本次查詢結果的新資料夾路徑；路徑相對於 `_internal/` 工作目錄，每次執行都必須使用尚不存在的新路徑。
-- `--vector-query` 必填，送給 vector search。
-- `--drive-query` 必填，直接送給 Google Drive API `files().list(q=...)`。
-- `--image` 可重複指定多次；路徑須為相對 `_internal/` 工作目錄的本機圖檔路徑（例如 `../tasks/<任務資料夾>/user-01.png`）。
+- `--vector-query` 選填，送給 vector search；可與 `--image` 併用或單獨使用。
+- `--drive-query` 選填，直接送給 Google Drive API `files().list(q=...)`；省略時本次不執行 Google Drive 關鍵字搜尋。
+- `--image` 選填，可重複指定多次；路徑須為相對 `_internal/` 工作目錄的本機圖檔路徑（例如 `../tasks/<任務資料夾>/user-01.png`）。可單獨指定（不需 `--vector-query`），此時以空字串 query 搭配圖片做向量搜尋。
+- 每次 query 必須至少提供 `--vector-query`、`--drive-query` 或 `--image` 其中一個。
 - `--limit` 控制關鍵字搜尋與向量搜尋各自回傳的候選數量，由 Agent 依照狀況自行決定。
 - `--min-score` 是向量搜尋最低分數門檻，未指定時不套用最低分數，原則上不建議 Agent 指定此值。
 
@@ -72,11 +73,12 @@ repo_root/
 
 ## 使用 CLI 指令執行查詢的規則
 
-- 收到使用者查詢需求後，Agent 必須把使用者查詢拆成兩條路線，包括多模態相似度搜尋與 Google Drive 檔案搜尋。
-- 若使用者提供圖片，Agent 應先理解每張圖片，產生可檢索的圖片描述。圖片描述需描述圖中可辨識的文字、產品、表格、版面、顏色、型號、流程、錯誤訊息、文件類型與其他可協助搜尋的特徵。
-- 多模態相似度搜尋：針對 `--vector-query` 參數傳入值，需保留使用者原始自然語言，再補充 Agent 抽出的檢索重點與圖片描述；不得任意改寫成另一個問題或加入使用者未表達、圖片也無法確認的假設。
-- Google Drive 檔案搜尋：針對 `--drive-query` 參數傳入值：須從自然語言與圖片描述抽取關鍵字、型號、檔名片段等條件，組成 Google Drive API 的 `q` 語法直接傳入 CLI（非另建平行關鍵字清單），且只能使用支援的欄位與運算子，例如 `fullText contains ...`、`name contains ...`、`mimeType`、`modifiedTime`、`createdTime`、`owner`、`sharedWithMe`、`starred`、`trashed`。
-- 使用者附圖：將圖片存至目前任務資料夾中（檔名建議 `user-01.png`、`user-02.png`），再以 `--image` 傳入相對 `_internal/` 的路徑（例如 `../tasks/<任務資料夾>/user-01.png`）；多張圖可重複指定 `--image`。
+- 收到使用者查詢需求後，Agent 必須先引導使用者決定本次要執行哪些搜尋路線：多模態相似度搜尋、Google Drive 關鍵字搜尋，或兩者一起。若使用者沒有明確表達，預設兩條一起執行。
+- 決定執行相似度搜尋後，Agent 必須再與使用者確認向量輸入要納入哪些內容：使用者原始描述（組成 `--vector-query`）、使用者提供的圖片（傳 `--image`）、圖片描述／Agent 從問題抽出的檢索重點（亦寫入 `--vector-query`）；可任意組合，並以使用者選擇為準。使用者若沒有明確表達，預設全部納入。也可只傳 `--image` 不做文字向量查詢。
+- 若使用者選擇納入圖片描述，或本次要傳 `--image`，Agent 應先理解每張圖片，產生可檢索的圖片描述。圖片描述需描述圖中可辨識的文字、產品、表格、版面、顏色、型號、流程、錯誤訊息、文件類型與其他可協助搜尋的特徵。
+- 多模態相似度搜尋：若有文字內容要納入，`--vector-query` 由使用者選擇納入的文字組合而成；納入使用者原始描述時需保留其自然語言，不得任意改寫成另一個問題或加入使用者未表達、圖片也無法確認的假設。若使用者選擇不執行相似度搜尋，本次不傳 `--vector-query`，也不得傳 `--image`。
+- Google Drive 關鍵字搜尋：針對 `--drive-query` 參數傳入值：須從自然語言與圖片描述抽取關鍵字、型號、檔名片段等條件，組成 Google Drive API 的 `q` 語法直接傳入 CLI（非另建平行關鍵字清單），且只能使用支援的欄位與運算子，例如 `fullText contains ...`、`name contains ...`、`mimeType`、`modifiedTime`、`createdTime`、`owner`、`sharedWithMe`、`starred`、`trashed`。若使用者選擇不執行關鍵字搜尋，本次不傳 `--drive-query`；不得以空字串或無條件的 `q` 值代替省略。
+- 使用者附圖：僅在本次會執行相似度搜尋且使用者同意納入圖片時使用。可只傳 `--image`（不需 `--vector-query`）。將圖片存至目前任務資料夾中（檔名建議 `user-01.png`、`user-02.png`），再以 `--image` 傳入相對 `_internal/` 的路徑（例如 `../tasks/<任務資料夾>/user-01.png`）；多張圖可重複指定 `--image`。
 - 執行前須依日期時間與查詢目的產生新的查詢結果路徑。若指令回報路徑已存在，不得覆蓋、刪除或重用該資料夾，應改用新的查詢結果路徑重新執行。
 - 執行查詢時必須直接以 sandbox 外部同意方式執行。因在 sandbox 內執行時，無法正確開啟給使用者登入的瀏覽器頁面。
 - 預期查詢可能長時間下載或轉檔時，應以背景程序執行，並將 stdout、stderr 重新導向至系統暫存檔，避免呼叫端結束後關閉 pipe。背景啟動與每次狀態檢查只設定短 timeout，不為整批 query 設定固定總 timeout。
@@ -112,7 +114,7 @@ repo_root/
       <vector hit page>.png
 ```
 
-- `query_plan.json` 記錄本次實際使用的 `vector_query`、`drive_query`、`image_paths`、`limit` 與 `min_score`。
+- `query_plan.json` 記錄本次實際使用的 `vector_query`、`drive_query`、`image_paths`、`limit` 與 `min_score`；本次未執行的搜尋路線對應欄位會寫成 `null`（例如僅執行關鍵字搜尋時 `vector_query` 與 `image_paths` 為 `null`）。
 - `full_text_results.json` 是此使用者有權限存取的檔案的 Google Drive 查詢結果清單，屬於檔案層級結果。
 - `vector_results.json` 是此使用者有權限存取的檔案的圖文向量庫的相似度查詢結果清單，屬於檔案與頁面層級結果，頁面結果會包含 `page_number` 與相似度分數。
 - `download_failures.json` 記錄無法完成 metadata 補查、產物目錄建立、下載或文件處理的檔案；沒有失敗時內容為空陣列。

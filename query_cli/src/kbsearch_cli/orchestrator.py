@@ -97,43 +97,60 @@ class QueryOrchestrator:
     def run(
         self,
         output_dir: Path,
-        vector_query: str,
-        drive_query: str,
+        vector_query: str | None,
+        drive_query: str | None,
         limit: int,
         min_score: float | None,
         image_paths: list[Path] | None = None,
         progress: ProgressCallback | None = None,
     ) -> QueryRunResult:
         resolved_image_paths = image_paths or []
+        if vector_query is None and drive_query is None and not resolved_image_paths:
+            raise QueryCliError(
+                "At least one of vector_query, drive_query or image must be provided."
+            )
         for image_path in resolved_image_paths:
             if not image_path.is_file():
                 raise QueryCliError(f"Query image not found: {image_path}")
 
-        _report(progress, "search", status="started")
+        run_vector_search = vector_query is not None or bool(resolved_image_paths)
+        run_drive_search = drive_query is not None
+
+        _report(
+            progress,
+            "search",
+            status="started",
+            drive_included=run_drive_search,
+            vector_included=run_vector_search,
+        )
         logger.info(
-            "query phase=search started drive_query=%s vector_query=%s image_count=%s limit=%s min_score=%s",
+            "query phase=search started drive_query=%s vector_query=%s image_count=%s "
+            "limit=%s min_score=%s drive_included=%s vector_included=%s",
             drive_query,
             vector_query,
             len(resolved_image_paths),
             limit,
             min_score,
+            run_drive_search,
+            run_vector_search,
         )
-        with ThreadPoolExecutor(max_workers=2) as executor:
-            full_text_future = executor.submit(self._google_drive.search, drive_query, limit)
-            vector_future = executor.submit(
-                self._backend.search,
-                vector_query,
-                resolved_image_paths,
-                limit,
-                min_score,
-            )
-            full_text_results = full_text_future.result()
-            vector_candidates = vector_future.result()
+        full_text_results, vector_candidates = self._execute_searches(
+            drive_query=drive_query,
+            vector_query=vector_query,
+            image_paths=resolved_image_paths,
+            limit=limit,
+            min_score=min_score,
+            run_drive_search=run_drive_search,
+            run_vector_search=run_vector_search,
+        )
 
         logger.info(
-            "query phase=search finished full_text_count=%s vector_count=%s",
+            "query phase=search finished full_text_count=%s vector_count=%s "
+            "drive_included=%s vector_included=%s",
             len(full_text_results),
             len(vector_candidates),
+            run_drive_search,
+            run_vector_search,
         )
         _report(
             progress,
@@ -141,6 +158,8 @@ class QueryOrchestrator:
             status="finished",
             full_text_count=len(full_text_results),
             vector_count=len(vector_candidates),
+            drive_included=run_drive_search,
+            vector_included=run_vector_search,
         )
 
         vector_file_ids = list(dict.fromkeys(result.google_file_id for result in vector_candidates))
@@ -190,7 +209,11 @@ class QueryOrchestrator:
             query_plan={
                 "vector_query": vector_query,
                 "drive_query": drive_query,
-                "image_paths": [_path_as_posix(path) for path in resolved_image_paths],
+                "image_paths": (
+                    [_path_as_posix(path) for path in resolved_image_paths]
+                    if run_vector_search
+                    else None
+                ),
                 "limit": limit,
                 "min_score": min_score,
             },
@@ -202,6 +225,8 @@ class QueryOrchestrator:
                 vector_candidates=vector_candidates,
                 vector_results=vector_results,
                 full_text_results=full_text_results,
+                run_vector_search=run_vector_search,
+                run_drive_search=run_drive_search,
             )
             _report(
                 progress,
@@ -274,6 +299,45 @@ class QueryOrchestrator:
             warning_count=len(download_batch.warnings),
             warnings=download_batch.warnings,
         )
+
+    def _execute_searches(
+        self,
+        *,
+        drive_query: str | None,
+        vector_query: str | None,
+        image_paths: list[Path],
+        limit: int,
+        min_score: float | None,
+        run_drive_search: bool,
+        run_vector_search: bool,
+    ) -> tuple[list[FullTextSearchResult], list[VectorFileSearchResult]]:
+        vector_query_text = vector_query if vector_query is not None else ""
+        if run_drive_search and run_vector_search:
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                full_text_future = executor.submit(
+                    self._google_drive.search, drive_query, limit
+                )
+                vector_future = executor.submit(
+                    self._backend.search,
+                    vector_query_text,
+                    image_paths,
+                    limit,
+                    min_score,
+                )
+                return full_text_future.result(), vector_future.result()
+
+        full_text_results: list[FullTextSearchResult] = []
+        vector_candidates: list[VectorFileSearchResult] = []
+        if run_drive_search:
+            full_text_results = self._google_drive.search(drive_query, limit)
+        if run_vector_search:
+            vector_candidates = self._backend.search(
+                vector_query_text,
+                image_paths,
+                limit,
+                min_score,
+            )
+        return full_text_results, vector_candidates
 
     def _download_union_files(
         self,
@@ -493,7 +557,14 @@ def _download_skip_reason(
     vector_candidates: list[VectorFileSearchResult],
     vector_results: list[VectorFileSearchResult],
     full_text_results: list[FullTextSearchResult],
+    *,
+    run_vector_search: bool,
+    run_drive_search: bool,
 ) -> str:
+    if not run_drive_search and not vector_candidates:
+        return "vector_search_no_results"
+    if not run_vector_search and not full_text_results:
+        return "drive_search_no_results"
     if not full_text_results and not vector_candidates:
         return "no_full_text_or_vector_results"
     if not full_text_results and not vector_results:

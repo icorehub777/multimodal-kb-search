@@ -156,6 +156,175 @@ class CliTests(unittest.TestCase):
         )
         self.assertIn("warning_count=0", stderr.getvalue())
 
+    def _run_query_with_mocks(
+        self,
+        *,
+        argv: list[str],
+        run_result: QueryRunResult,
+        log_context: QueryLogContext,
+    ) -> tuple[int, "FakeOrchestrator", StringIO, StringIO, "unittest.mock.MagicMock"]:
+        class FakeOrchestrator:
+            def run(self, **kwargs):
+                self.kwargs = kwargs
+                return run_result
+
+        fake_orchestrator = FakeOrchestrator()
+        with patch("kbsearch_cli.__main__.load_query_cli_config") as load_config, patch(
+            "kbsearch_cli.__main__.reserve_output_directory",
+        ), patch(
+            "kbsearch_cli.__main__._run_startup_probe",
+        ) as run_startup_probe, patch(
+            "kbsearch_cli.__main__.create_query_orchestrator",
+            return_value=fake_orchestrator,
+        ), patch(
+            "kbsearch_cli.__main__.new_query_run_id",
+            return_value=log_context.run_id,
+        ), patch(
+            "kbsearch_cli.__main__.create_query_log_context",
+            return_value=log_context,
+        ), patch(
+            "kbsearch_cli.__main__.configure_query_cli_logging",
+        ), patch(
+            "kbsearch_cli.__main__.cleanup_old_query_log_files",
+            return_value=0,
+        ), redirect_stdout(StringIO()) as stdout, redirect_stderr(StringIO()) as stderr:
+            load_config.return_value.query_logs_root = Path("C:/tmp/logs")
+            load_config.return_value.query_log_retention_days = 14
+            exit_code = main(argv)
+        return exit_code, fake_orchestrator, stdout, stderr, run_startup_probe
+
+    def _make_empty_run_result(self, bundle_path: Path) -> QueryRunResult:
+        bundle = QueryResultBundle(
+            path=bundle_path,
+            query_plan_path=bundle_path / "query_plan.json",
+            full_text_results_path=bundle_path / "full_text_results.json",
+            vector_results_path=bundle_path / "vector_results.json",
+            full_text_results=[],
+            vector_results=[],
+            download_failures_path=bundle_path / "download_failures.json",
+            warnings_path=bundle_path / "warnings.json",
+        )
+        return QueryRunResult(
+            bundle=bundle,
+            full_text_count=0,
+            vector_count=0,
+            vector_accessible_count=0,
+            union_count=0,
+            download_count=0,
+            downloaded_files=[],
+            download_failure_count=0,
+            download_failures=[],
+            warning_count=0,
+            warnings=[],
+        )
+
+    def test_query_accepts_only_vector_query_and_probes_secure_backend(self):
+        bundle_path = Path("C:/tmp/query/20260708-100000-vector-only")
+        run_result = self._make_empty_run_result(bundle_path)
+        log_context = QueryLogContext(
+            run_id="runvec001",
+            log_path=Path("C:/tmp/logs/kbsearch-20260708-100000-runvec001.log"),
+        )
+
+        exit_code, orchestrator, _stdout, _stderr, run_startup_probe = self._run_query_with_mocks(
+            argv=[
+                "query",
+                "--output-dir",
+                bundle_path.as_posix(),
+                "--vector-query",
+                "semantic only",
+            ],
+            run_result=run_result,
+            log_context=log_context,
+        )
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(orchestrator.kwargs["vector_query"], "semantic only")
+        self.assertIsNone(orchestrator.kwargs["drive_query"])
+        self.assertEqual(
+            run_startup_probe.call_args.kwargs.get("probe_secure_backend"),
+            True,
+        )
+
+    def test_query_accepts_only_drive_query_and_skips_secure_backend_probe(self):
+        bundle_path = Path("C:/tmp/query/20260708-100000-drive-only")
+        run_result = self._make_empty_run_result(bundle_path)
+        log_context = QueryLogContext(
+            run_id="rundrv001",
+            log_path=Path("C:/tmp/logs/kbsearch-20260708-100000-rundrv001.log"),
+        )
+
+        exit_code, orchestrator, _stdout, _stderr, run_startup_probe = self._run_query_with_mocks(
+            argv=[
+                "query",
+                "--output-dir",
+                bundle_path.as_posix(),
+                "--drive-query",
+                "fullText contains 'alpha'",
+            ],
+            run_result=run_result,
+            log_context=log_context,
+        )
+
+        self.assertEqual(exit_code, 0)
+        self.assertIsNone(orchestrator.kwargs["vector_query"])
+        self.assertEqual(
+            orchestrator.kwargs["drive_query"],
+            "fullText contains 'alpha'",
+        )
+        self.assertEqual(orchestrator.kwargs["image_paths"], [])
+        self.assertEqual(
+            run_startup_probe.call_args.kwargs.get("probe_secure_backend"),
+            False,
+        )
+
+    def test_query_accepts_only_image_and_probes_secure_backend(self):
+        bundle_path = Path("C:/tmp/query/20260708-100000-image-only")
+        run_result = self._make_empty_run_result(bundle_path)
+        log_context = QueryLogContext(
+            run_id="runimg001",
+            log_path=Path("C:/tmp/logs/kbsearch-20260708-100000-runimg001.log"),
+        )
+
+        exit_code, orchestrator, _stdout, _stderr, run_startup_probe = self._run_query_with_mocks(
+            argv=[
+                "query",
+                "--output-dir",
+                bundle_path.as_posix(),
+                "--image",
+                "C:/tmp/user-01.png",
+            ],
+            run_result=run_result,
+            log_context=log_context,
+        )
+
+        self.assertEqual(exit_code, 0)
+        self.assertIsNone(orchestrator.kwargs["vector_query"])
+        self.assertIsNone(orchestrator.kwargs["drive_query"])
+        self.assertEqual(
+            orchestrator.kwargs["image_paths"],
+            [Path("C:/tmp/user-01.png")],
+        )
+        self.assertEqual(
+            run_startup_probe.call_args.kwargs.get("probe_secure_backend"),
+            True,
+        )
+
+    def test_query_rejects_when_no_search_route_provided(self):
+        with redirect_stderr(StringIO()) as stderr:
+            exit_code = main(
+                [
+                    "query",
+                    "--output-dir",
+                    "C:/tmp/query/none",
+                ]
+            )
+
+        self.assertEqual(exit_code, 1)
+        self.assertIn("--vector-query", stderr.getvalue())
+        self.assertIn("--drive-query", stderr.getvalue())
+        self.assertIn("--image", stderr.getvalue())
+
     def test_render_pdf_pages_renders_selected_pages_without_loading_query_config(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

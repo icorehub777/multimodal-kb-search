@@ -69,7 +69,7 @@ LibreOffice 的 `soffice` 必須可從系統 `PATH` 找到，並須設定 `KBSEA
 
 ## 手動測試
 
-執行前請確認 `secure_backend` 已在本機啟動（`KBSEARCH_SECURE_BACKEND_BASE_URL` 可連線）。在 `query_cli/` 目錄下執行：
+若要做向量搜尋，執行前請確認 `secure_backend` 已在本機啟動（`KBSEARCH_SECURE_BACKEND_BASE_URL` 可連線）後，在 `query_cli/` 目錄下執行：
 
 ```powershell
 kbsearch query `
@@ -84,11 +84,15 @@ kbsearch query `
 參數說明：
 
 - `--output-dir`：本次查詢結果的輸出資料夾路徑，必須使用尚不存在的新路徑；父目錄不存在時會自動建立。
-- `--vector-query`：語意查詢文字；若有附圖，在此描述問題與圖片內容，連同 `--image` 一併送給 `secure_backend` 做向量搜尋。向量搜尋僅涵蓋 importer 已同步的文件。
-- `--drive-query`：Google Drive API `q` 語法，原樣送出，用於檔名、全文或 metadata 的關鍵字搜尋。搜尋範圍依目前使用者的 Drive 權限決定，不受 importer 同步來源資料夾限制。
-- `--image`：本機圖片路徑（PNG/JPEG 等），可重複指定；省略則僅以文字做向量搜尋。
+- `--vector-query`：語意查詢文字；可與 `--image` 一起或單獨送給 `secure_backend` 做向量搜尋。向量搜尋僅涵蓋 importer 已同步的文件。與 `--image` 皆省略時不執行向量搜尋。
+- `--drive-query`：Google Drive API `q` 語法，原樣送出，用於檔名、全文或 metadata 的關鍵字搜尋。搜尋範圍依目前使用者的 Drive 權限決定，不受 importer 同步來源資料夾限制。省略時不執行關鍵字搜尋。
+- `--image`：本機圖片路徑（PNG/JPEG 等），可重複指定；可單獨指定（不需 `--vector-query`），此時以空字串 query 搭配圖片做向量搜尋。也可與 `--vector-query` 併用。
 - `--limit`：向量與 Drive 搜尋各別的結果筆數上限，預設 `10`。
 - `--min-score`：向量相似度下限；省略則不過濾低分結果。
+
+`--vector-query`、`--drive-query`、`--image` 至少要提供其中一個；三者皆未提供時指令會顯示失敗。
+
+Startup 檢查會依實際路線調整：`secure_backend /healthz` 只在有 `--vector-query` 或 `--image` 時才呼叫；Google Drive 授權、`soffice`、CJK 字型檢查一律執行（Drive 用於存取權檢查與檔案下載，兩條路線皆需要）。
 
 `--output-dir` 與 `--image` 均可使用絕對或相對路徑；相對路徑以執行指令時的目前工作目錄解析。
 

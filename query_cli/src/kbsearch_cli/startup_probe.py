@@ -28,10 +28,12 @@ def probe_startup_environment(
     config: QueryCliConfig,
     *,
     create_drive_service: CreateDriveService | None = None,
+    probe_secure_backend: bool = True,
 ) -> StartupProbeResult:
     """Verify local config paths and external services before running a query."""
     _probe_local_tools(config)
-    _probe_secure_backend(config)
+    if probe_secure_backend:
+        _probe_secure_backend(config)
     google_drive_authenticated = _probe_google_drive_if_configured(
         config,
         create_drive_service=create_drive_service,

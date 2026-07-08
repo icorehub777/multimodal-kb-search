@@ -95,6 +95,26 @@ class StartupProbeTests(unittest.TestCase):
                 ):
                     probe_startup_environment(config)
 
+    def test_probe_skips_secure_backend_when_probe_secure_backend_false(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = _sample_config(Path(temp_dir))
+
+            with patch("shutil.which", return_value="soffice"), patch(
+                "requests.get"
+            ) as requests_get:
+                result = probe_startup_environment(config, probe_secure_backend=False)
+
+        requests_get.assert_not_called()
+        self.assertFalse(result.google_drive_authenticated)
+        self.assertEqual(result.secure_backend_base_url, "http://127.0.0.1:8000")
+
+    def test_probe_still_checks_local_tools_when_secure_backend_skipped(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = _sample_config(Path(temp_dir), oauth_client_exists=False)
+
+            with self.assertRaisesRegex(ConfigError, "Google OAuth client not found"):
+                probe_startup_environment(config, probe_secure_backend=False)
+
     def test_probe_validates_google_drive_when_token_cache_exists(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             config = _sample_config(Path(temp_dir), token_cache_exists=True)

@@ -61,18 +61,24 @@ def _run_startup_probe(
     config,
     logger: logging.Logger,
     progress: ProgressCallback,
+    *,
+    probe_secure_backend: bool,
 ) -> None:
-    progress("startup_probe", {"status": "started"})
+    progress("startup_probe", {"status": "started", "probe_secure_backend": probe_secure_backend})
     logger.info(
         "startup_probe started secure_backend_base_url=%s oauth_client=%s token_cache=%s "
-        "cjk_font_path=%s",
+        "cjk_font_path=%s probe_secure_backend=%s",
         config.secure_backend_base_url,
         config.google_oauth_client_config,
         config.google_oauth_token_cache,
         config.cjk_font_path,
+        probe_secure_backend,
     )
     try:
-        result = probe_startup_environment(config)
+        result = probe_startup_environment(
+            config,
+            probe_secure_backend=probe_secure_backend,
+        )
     except Exception as exc:
         logger.exception(
             "startup_probe failed error=%s message=%s secure_backend_base_url=%s",
@@ -120,8 +126,8 @@ def main(argv: list[str] | None = None) -> int:
 
     query_parser = subparsers.add_parser("query")
     query_parser.add_argument("--output-dir", required=True)
-    query_parser.add_argument("--vector-query", required=True)
-    query_parser.add_argument("--drive-query", required=True)
+    query_parser.add_argument("--vector-query", default=None)
+    query_parser.add_argument("--drive-query", default=None)
     query_parser.add_argument("--image", action="append", default=[])
     query_parser.add_argument("--limit", type=int, default=10)
     query_parser.add_argument("--min-score", type=float, default=None)
@@ -174,6 +180,14 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "query":
+        if args.vector_query is None and args.drive_query is None and not args.image:
+            _write_terminal(
+                "Query failed: at least one of --vector-query, --drive-query or --image must be provided",
+                stream=sys.stderr,
+            )
+            return 1
+
+        do_vector_search = args.vector_query is not None or bool(args.image)
         logger: logging.Logger | None = None
         log_path: Path | None = None
         run_id = new_query_run_id()
@@ -236,7 +250,12 @@ def main(argv: list[str] | None = None) -> int:
             )
             reserve_output_directory(output_dir)
             logger.info("query output directory reserved output_dir=%s", output_dir)
-            _run_startup_probe(config, logger, progress)
+            _run_startup_probe(
+                config,
+                logger,
+                progress,
+                probe_secure_backend=do_vector_search,
+            )
             result = create_query_orchestrator(config).run(
                 output_dir=output_dir,
                 vector_query=args.vector_query,
