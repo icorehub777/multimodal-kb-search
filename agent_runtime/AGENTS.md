@@ -103,7 +103,7 @@ repo_root/
   vector_results.json
   download_failures.json
   warnings.json
- <safe_file_name>-<google_file_id_prefix>/
+  <safe_file_name>-<google_file_id_prefix>/
     <downloaded original file>
     pdf/
       document.pdf
