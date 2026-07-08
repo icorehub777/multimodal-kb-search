@@ -103,7 +103,7 @@ repo_root/
   vector_results.json
   download_failures.json
   warnings.json
-  <safe_file_name>-<google_file_id>/
+ <safe_file_name>-<google_file_id_prefix>/
     <downloaded original file>
     pdf/
       document.pdf
@@ -119,7 +119,7 @@ repo_root/
 - `vector_results.json` 是此使用者有權限存取的檔案的圖文向量庫的相似度查詢結果清單，屬於檔案與頁面層級結果，頁面結果會包含 `page_number` 與相似度分數。
 - `download_failures.json` 記錄無法完成 metadata 補查、產物目錄建立、下載或文件處理的檔案；沒有失敗時內容為空陣列。
 - `warnings.json` 記錄非失敗但會影響閱讀完整性的狀況；沒有警告時內容為空陣列。
-- 針對 Google Drive 查詢結果清單與相似度查詢結果清單的聯集檔案清單（`file_id` 去重） 中的每個檔案，都建立一個以 `<safe_file_name>-<google_file_id>` 命名的檔案子資料夾。
+- 針對 Google Drive 查詢結果清單與相似度查詢結果清單的聯集檔案清單（`file_id` 去重）中的每個檔案，都建立一個以 `<safe_file_name>-<google_file_id_prefix>` 命名的檔案子資料夾。`safe_file_name` 在前，`google_file_id` 前綴在後；前綴預設先取前 5 碼，若同一批查詢內發生名稱碰撞，則逐碼加長直到可區分。
 - 每個檔案子資料夾會保留該檔案自 Google Drive 下載的檔案；Google Docs 與 Google Slides 由 Drive API 匯出為 PDF，Google Sheet 匯出為 XLSX。
 - PDF、Word、PowerPoint、TXT、MD 另提供固定路徑 `pdf/document.pdf` 與逐頁 UTF-8 TXT；原始檔本身為 PDF 時仍會保留下載檔。
 - `pages/` 只包含向量搜尋命中的頁面，不會預先渲染關鍵字搜尋結果或整份文件。

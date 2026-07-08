@@ -349,6 +349,7 @@ class QueryOrchestrator:
         downloaded_files: list[DownloadedFileResult] = []
         failures: list[DownloadFailureResult] = []
         warnings: list[QueryWarningResult] = []
+        used_dir_names: set[str] = set()
         total = len(download_targets)
         for index, target in enumerate(download_targets, start=1):
             name = target.name
@@ -360,10 +361,12 @@ class QueryOrchestrator:
                     name = metadata.name
                     mime_type = metadata.mime_type
                 stage = "prepare_directory"
-                file_dir = (
-                    bundle_path
-                    / f"{safe_path_name(name)}-{safe_path_name(target.google_file_id)}"
+                file_dir_name = _build_unique_file_dir_name(
+                    file_name=name,
+                    google_file_id=target.google_file_id,
+                    used_dir_names=used_dir_names,
                 )
+                file_dir = bundle_path / file_dir_name
                 file_dir.mkdir(parents=True, exist_ok=False)
                 _report(
                     progress,
@@ -576,6 +579,39 @@ def _path_as_posix(path: Path | str) -> str:
     if isinstance(path, Path):
         return path.as_posix()
     return str(path).replace("\\", "/")
+
+
+def _build_unique_file_dir_name(
+    file_name: str,
+    google_file_id: str,
+    *,
+    used_dir_names: set[str],
+    start_length: int = 5,
+) -> str:
+    safe_file_name = safe_path_name(file_name).strip(" .")
+    if not safe_file_name:
+        safe_file_name = "file"
+    safe_file_id = safe_path_name(google_file_id).strip(" .")
+    if not safe_file_id:
+        safe_file_id = "file"
+    prefix_length = min(start_length, len(safe_file_id))
+    while True:
+        id_prefix = safe_file_id[:prefix_length].strip(" .")
+        if not id_prefix:
+            id_prefix = "file"
+        candidate = f"{safe_file_name}-{id_prefix}"
+        if candidate not in used_dir_names:
+            used_dir_names.add(candidate)
+            return candidate
+        if prefix_length >= len(safe_file_id):
+            suffix = 2
+            while True:
+                fallback = f"{safe_file_name}-{safe_file_id}-{suffix}"
+                if fallback not in used_dir_names:
+                    used_dir_names.add(fallback)
+                    return fallback
+                suffix += 1
+        prefix_length += 1
 
 
 def _report(

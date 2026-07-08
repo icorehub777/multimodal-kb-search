@@ -147,6 +147,8 @@ Query progress: phase=query status=failed run_id=a1b2c3d4 ...
 
 所有檔案皆成功時，`status` 為 `finished` 且 `download_failure_count` 為 `0`。若單一檔案在 metadata 補查、產物目錄建立、下載或文件處理階段失敗，該檔案會被略過，其餘檔案繼續處理；此時指令仍以成功 exit code 完成，但 `status` 為 `finished_with_errors`。
 
+`download_count` 是成功下載的檔案數量，不包含 `download_failure_count`。
+
 每筆失敗包含 `google_file_id`、檔名、失敗階段、錯誤類型、訊息與 `google_drive_url`，讓使用者可直接到 Google Drive 查看原檔。若檔案來自向量搜尋，`vector_page_numbers` 會列出命中頁碼；若來自關鍵字搜尋，`full_text_query` 會保留本次查詢條件。同時命中兩種搜尋時兩組資訊都會提供。完整清單同時寫入 `download_failures.json`。失敗檔案已建立的部分產物會保留供排錯。
 
 `warnings` 記錄非失敗但會影響閱讀完整性的狀況，完整清單同時寫入 `warnings.json`。例如 `vector_pages_unrendered` 表示向量搜尋命中頁碼存在，但該檔案沒有產生對應的 `pages/*.png`；常見原因是 Drive 上同一個 `file_id` 的檔案在同步後變成不支援文件處理的 MIME type。此時檔案仍算下載成功，但 Agent 應改以原始下載檔或其他工具能力判讀，並在必要時向使用者說明該向量命中頁面無法直接閱讀。
@@ -163,7 +165,7 @@ Query progress: phase=query status=failed run_id=a1b2c3d4 ...
 <output_dir>/
   download_failures.json
   warnings.json
-  <safe_file_name>-<google_file_id>/
+  <safe_file_name>-<google_file_id_prefix>/
     <downloaded file>
     pdf/
       document.pdf
@@ -174,7 +176,7 @@ Query progress: phase=query status=failed run_id=a1b2c3d4 ...
       0003.png
 ```
 
-- `download_count` 是成功下載的檔案數量，不包含 `download_failure_count`。
+- 每個文件子資料夾名稱為 `<safe_file_name>-<google_file_id_prefix>`：`safe_file_name` 在前，`google_file_id` 前綴在後；前綴預設先取前 5 碼，若同一批查詢發生撞名，則逐碼加長至可區分。
 - PDF、Word、PowerPoint、TXT、MD 會產生固定路徑 `pdf/document.pdf` 與逐頁 UTF-8 TXT。
 - `pages/` 只包含向量搜尋命中的頁面。
 - 圖片只在向量搜尋命中時產生 `pages/0001.png`。
@@ -186,9 +188,9 @@ Agent 可指定 PDF 路徑與頁碼，將額外需要閱讀的頁面轉為 PNG�
 
 ```powershell
 kbsearch render-pdf-pages `
-  --pdf "C:\path\to\<safe_file_name>-<google_file_id>\pdf\document.pdf" `
+  --pdf "C:\path\to\<safe_file_name>-<google_file_id_prefix>\pdf\document.pdf" `
   --pages "3,5,8-10" `
-  --output-dir "C:\path\to\<safe_file_name>-<google_file_id>\pages"
+  --output-dir "C:\path\to\<safe_file_name>-<google_file_id_prefix>\pages"
 ```
 
 - `--pdf`：要處理的 `pdf/document.pdf` 路徑。

@@ -11,7 +11,7 @@ from kbsearch_cli.models import (
 )
 from kbsearch_cli.errors import QueryCliError
 from kbsearch_cli.orchestrator import QueryOrchestrator
-from kbsearch_cli.output import QueryResultWriter
+from kbsearch_cli.output import QueryResultWriter, safe_path_name
 from kbsearch_cli.google_drive import safe_download_name
 from kbsearch_cli.rendering import DocumentPageRenderer, classify_document_type
 
@@ -129,6 +129,24 @@ def _create_output_dir(root: str, name: str) -> Path:
     output_dir = Path(root) / name
     output_dir.mkdir()
     return output_dir
+
+
+def _expected_dir_names(file_infos: list[tuple[str, str]], start: int = 5) -> dict[str, str]:
+    used: set[str] = set()
+    result: dict[str, str] = {}
+    for file_id, file_name in file_infos:
+        safe_name = safe_path_name(file_name).strip(" .") or "file"
+        width = min(start, len(file_id))
+        while True:
+            candidate = f"{safe_name}-{file_id[:width]}"
+            if candidate not in used:
+                used.add(candidate)
+                result[file_id] = candidate
+                break
+            if width >= len(file_id):
+                raise AssertionError(f"unable to find unique prefix for {file_id}")
+            width += 1
+    return result
 
 
 class QueryOrchestratorTests(unittest.TestCase):
@@ -340,8 +358,9 @@ class QueryOrchestratorTests(unittest.TestCase):
             )
             bundle = result.bundle
 
-            file_dir = bundle.path / "Alpha.pdf-file-1"
-            beta_dir = bundle.path / "Beta.pdf-file-2"
+            dir_names = _expected_dir_names([("file-1", "Alpha.pdf"), ("file-2", "Beta.pdf")])
+            file_dir = bundle.path / dir_names["file-1"]
+            beta_dir = bundle.path / dir_names["file-2"]
             self.assertTrue((file_dir / "Alpha.pdf").exists())
             self.assertTrue((file_dir / "text" / "0001.txt").exists())
             self.assertTrue((file_dir / "pages" / "0002.png").exists())
@@ -351,7 +370,7 @@ class QueryOrchestratorTests(unittest.TestCase):
             self.assertFalse((bundle.path / "Gamma.pdf-file-3").exists())
             self.assertEqual(
                 google_drive.downloads,
-                [("file-1", "Alpha.pdf-file-1"), ("file-2", "Beta.pdf-file-2")],
+                [("file-1", dir_names["file-1"]), ("file-2", dir_names["file-2"])],
             )
             self.assertEqual(google_drive.drive_queries, ["fullText contains 'alpha' and trashed = false"])
             self.assertEqual(backend.calls, [("semantic alpha", [image_path], 10, 0.5)])
@@ -405,7 +424,10 @@ class QueryOrchestratorTests(unittest.TestCase):
                 min_score=0.5,
             )
 
-            self.assertTrue((result.bundle.path / "Orders-sheet-1" / "Orders.xlsx").exists())
+            dir_names = _expected_dir_names([("sheet-1", "Orders"), ("file-1", "file-1.pdf")])
+            self.assertTrue(
+                (result.bundle.path / dir_names["sheet-1"] / "Orders.xlsx").exists()
+            )
             self.assertEqual(result.downloaded_files[0].page_paths, [])
             self.assertEqual(
                 processor.processed,
@@ -452,7 +474,8 @@ class QueryOrchestratorTests(unittest.TestCase):
                 min_score=0.5,
             )
 
-            csv_dir = result.bundle.path / "Orders.csv-csv-1"
+            dir_names = _expected_dir_names([("csv-1", "Orders.csv")])
+            csv_dir = result.bundle.path / dir_names["csv-1"]
             failures = json.loads(
                 result.bundle.download_failures_path.read_text(encoding="utf-8")
             )
@@ -570,7 +593,7 @@ class QueryOrchestratorTests(unittest.TestCase):
             )
         )
 
-    def test_run_uses_file_id_suffix_when_normalized_file_names_collide(self):
+    def test_run_increases_file_id_prefix_length_when_short_prefix_collides(self):
         class CollidingGoogleDriveClient(FakeGoogleDriveClient):
             def search(self, drive_query, limit):
                 return [
@@ -603,9 +626,13 @@ class QueryOrchestratorTests(unittest.TestCase):
             )
             bundle = result.bundle
 
-            self.assertTrue((bundle.path / "A_.pdf-file-1").exists())
-            self.assertTrue((bundle.path / "A_.pdf-file-2").exists())
-            self.assertEqual([download[1] for download in google_drive.downloads], ["A_.pdf-file-1", "A_.pdf-file-2"])
+            dir_names = _expected_dir_names([("file-1", "A?.pdf"), ("file-2", "A:.pdf")])
+            self.assertTrue((bundle.path / dir_names["file-1"]).exists())
+            self.assertTrue((bundle.path / dir_names["file-2"]).exists())
+            self.assertEqual(
+                [download[1] for download in google_drive.downloads],
+                [dir_names["file-1"], dir_names["file-2"]],
+            )
 
     def test_run_resolves_vector_metadata_in_one_batch(self):
         class ThreeResultBackendClient:
@@ -658,11 +685,12 @@ class QueryOrchestratorTests(unittest.TestCase):
                 min_score=0.5,
             ).bundle
 
-            self.assertTrue((bundle.path / "Alpha.pdf-file-1").exists())
-            self.assertTrue((bundle.path / "Beta.pdf-file-2").exists())
+            dir_names = _expected_dir_names([("file-1", "Alpha.pdf"), ("file-2", "Beta.pdf")])
+            self.assertTrue((bundle.path / dir_names["file-1"]).exists())
+            self.assertTrue((bundle.path / dir_names["file-2"]).exists())
             self.assertEqual(
                 google_drive.downloads,
-                [("file-1", "Alpha.pdf-file-1"), ("file-2", "Beta.pdf-file-2")],
+                [("file-1", dir_names["file-1"]), ("file-2", dir_names["file-2"])],
             )
 
     def test_run_downloads_vector_only_files_not_in_full_text_results(self):
@@ -689,9 +717,12 @@ class QueryOrchestratorTests(unittest.TestCase):
                 min_score=0.5,
             ).bundle
 
-            self.assertTrue((bundle.path / "Alpha.pdf-file-1").exists())
-            self.assertTrue((bundle.path / "Beta.pdf-file-2").exists())
-            self.assertTrue((bundle.path / "Z.pdf-file-9").exists())
+            dir_names = _expected_dir_names(
+                [("file-1", "Alpha.pdf"), ("file-2", "Beta.pdf"), ("file-9", "Z.pdf")]
+            )
+            self.assertTrue((bundle.path / dir_names["file-1"]).exists())
+            self.assertTrue((bundle.path / dir_names["file-2"]).exists())
+            self.assertTrue((bundle.path / dir_names["file-9"]).exists())
             self.assertEqual(len(google_drive.downloads), 3)
 
     def test_run_skips_drive_search_when_drive_query_is_none(self):
