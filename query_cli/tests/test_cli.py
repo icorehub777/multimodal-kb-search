@@ -325,6 +325,67 @@ class CliTests(unittest.TestCase):
         self.assertIn("--drive-query", stderr.getvalue())
         self.assertIn("--image", stderr.getvalue())
 
+    def test_query_rejects_blank_drive_query_as_missing_route(self):
+        with redirect_stderr(StringIO()) as stderr:
+            exit_code = main(
+                [
+                    "query",
+                    "--output-dir",
+                    "C:/tmp/query/blank-drive",
+                    "--drive-query",
+                    "   ",
+                ]
+            )
+
+        self.assertEqual(exit_code, 1)
+        self.assertIn("--drive-query", stderr.getvalue())
+
+    def test_query_rejects_blank_vector_query_without_image(self):
+        with redirect_stderr(StringIO()) as stderr:
+            exit_code = main(
+                [
+                    "query",
+                    "--output-dir",
+                    "C:/tmp/query/blank-vector",
+                    "--vector-query",
+                    "   ",
+                ]
+            )
+
+        self.assertEqual(exit_code, 1)
+        self.assertIn("--vector-query", stderr.getvalue())
+        self.assertIn("--image", stderr.getvalue())
+
+    def test_query_treats_blank_vector_query_as_none_when_image_provided(self):
+        bundle_path = Path("C:/tmp/query/20260709-blank-vector-with-image")
+        run_result = self._make_empty_run_result(bundle_path)
+        log_context = QueryLogContext(
+            run_id="runimgblank",
+            log_path=Path("C:/tmp/logs/kbsearch-20260709-010000-runimgblank.log"),
+        )
+
+        exit_code, orchestrator, _stdout, _stderr, run_startup_probe = self._run_query_with_mocks(
+            argv=[
+                "query",
+                "--output-dir",
+                bundle_path.as_posix(),
+                "--vector-query",
+                "   ",
+                "--image",
+                "C:/tmp/user-01.png",
+            ],
+            run_result=run_result,
+            log_context=log_context,
+        )
+
+        self.assertEqual(exit_code, 0)
+        self.assertIsNone(orchestrator.kwargs["vector_query"])
+        self.assertEqual(orchestrator.kwargs["image_paths"], [Path("C:/tmp/user-01.png")])
+        self.assertEqual(
+            run_startup_probe.call_args.kwargs.get("probe_secure_backend"),
+            True,
+        )
+
     def test_render_pdf_pages_renders_selected_pages_without_loading_query_config(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

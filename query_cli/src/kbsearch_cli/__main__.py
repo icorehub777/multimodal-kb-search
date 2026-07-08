@@ -26,6 +26,13 @@ from kbsearch_cli.startup_probe import probe_startup_environment
 ProgressCallback = Callable[[str, dict[str, object]], None]
 
 
+def _normalize_optional_query(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip()
+    return normalized if normalized else None
+
+
 def _write_terminal(
     message: str,
     *,
@@ -180,14 +187,17 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "query":
-        if args.vector_query is None and args.drive_query is None and not args.image:
+        vector_query = _normalize_optional_query(args.vector_query)
+        drive_query = _normalize_optional_query(args.drive_query)
+
+        if vector_query is None and drive_query is None and not args.image:
             _write_terminal(
                 "Query failed: at least one of --vector-query, --drive-query or --image must be provided",
                 stream=sys.stderr,
             )
             return 1
 
-        do_vector_search = args.vector_query is not None or bool(args.image)
+        do_vector_search = vector_query is not None or bool(args.image)
         logger: logging.Logger | None = None
         log_path: Path | None = None
         run_id = new_query_run_id()
@@ -258,8 +268,8 @@ def main(argv: list[str] | None = None) -> int:
             )
             result = create_query_orchestrator(config).run(
                 output_dir=output_dir,
-                vector_query=args.vector_query,
-                drive_query=args.drive_query,
+                vector_query=vector_query,
+                drive_query=drive_query,
                 image_paths=[Path(path) for path in args.image],
                 limit=args.limit,
                 min_score=args.min_score,
