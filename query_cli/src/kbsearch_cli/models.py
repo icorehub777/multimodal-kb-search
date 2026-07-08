@@ -52,6 +52,17 @@ class DownloadedFileResult:
     text_paths: list[Path]
     page_paths: list[Path]
 
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "google_file_id": self.google_file_id,
+            "name": self.name,
+            "directory": self.directory.as_posix(),
+            "source_path": self.source_path.as_posix(),
+            "pdf_path": self.pdf_path.as_posix() if self.pdf_path is not None else None,
+            "text_paths": [path.as_posix() for path in self.text_paths],
+            "page_paths": [path.as_posix() for path in self.page_paths],
+        }
+
 
 @dataclass(frozen=True)
 class DownloadFailureResult:

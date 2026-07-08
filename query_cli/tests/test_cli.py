@@ -141,6 +141,35 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["full_text_count"], 1)
         self.assertEqual(payload["vector_count"], 2)
         self.assertEqual(payload["download_count"], 1)
+        self.assertEqual(
+            payload["downloaded_files"],
+            [
+                {
+                    "google_file_id": "file-1",
+                    "name": "Alpha.pdf",
+                    "directory": (bundle_path / "Alpha.pdf-file-1").as_posix(),
+                    "source_path": (
+                        bundle_path / "Alpha.pdf-file-1" / "Alpha.pdf"
+                    ).as_posix(),
+                    "pdf_path": (
+                        bundle_path / "Alpha.pdf-file-1" / "Alpha.pdf"
+                    ).as_posix(),
+                    "text_paths": [
+                        (
+                            bundle_path
+                            / "Alpha.pdf-file-1"
+                            / "text"
+                            / "0001.txt"
+                        ).as_posix(),
+                    ],
+                    "page_paths": [
+                        (
+                            bundle_path / "Alpha.pdf-file-1" / "0001.png"
+                        ).as_posix(),
+                    ],
+                }
+            ],
+        )
         self.assertEqual(payload["download_failure_count"], 0)
         self.assertEqual(payload["download_failures"], [])
         self.assertEqual(payload["warning_count"], 0)

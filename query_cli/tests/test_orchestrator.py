@@ -10,7 +10,7 @@ from kbsearch_cli.models import (
     VectorFileSearchResult,
 )
 from kbsearch_cli.errors import QueryCliError
-from kbsearch_cli.orchestrator import QueryOrchestrator
+from kbsearch_cli.orchestrator import QueryOrchestrator, _build_unique_file_dir_name
 from kbsearch_cli.output import QueryResultWriter, safe_path_name
 from kbsearch_cli.google_drive import safe_download_name
 from kbsearch_cli.rendering import DocumentPageRenderer, classify_document_type
@@ -150,6 +150,47 @@ def _expected_dir_names(file_infos: list[tuple[str, str]], start: int = 5) -> di
 
 
 class QueryOrchestratorTests(unittest.TestCase):
+    def test_build_unique_file_dir_name_uses_five_character_prefix(self):
+        used: set[str] = set()
+
+        self.assertEqual(
+            _build_unique_file_dir_name(
+                "Alpha.pdf",
+                "abcde12345",
+                used_dir_names=used,
+            ),
+            "Alpha.pdf-abcde",
+        )
+
+    def test_build_unique_file_dir_name_extends_prefix_on_collision(self):
+        used: set[str] = set()
+
+        first = _build_unique_file_dir_name(
+            "Alpha.pdf",
+            "abcde12345",
+            used_dir_names=used,
+        )
+        second = _build_unique_file_dir_name(
+            "Alpha.pdf",
+            "abcdf67890",
+            used_dir_names=used,
+        )
+
+        self.assertEqual(first, "Alpha.pdf-abcde")
+        self.assertEqual(second, "Alpha.pdf-abcdf")
+
+    def test_build_unique_file_dir_name_sanitizes_windows_edge_cases(self):
+        used: set[str] = set()
+
+        self.assertEqual(
+            _build_unique_file_dir_name(
+                " .",
+                " abcde. ",
+                used_dir_names=used,
+            ),
+            "untitled-abcde",
+        )
+
     def test_run_records_metadata_failure_and_continues(self):
         class NoVectorBackendClient:
             def search(self, query, image_paths, limit, min_score):
@@ -626,12 +667,11 @@ class QueryOrchestratorTests(unittest.TestCase):
             )
             bundle = result.bundle
 
-            dir_names = _expected_dir_names([("file-1", "A?.pdf"), ("file-2", "A:.pdf")])
-            self.assertTrue((bundle.path / dir_names["file-1"]).exists())
-            self.assertTrue((bundle.path / dir_names["file-2"]).exists())
+            self.assertTrue((bundle.path / "A_.pdf-file-").exists())
+            self.assertTrue((bundle.path / "A_.pdf-file-2").exists())
             self.assertEqual(
                 [download[1] for download in google_drive.downloads],
-                [dir_names["file-1"], dir_names["file-2"]],
+                ["A_.pdf-file-", "A_.pdf-file-2"],
             )
 
     def test_run_resolves_vector_metadata_in_one_batch(self):

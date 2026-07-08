@@ -39,6 +39,9 @@ def build_query_success_payload(
         "full_text_count": result.full_text_count,
         "vector_count": result.vector_count,
         "download_count": result.download_count,
+        "downloaded_files": [
+            downloaded_file.to_dict() for downloaded_file in result.downloaded_files
+        ],
         "download_failure_count": result.download_failure_count,
         "download_failures_path": result.bundle.download_failures_path.as_posix(),
         "warning_count": result.warning_count,

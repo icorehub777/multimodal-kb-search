@@ -5,6 +5,7 @@ from pathlib import Path
 
 from kbsearch_cli.cli_output import build_query_success_payload, format_progress_message
 from kbsearch_cli.models import (
+    DownloadedFileResult,
     DownloadFailureResult,
     FullTextSearchResult,
     QueryResultBundle,
@@ -56,7 +57,22 @@ class CliOutputTests(unittest.TestCase):
                 vector_accessible_count=4,
                 union_count=4,
                 download_count=3,
-                downloaded_files=[],
+                downloaded_files=[
+                    DownloadedFileResult(
+                        google_file_id="file-1",
+                        name="Alpha.pdf",
+                        directory=bundle_dir / "Alpha.pdf-abcde",
+                        source_path=bundle_dir / "Alpha.pdf-abcde" / "Alpha.pdf",
+                        pdf_path=bundle_dir / "Alpha.pdf-abcde" / "pdf" / "document.pdf",
+                        text_paths=[
+                            bundle_dir / "Alpha.pdf-abcde" / "text" / "0001.txt",
+                            bundle_dir / "Alpha.pdf-abcde" / "text" / "0002.txt",
+                        ],
+                        page_paths=[
+                            bundle_dir / "Alpha.pdf-abcde" / "pages" / "0002.png",
+                        ],
+                    )
+                ],
                 download_failure_count=1,
                 download_failures=[
                     DownloadFailureResult(
@@ -103,6 +119,41 @@ class CliOutputTests(unittest.TestCase):
                 "full_text_count": 1,
                 "vector_count": 4,
                 "download_count": 3,
+                "downloaded_files": [
+                    {
+                        "google_file_id": "file-1",
+                        "name": "Alpha.pdf",
+                        "directory": (bundle_dir / "Alpha.pdf-abcde").as_posix(),
+                        "source_path": (
+                            bundle_dir / "Alpha.pdf-abcde" / "Alpha.pdf"
+                        ).as_posix(),
+                        "pdf_path": (
+                            bundle_dir / "Alpha.pdf-abcde" / "pdf" / "document.pdf"
+                        ).as_posix(),
+                        "text_paths": [
+                            (
+                                bundle_dir
+                                / "Alpha.pdf-abcde"
+                                / "text"
+                                / "0001.txt"
+                            ).as_posix(),
+                            (
+                                bundle_dir
+                                / "Alpha.pdf-abcde"
+                                / "text"
+                                / "0002.txt"
+                            ).as_posix(),
+                        ],
+                        "page_paths": [
+                            (
+                                bundle_dir
+                                / "Alpha.pdf-abcde"
+                                / "pages"
+                                / "0002.png"
+                            ).as_posix(),
+                        ],
+                    }
+                ],
                 "download_failure_count": 1,
                 "download_failures_path": (
                     bundle_dir / "download_failures.json"

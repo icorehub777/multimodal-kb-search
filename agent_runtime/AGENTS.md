@@ -93,7 +93,7 @@ repo_root/
 ## 查詢結果結構
 
 - 每次查詢結果位於 Agent 透過 `--output-dir` 指定的獨立資料夾中。
-- 指令執行成功時，**stdout** 會回傳 JSON，其中 `output_dir` 即本次查詢結果資料夾路徑。
+- 指令執行成功時，**stdout** 會回傳 JSON，其中 `output_dir` 即本次查詢結果資料夾路徑，`downloaded_files` 則提供成功下載檔案的 `google_file_id`、檔名、文件子資料夾 `directory`、下載檔 `source_path`、標準 PDF 路徑 `pdf_path`、逐頁文字 `text_paths` 與命中頁圖 `page_paths`。
 - 結果資料夾的基本結構如下：
 
 ```text
@@ -119,6 +119,7 @@ repo_root/
 - `vector_results.json` 是此使用者有權限存取的檔案的圖文向量庫的相似度查詢結果清單，屬於檔案與頁面層級結果，頁面結果會包含 `page_number` 與相似度分數。
 - `download_failures.json` 記錄無法完成 metadata 補查、產物目錄建立、下載或文件處理的檔案；沒有失敗時內容為空陣列。
 - `warnings.json` 記錄非失敗但會影響閱讀完整性的狀況；沒有警告時內容為空陣列。
+- 成功下載檔案的 `file_id` 與文件子資料夾對照以 stdout 的 `downloaded_files` 為準；不要依資料夾名稱反推 `file_id`。
 - 針對 Google Drive 查詢結果清單與相似度查詢結果清單的聯集檔案清單（`file_id` 去重）中的每個檔案，都建立一個以 `<safe_file_name>-<google_file_id_prefix>` 命名的檔案子資料夾。`safe_file_name` 在前，`google_file_id` 前綴在後；前綴預設先取前 5 碼，若同一批查詢內發生名稱碰撞，則逐碼加長直到可區分。
 - 每個檔案子資料夾會保留該檔案自 Google Drive 下載的檔案；Google Docs 與 Google Slides 由 Drive API 匯出為 PDF，Google Sheet 匯出為 XLSX。
 - PDF、Word、PowerPoint、TXT、MD 另提供固定路徑 `pdf/document.pdf` 與逐頁 UTF-8 TXT；原始檔本身為 PDF 時仍會保留下載檔。

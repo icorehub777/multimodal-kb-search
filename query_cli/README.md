@@ -107,6 +107,21 @@ Startup 檢查會依實際路線調整：`secure_backend /healthz` 只在有 `--
   "full_text_count": 1,
   "vector_count": 4,
   "download_count": 3,
+  "downloaded_files": [
+    {
+      "google_file_id": "file-1",
+      "name": "Alpha.pdf",
+      "directory": "C:/path/to/task/query_results/20260613-131500-manual-test/Alpha.pdf-abcde",
+      "source_path": "C:/path/to/task/query_results/20260613-131500-manual-test/Alpha.pdf-abcde/Alpha.pdf",
+      "pdf_path": "C:/path/to/task/query_results/20260613-131500-manual-test/Alpha.pdf-abcde/pdf/document.pdf",
+      "text_paths": [
+        "C:/path/to/task/query_results/20260613-131500-manual-test/Alpha.pdf-abcde/text/0001.txt"
+      ],
+      "page_paths": [
+        "C:/path/to/task/query_results/20260613-131500-manual-test/Alpha.pdf-abcde/pages/0003.png"
+      ]
+    }
+  ],
   "download_failure_count": 1,
   "download_failures_path": "C:/path/to/task/query_results/20260613-131500-manual-test/download_failures.json",
   "warning_count": 1,
@@ -147,7 +162,7 @@ Query progress: phase=query status=failed run_id=a1b2c3d4 ...
 
 所有檔案皆成功時，`status` 為 `finished` 且 `download_failure_count` 為 `0`。若單一檔案在 metadata 補查、產物目錄建立、下載或文件處理階段失敗，該檔案會被略過，其餘檔案繼續處理；此時指令仍以成功 exit code 完成，但 `status` 為 `finished_with_errors`。
 
-`download_count` 是成功下載的檔案數量，不包含 `download_failure_count`。
+`download_count` 是成功下載的檔案數量，不包含 `download_failure_count`。`downloaded_files` 是成功下載與處理的檔案清單，提供 `google_file_id`、原始檔名、文件子資料夾 `directory`、下載檔 `source_path`、標準 PDF 路徑 `pdf_path`、逐頁文字 `text_paths` 與命中頁圖 `page_paths`。
 
 每筆失敗包含 `google_file_id`、檔名、失敗階段、錯誤類型、訊息與 `google_drive_url`，讓使用者可直接到 Google Drive 查看原檔。若檔案來自向量搜尋，`vector_page_numbers` 會列出命中頁碼；若來自關鍵字搜尋，`full_text_query` 會保留本次查詢條件。同時命中兩種搜尋時兩組資訊都會提供。完整清單同時寫入 `download_failures.json`。失敗檔案已建立的部分產物會保留供排錯。
 
