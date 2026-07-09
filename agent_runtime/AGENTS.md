@@ -1,6 +1,6 @@
 # AGENTS.md
 
-本文件是當使用者詢問問題時， Agent 執行知識庫查詢、解讀查詢結果與回答使用問題時的操作規則。
+本文件是 Agent 協助使用者查詢知識庫、呈現查詢結果與回答問題時的操作規則。
 
 ---
 
@@ -15,160 +15,142 @@ repo_root/
       <其他任務產物>
   memory.md                       # 目前作用中任務指標與跨任務記憶
   AGENTS.md                       # Agent 操作規則
-  _internal/
-    .venv/                        # Python 虛擬環境
-    config/
-      .env                        # kbsearch 設定
-      oauth_client.json           # Google OAuth Desktop 用戶端憑證
-      token_cache.json            # 首次授權後由程式寫入
-    packages/                     # kbsearch_cli wheel
-    logs/                         # 每次 query 的獨立 kbsearch-<日期時間>-<run_id>.log
+  _internal/                      # 內部執行資料夾
+    logs/                         # 每次 query 的專屬 kbsearch-<日期時間>-<run_id>.log
 ```
 
-`_internal/` 是內部執行資料夾。Agent 不得修改其中的設定、套件、虛擬環境或認證資料；允許讀取 query 在 stderr 回報的該次專屬 log 以監看進度或排錯。
+`_internal/` 由管理者維護；Agent 只在其中執行指令與讀取 `logs/` 下的 query 專屬 log。
 
 ---
 
 ## 任務工作區
 
-- 收到新的使用者任務時，必須在 `tasks/` 下建立獨立任務資料夾，命名格式為 `<yyyyMMdd-HHmmss>-<safe_task_name>`。
-- 建立新任務資料夾時，必須同時建立該任務的 `memory.md`。若根目錄 `memory.md` 尚不存在，也必須依本文件規範建立。
-- 同一任務的使用者輸入、查詢結果、分析內容與產出均放在同一任務資料夾中；既有任務的後續需求繼續使用原任務資料夾。
-- 任務中的每次查詢結果會固定放在該任務的 `query_results/` 下；其餘內容由 Agent 依實際工作需求安排。
-- 若需產生查詢結果既有結構以外的臨時分析產物，可依用途在目前任務資料夾中建立名稱明確的子資料夾；不得寫入 `_internal/` 或其他任務資料夾，也不得寫入目前任務資料夾中的 `query_results/` 中。
-- `safe_task_name` 與後述 `safe_query_name` 應簡短描述目的，並避免使用 `< > : " / \ | ? *`、`..`、結尾空白或結尾句點。
+- 收到新的使用者任務時，在 `tasks/` 下建立 `<yyyyMMdd-HHmmss>-<safe_task_name>` 任務資料夾，並同時建立該任務的 `memory.md`；若根目錄 `memory.md` 尚不存在，一併依本文件規範建立。
+- 同一任務的使用者輸入、查詢結果、分析內容與產出均放在同一任務資料夾；既有任務的後續需求沿用原任務資料夾。
+- 每次查詢結果固定放在該任務的 `query_results/` 下；其他臨時分析產物放在目前任務資料夾內名稱明確的子資料夾（`query_results/` 保留給查詢輸出）。
+- `safe_task_name` 與 `safe_query_name` 簡短描述目的，僅使用 Windows 檔名安全字元（避免 `< > : " / \ | ? *`、`..`、結尾空白與結尾句點）。
 
 ---
 
-## CLI 指令說明
+## 兩種搜尋方式
 
-當接收到使用者問題時，Agent 會使用以下指令協助進行 Google Drive 的檔案搜尋與圖文向量庫的相似度搜尋，並下載搜尋結果檔案：
+- **相似度搜尋**：以自然語言描述或圖片比對文件頁面內容，只涵蓋**管理者指定同步範圍內**的文件；結果帶命中頁碼與相似度分數，適合「找內容像這樣」的語意查詢。
+- **關鍵字搜尋**：以關鍵字比對檔名、全文與 metadata，涵蓋**此使用者有權限存取的所有 Google Drive 檔案**；結果只到檔案層級（不含頁碼），適合客戶名稱、型號、合約編號、檔名等可逐字比對的詞彙。
 
-執行知識庫搜尋指令時，工作目錄必須為 `_internal/`。以下為指令執行參數：
+---
+
+## 查詢計畫討論
+
+- 收到查詢需求後，先以白話與使用者討論本次查詢計畫，經使用者確認後才轉成指令執行。討論時使用「相似度搜尋」「關鍵字搜尋」等白話用語，並讓使用者理解兩者涵蓋範圍的差異（見上節）。
+- 依使用者的查詢目的協助選擇合適的搜尋方式，原則上一輪一種、必要時分多輪查詢，讓每輪結果聚焦；僅在確有需要時才建議同輪執行兩種。
+- 與使用者確認每輪回傳筆數（預設 10）。
+- 選擇相似度搜尋時，與使用者確認查詢輸入要納入哪些內容：使用者原始描述、使用者提供的圖片、從圖片延伸的可檢索描述；納入原始描述時保留其自然語言原意。
+- 選擇關鍵字搜尋時，依查詢目的協助使用者設計關鍵字；有圖片時同樣依查詢目的從圖片內容抽取關鍵字。
+- 使用者附圖時，先理解每張圖片並產生可檢索的圖片描述（圖中可辨識的文字、產品、表格、版面、顏色、型號、流程、錯誤訊息、文件類型等特徵），並將圖片存至目前任務資料夾（建議 `user-01.png`、`user-02.png`）。
+
+---
+
+## CLI 指令
+
+執行以下指令時，工作目錄必須為 `_internal/`。
 
 ```powershell
-.\.venv\Scripts\kbsearch.exe query --output-dir "../tasks/<任務資料夾>/query_results/<yyyyMMdd-HHmmss>-<safe_query_name>" [--vector-query "<向量查詢文字>"] [--drive-query "<Google Drive q 查詢語法>"] [--image <圖片路徑>] [--limit <數量>] [--min-score <分數>]
+.\.venv\Scripts\kbsearch.exe query --output-dir "../tasks/<任務資料夾>/query_results/<yyyyMMdd-HHmmss>-<safe_query_name>" [--vector-query "<相似度查詢文字>"] [--drive-query "<Google Drive q 查詢語法>"] [--image <圖片路徑>] [--limit <數量>] [--min-score <分數>]
 ```
 
-- `--output-dir` 必填，由 Agent 指定本次查詢結果的新資料夾路徑；路徑相對於 `_internal/` 工作目錄，每次執行都必須使用尚不存在的新路徑。
-- `--vector-query` 選填，送給 vector search；可與 `--image` 併用或單獨使用。
-- `--drive-query` 選填，直接送給 Google Drive API `files().list(q=...)`；省略時本次不執行 Google Drive 關鍵字搜尋。
-- `--image` 選填，可重複指定多次；路徑須為相對 `_internal/` 工作目錄的本機圖檔路徑（例如 `../tasks/<任務資料夾>/user-01.png`）。可單獨指定（不需 `--vector-query`），此時以空字串 query 搭配圖片做向量搜尋。
-- 每次 query 必須至少提供 `--vector-query`、`--drive-query` 或 `--image` 其中一個。
-- `--limit` 控制關鍵字搜尋與向量搜尋各自回傳的候選數量，由 Agent 依照狀況自行決定。
-- `--min-score` 是向量搜尋最低分數門檻，未指定時不套用最低分數，原則上不建議 Agent 指定此值。
+- `--output-dir` 必填，每次使用尚不存在的新路徑；若指令回報路徑已存在，改用新路徑重新執行，既有資料夾保留原樣。
+- `--vector-query` 相似度搜尋文字；可與 `--image` 併用或單獨使用。
+- `--image` 圖片路徑，可重複指定；路徑相對 `_internal/`（例如 `../tasks/<任務資料夾>/user-01.png`）。可只帶 `--image` 執行純圖片相似度搜尋。
+- `--drive-query` 關鍵字搜尋條件，直接送給 Google Drive API `files().list(q=...)`；只使用支援的欄位與運算子，例如 `fullText contains ...`、`name contains ...`、`mimeType`、`modifiedTime`、`createdTime`、`owner`、`sharedWithMe`、`starred`、`trashed`。
+- 只帶本輪查詢計畫確定要執行的路線參數，每次至少提供 `--vector-query`、`--drive-query` 或 `--image` 其中一個。
+- `--limit` 兩種搜尋各自的回傳筆數上限，傳入與使用者確認的值。
+- `--min-score` 相似度分數門檻，原則上省略。
 
-需要將查詢結果中的 PDF 額外頁面轉成 PNG 時，工作目錄同樣必須為 `_internal/`：
+需要將 PDF 額外頁面轉成 PNG 時：
 
 ```powershell
 .\.venv\Scripts\kbsearch.exe render-pdf-pages --pdf "../tasks/<任務資料夾>/query_results/<查詢資料夾>/<文件資料夾>/pdf/document.pdf" --pages "<頁碼或範圍>" --output-dir "../tasks/<任務資料夾>/query_results/<查詢資料夾>/<文件資料夾>/pages"
 ```
 
-- `--pdf` 必填，必須明確指定要處理的 `pdf/document.pdf`；路徑相對於 `_internal/` 工作目錄。
-- `--pages` 必填，頁碼從 `1` 開始，支援單頁、逗號清單與區間，例如 `3,5,8-10`。
-- `--output-dir` 必填，固定指定同一文件資料夾內的 `pages/`；路徑相對於 `_internal/` 工作目錄。目錄可存在；同頁碼 PNG 會直接覆蓋，其他頁面保留。
-
+- `--pdf` 指定該文件資料夾內的 `pdf/document.pdf`。
+- `--pages` 頁碼從 `1` 開始，支援單頁、逗號清單與區間，例如 `3,5,8-10`。
+- `--output-dir` 指定同一文件資料夾內的 `pages/`；同頁碼 PNG 直接覆蓋，其他頁面保留。
 
 ---
 
-## 使用 CLI 指令執行查詢的規則
+## 執行與監控
 
-- 收到使用者查詢需求後，Agent 必須先引導使用者決定本次要執行哪些搜尋路線：多模態相似度搜尋、Google Drive 關鍵字搜尋，或兩者一起。若使用者沒有明確表達，預設兩條一起執行。
-- 決定執行相似度搜尋後，Agent 必須再與使用者確認向量輸入要納入哪些內容：使用者原始描述（組成 `--vector-query`）、使用者提供的圖片（傳 `--image`）、圖片描述／Agent 從問題抽出的檢索重點（亦寫入 `--vector-query`）；可任意組合，並以使用者選擇為準。使用者若沒有明確表達，預設全部納入。也可只傳 `--image` 不做文字向量查詢。
-- 若使用者選擇納入圖片描述，或本次要傳 `--image`，Agent 應先理解每張圖片，產生可檢索的圖片描述。圖片描述需描述圖中可辨識的文字、產品、表格、版面、顏色、型號、流程、錯誤訊息、文件類型與其他可協助搜尋的特徵。
-- 多模態相似度搜尋：若有文字內容要納入，`--vector-query` 由使用者選擇納入的文字組合而成；納入使用者原始描述時需保留其自然語言，不得任意改寫成另一個問題或加入使用者未表達、圖片也無法確認的假設。若使用者選擇不執行相似度搜尋，本次不傳 `--vector-query`，也不得傳 `--image`。
-- Google Drive 關鍵字搜尋：針對 `--drive-query` 參數傳入值：須從自然語言與圖片描述抽取關鍵字、型號、檔名片段等條件，組成 Google Drive API 的 `q` 語法直接傳入 CLI（非另建平行關鍵字清單），且只能使用支援的欄位與運算子，例如 `fullText contains ...`、`name contains ...`、`mimeType`、`modifiedTime`、`createdTime`、`owner`、`sharedWithMe`、`starred`、`trashed`。若使用者選擇不執行關鍵字搜尋，本次不傳 `--drive-query`；不得以空字串或無條件的 `q` 值代替省略。
-- 使用者附圖：僅在本次會執行相似度搜尋且使用者同意納入圖片時使用。可只傳 `--image`（不需 `--vector-query`）。將圖片存至目前任務資料夾中（檔名建議 `user-01.png`、`user-02.png`），再以 `--image` 傳入相對 `_internal/` 的路徑（例如 `../tasks/<任務資料夾>/user-01.png`）；多張圖可重複指定 `--image`。
-- 執行前須依日期時間與查詢目的產生新的查詢結果路徑。若指令回報路徑已存在，不得覆蓋、刪除或重用該資料夾，應改用新的查詢結果路徑重新執行。
-- 執行查詢時必須直接以 sandbox 外部同意方式執行。因在 sandbox 內執行時，無法正確開啟給使用者登入的瀏覽器頁面。
-- 預期查詢可能長時間下載或轉檔時，應以背景程序執行，並將 stdout、stderr 重新導向至系統暫存檔，避免呼叫端結束後關閉 pipe。背景啟動與每次狀態檢查只設定短 timeout，不為整批 query 設定固定總 timeout。
-- 啟動後先從 stderr 取得 `run_id` 與 `log` 路徑，再以短間隔輪詢該次專屬 log 與背景程序狀態，並依新進度持續向使用者更新。不得只輪詢共用 log，也不得因一段時間沒有新訊息就判定完成。
-- query 啟動時會依 `KBSEARCH_QUERY_LOG_RETENTION_DAYS` 清理過期的 `kbsearch-*.log`；清理失敗會讓 query 以失敗終態結束，Agent 應依 stderr 與該次專屬 log 回報原因。
-- 每次 query 正常結束時，stderr 必須出現 `phase=query` 的 `status=finished`、`status=finished_with_errors` 或 `status=failed`，專屬 log 也必須有相同終態。成功或部分成功時另須讀取 stdout JSON；失敗時須讀取 stderr 錯誤摘要。
-- 只有在看到終態且背景程序已結束後，才可判定 query 完成。若程序已結束但沒有終態，視為異常中止，須讀取該次專屬 log 與暫存 stderr 排錯。完成判讀後需刪除重新導向用的 stdout、stderr 暫存檔；正式 application log 不得刪除。
-- 查詢結果資料夾一旦建立，不論查詢成功或失敗均不得刪除或供後續查詢重用；查詢失敗時應保留其中的部分產物供排錯。
-- 查詢失敗時，先閱讀 stderr 的錯誤訊息與該次 `run_id` 對應的專屬 log。可自行處理的路徑、查詢參數或任務檔案問題應先修正後重試；涉及權限、外部服務、部署環境或其他無法處理的問題，再向使用者說明原因與所需處理方式。
+- 以 sandbox 外部同意方式執行查詢，讓 OAuth 能正確開啟瀏覽器登入頁。
+- 預期查詢可能長時間下載或轉檔時，以背景程序執行，並將 stdout、stderr 重新導向至系統暫存檔；背景啟動與每次狀態檢查只設定短 timeout。
+- 啟動後先從 stderr 取得 `run_id` 與該次專屬 `log` 路徑，再以短間隔輪詢該 log 與背景程序狀態，依新進度持續向使用者更新。
+- 看到 `phase=query` 終態（`finished`、`finished_with_errors`、`failed`）且背景程序已結束後，才判定 query 完成：成功或部分成功時讀取 stdout JSON，失敗時讀取 stderr 錯誤摘要。程序已結束但沒有終態時視為異常中止，讀取專屬 log 與暫存 stderr 排錯。
+- 完成判讀後刪除重新導向用的暫存檔；保留 `_internal/logs/` 的正式 log 與查詢結果資料夾（含失敗查詢的部分產物，供排錯）。
+- 查詢失敗時先讀 stderr 與該 `run_id` 的專屬 log：路徑、查詢參數或任務檔案問題自行修正後以新路徑重試；權限、外部服務或部署環境問題向使用者說明原因與所需處理方式。
 
+---
 
 ## 查詢結果結構
 
-- 每次查詢結果位於 Agent 透過 `--output-dir` 指定的獨立資料夾中。
-- 指令執行成功時，**stdout** 會回傳 JSON，其中 `output_dir` 即本次查詢結果資料夾路徑，`downloaded_files` 則提供成功下載檔案的 `google_file_id`、檔名、文件子資料夾 `directory`、下載檔 `source_path`、標準 PDF 路徑 `pdf_path`、逐頁文字 `text_paths` 與命中頁圖 `page_paths`。
-- 結果資料夾的基本結構如下：
+- 指令成功時 stdout 回傳 JSON：`output_dir` 是本次查詢結果資料夾；`downloaded_files` 提供每個成功下載檔案的 `google_file_id`、檔名與各項產物路徑（`directory`、`source_path`、`pdf_path`、`text_paths`、`page_paths`），`file_id` 與文件子資料夾的對照一律以此為準。
+- 檔案依「相似度命中優先、按分數排序」的順序下載，最相關的檔案最早可用。
 
 ```text
 <output_dir>/
-  query_plan.json
-  full_text_results.json
-  vector_results.json
-  download_failures.json
-  warnings.json
-  <safe_file_name>-<google_file_id_prefix>/
-    <downloaded original file>
-    pdf/
-      document.pdf
-    text/
-      0001.txt
-      0002.txt
-    pages/
-      <vector hit page>.png
+  query_plan.json          # 本次實際使用的查詢參數
+  full_text_results.json   # 關鍵字搜尋結果（檔案層級，含 Google Drive 檔案資訊）
+  vector_results.json      # 相似度搜尋結果（含檔案資訊、命中頁碼與分數）
+  download_failures.json   # 下載或處理失敗的檔案；無失敗為空陣列
+  warnings.json            # 非失敗但影響閱讀完整性的狀況；無警告為空陣列
+  <檔案子資料夾>/          # 兩種結果聯集內每個檔案一個
+    <下載的原始檔>         # Google Docs/Slides 匯出 PDF，Google Sheets 匯出 XLSX
+    pdf/document.pdf       # PDF、Word、PowerPoint、TXT、MD 提供
+    text/000N.txt          # 逐頁文字，檔名即 PDF 頁碼
+    pages/000N.png         # 相似度命中頁
 ```
 
-- `query_plan.json` 記錄本次實際使用的 `vector_query`、`drive_query`、`image_paths`、`limit` 與 `min_score`；本次未執行的搜尋路線對應欄位會寫成 `null`（例如僅執行關鍵字搜尋時 `vector_query` 與 `image_paths` 為 `null`）。
-- `full_text_results.json` 是此使用者有權限存取的檔案的 Google Drive 查詢結果清單，屬於檔案層級結果。
-- `vector_results.json` 是此使用者有權限存取的檔案的圖文向量庫的相似度查詢結果清單，屬於檔案與頁面層級結果，頁面結果會包含 `page_number` 與相似度分數。
-- `download_failures.json` 記錄無法完成 metadata 補查、產物目錄建立、下載或文件處理的檔案；沒有失敗時內容為空陣列。
-- `warnings.json` 記錄非失敗但會影響閱讀完整性的狀況；沒有警告時內容為空陣列。
-- 成功下載檔案的 `file_id` 與文件子資料夾對照以 stdout 的 `downloaded_files` 為準；不要依資料夾名稱反推 `file_id`。
-- 針對 Google Drive 查詢結果清單與相似度查詢結果清單的聯集檔案清單（`file_id` 去重）中的每個檔案，都建立一個以 `<safe_file_name>-<google_file_id_prefix>` 命名的檔案子資料夾。`safe_file_name` 在前，`google_file_id` 前綴在後；前綴預設先取前 5 碼，若同一批查詢內發生名稱碰撞，則逐碼加長直到可區分。
-- 每個檔案子資料夾會保留該檔案自 Google Drive 下載的檔案；Google Docs 與 Google Slides 由 Drive API 匯出為 PDF，Google Sheet 匯出為 XLSX。
-- PDF、Word、PowerPoint、TXT、MD 另提供固定路徑 `pdf/document.pdf` 與逐頁 UTF-8 TXT；原始檔本身為 PDF 時仍會保留下載檔。
-- `pages/` 只包含向量搜尋命中的頁面，不會預先渲染關鍵字搜尋結果或整份文件。
-- XLS/XLSX 不產生 PDF、逐頁 TXT 或 PNG。圖片不產生 PDF 或 TXT；向量命中時提供 `pages/0001.png`。
+- `pages/` 只包含相似度搜尋命中的頁面；其他頁面用 `render-pdf-pages` 按需產生。
+- 試算表與其他不支援文件處理的格式只保留下載檔或匯出檔，依 Agent 自身工具能力判讀（試算表使用 Spreadsheets Skill）。
+- stdout `status` 為 `finished_with_errors` 時，讀取 `download_failures` 並在呈現結果時明確告知使用者哪些檔案失敗及原因，附 `google_drive_url` 供使用者直接查看原檔。
+- stdout `warning_count` 大於 `0` 時，讀取 `warnings`：`vector_pages_unrendered` 代表相似度命中頁沒有對應 PNG（常見原因是檔案已變成不支援文件處理的格式），改以原始下載檔或其他工具判讀，並向使用者說明該檔案的命中頁無法以圖片呈現。
 
 ---
 
-## 閱讀與引用
+## 查詢結果呈現
 
-- Agent 閱讀與回覆時，應以本次查詢結果清單、逐頁文字、命中頁 PNG 與已下載檔案為依據。
-- stdout 的 `status` 若為 `finished_with_errors`，查詢結果仍可使用，但 Agent 必須先讀取 `download_failures` 或 `download_failures.json`，並在回答中明確告知使用者哪些檔案未能下載或處理及其原因；不得將結果描述為完整成功。
-- 告知失敗檔案時須附上 `google_drive_url`，請使用者直接到 Google Drive 查看原檔。若 `vector_page_numbers` 非空，須告知向量搜尋命中的頁碼；若 `full_text_query` 有值，須告知關鍵字搜尋使用的查詢條件，協助使用者自行在原檔中查找。
-- stdout 的 `warning_count` 若大於 `0`，Agent 必須讀取 `warnings` 或 `warnings.json`。若警告 `code` 為 `vector_pages_unrendered`，代表向量搜尋命中頁碼存在，但該檔案沒有產生對應的 `pages/*.png`；Agent 不得假設該向量命中頁面已可直接閱讀，應改以原始下載檔或其他工具能力判讀，並在必要時向使用者說明該檔案的向量命中頁面無法產生圖片、結果可能不完整。
-- PDF、Word、PowerPoint、TXT、MD 統一以 `text/*.txt` 進行內容定位，使用 `rg` 的固定文字、大小寫、regex、前後文與檔案篩選能力搜尋；TXT 檔名即對應 PDF 頁碼。
-- 確定需閱讀的頁碼後，優先使用既有 `pages/*.png`；尚未產生的頁面使用 `render-pdf-pages` 從該檔案的 `pdf/document.pdf` 轉出至同一文件資料夾的 `pages/`。
-- XLS/XLSX 使用 Spreadsheets Skill。圖片直接檢視原圖或既有 `pages/0001.png`。
-- Google Sheets 由 query CLI 匯出為 XLSX，與 Drive 上原有的 XLS/XLSX 一樣使用 Spreadsheets Skill 讀取與解析；試算表不會出現在向量搜尋結果中，但可能由關鍵字搜尋命中。
-- 閱讀向量搜尋命中頁面時，先依 `vector_results.json` 標示的頁碼讀取查詢結果已產生的 PNG。若相關頁內容不完整，可使用 `render-pdf-pages` 取得相鄰頁。
-- 若是只有關鍵字搜尋命中的檔案，先以 `rg` 搜尋逐頁 TXT 定位頁碼，再按需將命中頁及必要相鄰頁轉成 PNG。逐頁 TXT 無法包含掃描文字、圖片、圖表或完整表格版面，因此最終內容確認仍以 PNG 為準。
-- 同一檔案同時出現在關鍵字與向量結果時，優先參考向量命中頁，並用關鍵字搜尋結果補足可能相關頁。
-- 若同一問題有多份來源，應比對時間、版本與適用範圍；若資料互相矛盾，應指出衝突點並說明各來源差異，不要自行選擇一方當成唯一真相。
-- 回答使用者時，除非使用者要求說明搜尋方法，否則不要標示或強調內容來自關鍵字搜尋或向量搜尋；搜尋類型只作為 Agent 內部閱讀排序與定位依據。對外應以文件名稱、頁碼、版本、日期、Google Drive 路徑與內容重點描述來源。
-- 回答時除了參考此頁的 PNG 內容進行回答外，需嵌入實際用來回答的頁面 PNG (不得貼出所有查詢結果頁面)，並需呈現文件名稱、頁碼、版本、日期、Google Drive 路徑與內容回答。
-- 若查詢結果不足以回答使用者問題，可透過調整查詢或擴大回傳之查詢結果進行下一輪查詢。
+- 查詢完成後直接列出查詢結果供使用者篩選；僅當結果檔案內容很少、可快速閱讀時，才先閱讀後回答。
+- 相似度搜尋結果：依結果既有排序，分檔案呈現 Google Drive 檔案資訊與所有命中頁 PNG，並標示每頁的相似度分數。
+- 關鍵字搜尋結果：依結果既有排序，呈現每個檔案的 Google Drive 檔案資訊。
+- 呈現結果後，與使用者討論接下來要深入解析哪些檔案與頁面，輔導使用者高效完成後續內容解析。
+- 使用者反映沒有找到想要的檔案時，回到查詢計畫討論：依查詢目的決定放大搜尋範圍（提高筆數、放寬條件）或改用另一種搜尋方式，再執行下一輪查詢。
+
+---
+
+## 後續內容解析
+
+- PDF、Word、PowerPoint、TXT、MD 以 `rg` 搜尋該檔案的 `text/*.txt` 定位頁碼，再讀取對應頁 PNG；掃描文字、圖片、圖表與表格版面以 PNG 內容為準。
+- 優先使用既有 `pages/*.png`；其他頁面以 `render-pdf-pages` 從該檔案的 `pdf/document.pdf` 轉出至同資料夾的 `pages/`。
+- 圖片檔直接檢視原圖或既有 `pages/0001.png`。
+- 同一檔案同時出現在兩種結果時，優先讀相似度命中頁，再用關鍵字定位補足其他相關頁。
+- 多份來源結論不一致時，比對時間、版本與適用範圍，指出衝突點並說明各來源差異。
 
 ---
 
 ## 回答原則
 
-- 預設使用繁體中文回答，除非使用者指定其他語言。
-- 回答應清楚、精簡、具體；必要時可用條列或表格。
-- 對事實性問題，應區分「文件中明確記載」、「根據內容推論」與「目前找不到依據」。
-- 不要編造不存在的政策、文件、流程、價格、日期、人名或系統狀態。
-- 若問題涉及時效性，應說明目前依據的資料日期、文件版本或索引狀態。
-- 不要在回答中輸出超出問題所需的大量原文內容。
-- 若回答包含推論，應明確標示為推論。
-- 不確定時要直接說明不確定的原因。
+- 預設使用繁體中文回答；清楚、精簡、具體，必要時用條列或表格，原文引用以回答所需為限。
+- 只陳述查詢結果與文件內容支持的資訊，並區分「文件中明確記載」、「根據內容推論」（明確標示為推論）與「目前找不到依據」。
+- 引用內容時嵌入實際用來回答的頁面 PNG，並附文件名稱、頁碼、版本、日期與 Google Drive 路徑；對外以這些資訊描述來源，搜尋類型只作為 Agent 內部定位依據。
+- 涉及時效性時，說明目前依據的資料日期、文件版本或索引狀態；不確定時直接說明不確定的原因。
 
 ---
 
 ## Memory 操作規則
 
-Memory 分為根目錄 `memory.md` 與各任務資料夾內的 `memory.md`。兩者用途與生命週期不同，不得將單一任務的詳細狀態寫入根目錄 memory，也不得只更新其中一種而使作用中任務指標與實際任務狀態互相矛盾。
+Memory 分為根目錄 `memory.md` 與各任務資料夾內的 `memory.md`，兩者同步維護。
 
 ### 根目錄 memory
 
-- 根目錄 `memory.md` 用於讓新的 session 找到唯一的目前作用中任務，並保存可供不同任務一起參考、且會隨實際運作改變的跨任務記憶。
-- Agent 建立任務時，若發現沒有此根目錄 `memory.md`，必須依以下格式建立：
+用於讓新 session 找到唯一的目前作用中任務，並保存跨任務可重複參考的動態記憶。格式：
 
 ```markdown
 # Agent Memory
@@ -182,16 +164,12 @@ Memory 分為根目錄 `memory.md` 與各任務資料夾內的 `memory.md`。兩
 無
 ```
 
-- 「目前作用中任務」只能記錄一個任務資料夾路徑。開始新任務或恢復既有任務時，必須將其更新為該任務資料夾；任務完成且沒有後續工作時，改為 `無`。
-- 「跨任務記憶」只記錄可供未來不同任務重複參考的動態資訊，例如資料索引範圍與限制、常用文件位置、文件命名慣例、有效搜尋策略，使用者特殊喜好，以及會影響多個任務的待確認事項。
-- 不得在根目錄 memory 記錄單一任務的目前階段、查詢紀錄、完整發現、待確認事項或下一步；這些資訊應寫入該任務的 memory。
-- 不得重複記錄已在 `AGENTS.md`、README 或設計文件中完整說明的固定規則。
-- 沒有可記錄的跨任務記憶時保持 `無`，不為了填滿章節而加入內容。
+- 「目前作用中任務」只記錄一個任務資料夾路徑：開始或恢復任務時更新為該任務；任務完成且無後續工作時改為 `無`。
+- 「跨任務記憶」只記錄未來不同任務可重複參考的動態資訊，例如資料索引範圍與限制、常用文件位置、命名慣例、有效搜尋策略與使用者偏好；單一任務的狀態寫入該任務的 memory，固定規則以 `AGENTS.md` 為準；沒有內容時保持 `無`。
 
 ### 任務 memory
 
-- 每個任務資料夾必須有自己的 `memory.md`，用於保存該任務跨 session 接手所需的簡要狀態。
-- 建立任務時，必須依以下格式建立任務 memory，並填入當下已知內容：
+用於保存該任務跨 session 接手所需的簡要狀態，只保存摘要與路徑指標，詳細內容以任務資料夾內的實際檔案為準。格式：
 
 ```markdown
 # Task Memory
@@ -209,25 +187,15 @@ Memory 分為根目錄 `memory.md` 與各任務資料夾內的 `memory.md`。兩
 ## 下一步
 ```
 
-- 「任務目標」記錄使用者要解決的問題與預期產出。
-- 「目前階段」記錄任務目前所處狀態，例如準備查詢、閱讀結果、整理回答、等待使用者補充或已完成。
-- 「已完成工作」只摘要已完成的重要工作，並指向相關查詢結果資料夾或任務產物；不得記錄指令流水帳。
-- 「關鍵發現與依據」記錄會影響此任務後續判斷的結論、來源檔案、頁碼及相關路徑。
-- 「待確認事項」記錄需要使用者或其他人確認的問題及其影響；已解決事項應移除或整理至已完成工作。
-- 「下一步」必須是下一個 Agent 可直接執行的具體行動；任務完成時改為 `無`。
-- 詳細查詢清單、下載檔案、按需產生的頁面圖片、分析內容與產出仍以任務資料夾內的實際檔案為準；任務 memory 只保存摘要與路徑指標。
+- 「任務目標」記錄使用者要解決的問題與預期產出；「目前階段」記錄任務目前狀態（例如準備查詢、閱讀結果、整理回答、等待使用者補充、已完成）。
+- 「已完成工作」摘要重要工作並指向相關查詢結果資料夾或任務產物；「關鍵發現與依據」記錄影響後續判斷的結論、來源檔案、頁碼與路徑。
+- 「待確認事項」記錄需要使用者確認的問題及其影響，解決後移至已完成工作；「下一步」是下一個 Agent 可直接執行的具體行動，任務完成時改為 `無`。
 
-### 建立、接手與更新流程
+### 維護流程
 
-- 建立第一個任務時，同時建立根目錄 memory 與任務 memory，並將根目錄「目前作用中任務」指向新任務。
-- 切換作用中任務前，先更新原作用中任務 memory 的目前階段與下一步；確認目標任務 memory 存在且內容可供接手後，再更新根目錄作用中任務指標與目標任務 memory。
-- 新 session 開始時，若根目錄 memory 不存在且沒有任何既有任務，代表尚未依本規範建立任務。若根目錄 memory 不存在但已有任務資料夾，屬於狀態不一致，不得依建立時間或修改時間自行猜測作用中任務。
-- 根目錄 memory 存在時，先讀取其「目前作用中任務」；若其值不是 `無`，再讀取對應的任務 memory 後才繼續工作。
-- `kbsearch query` 完成並取得 `output_dir` 後，更新作用中任務 memory 的已完成工作、關鍵發現與依據、目前階段及下一步。
-- 查詢結果不足而準備進行下一輪查詢前，在作用中任務 memory 記錄不足原因與具體調整方向。
-- 發現對其他未來任務仍有價值的資訊時，先在作用中任務 memory 保留依據，再將精簡且可重複使用的結論提升至根目錄「跨任務記憶」。
-- 需要等待使用者補充或確認時，更新作用中任務 memory 的目前階段、待確認事項與下一步。
-- session 結束或任務暫停前，確保根目錄作用中任務指標正確，且對應任務 memory 足以讓新的 session 直接接手。
-- 任務完成時，將任務 memory 的目前階段標示為已完成、下一步改為 `無`，並將根目錄「目前作用中任務」改為 `無`。
-
----
+- 新 session 開始時，先讀根目錄 memory 的「目前作用中任務」；值不是 `無` 時，讀取對應任務 memory 後再繼續工作。根目錄 memory 不存在但已有任務資料夾時屬狀態不一致，向使用者確認作用中任務。
+- query 完成並取得 `output_dir` 後，更新任務 memory 的已完成工作、關鍵發現與依據、目前階段及下一步；準備下一輪查詢前，記錄本輪不足原因與調整方向。
+- 需要等待使用者確認時，更新目前階段、待確認事項與下一步。
+- 切換作用中任務前，先更新原任務 memory 的目前階段與下一步，再更新根目錄作用中任務指標。
+- 發現對未來任務有價值的資訊時，先在任務 memory 保留依據，再將精簡可重用的結論提升至根目錄「跨任務記憶」。
+- session 結束、任務暫停或完成前，確保根目錄指標正確、任務 memory 足以讓新 session 直接接手；任務完成時目前階段標為已完成、下一步與根目錄指標改為 `無`。
