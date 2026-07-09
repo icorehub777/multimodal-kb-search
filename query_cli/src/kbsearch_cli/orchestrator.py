@@ -503,8 +503,8 @@ def _build_download_targets(
     }
     ordered_ids = list(
         dict.fromkeys(
-            [result.google_file_id for result in full_text_results]
-            + [result.google_file_id for result in vector_results]
+            [result.google_file_id for result in vector_results]
+            + [result.google_file_id for result in full_text_results]
         )
     )
     targets: list[_DownloadTarget] = []

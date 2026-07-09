@@ -469,12 +469,16 @@ class QueryOrchestratorTests(unittest.TestCase):
             self.assertTrue(
                 (result.bundle.path / dir_names["sheet-1"] / "Orders.xlsx").exists()
             )
-            self.assertEqual(result.downloaded_files[0].page_paths, [])
+            downloaded_by_id = {
+                downloaded.google_file_id: downloaded
+                for downloaded in result.downloaded_files
+            }
+            self.assertEqual(downloaded_by_id["sheet-1"].page_paths, [])
             self.assertEqual(
                 processor.processed,
                 [
-                    ("Orders.xlsx", "application/vnd.google-apps.spreadsheet", []),
                     ("file-1.pdf", "application/pdf", [2]),
+                    ("Orders.xlsx", "application/vnd.google-apps.spreadsheet", []),
                 ],
             )
 
@@ -764,6 +768,37 @@ class QueryOrchestratorTests(unittest.TestCase):
             self.assertTrue((bundle.path / dir_names["file-2"]).exists())
             self.assertTrue((bundle.path / dir_names["file-9"]).exists())
             self.assertEqual(len(google_drive.downloads), 3)
+
+    def test_run_downloads_vector_results_before_full_text_results_with_deduplication(self):
+        class VectorFirstBackendClient:
+            def search(self, query, image_paths, limit, min_score):
+                return [
+                    VectorFileSearchResult("file-9", "Z.pdf", "", "", "1", "", 0.95, []),
+                    VectorFileSearchResult("file-1", "Alpha.pdf", "", "", "1", "", 0.9, []),
+                ]
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            google_drive = FakeGoogleDriveClient()
+            orchestrator = QueryOrchestrator(
+                google_drive=google_drive,
+                backend=VectorFirstBackendClient(),
+                result_writer=QueryResultWriter(),
+                document_processor=FakeDocumentProcessor(),
+            )
+
+            result = orchestrator.run(
+                output_dir=_create_output_dir(temp_dir, "vector-first"),
+                vector_query="alpha",
+                drive_query="fullText contains 'alpha' and trashed = false",
+                limit=10,
+                min_score=0.5,
+            )
+
+            self.assertEqual(
+                [download[0] for download in google_drive.downloads],
+                ["file-9", "file-1", "file-2"],
+            )
+            self.assertEqual(result.union_count, 3)
 
     def test_run_skips_drive_search_when_drive_query_is_none(self):
         with tempfile.TemporaryDirectory() as temp_dir:
