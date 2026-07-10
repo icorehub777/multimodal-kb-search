@@ -98,6 +98,14 @@ Startup 檢查會依實際路線調整：`secure_backend /healthz` 只在有 `--
 
 執行中會在 **stderr** 輸出進度；每個下載檔案輸出 `phase=download status=started` 與 `phase=download status=finished`，完成訊息包含文字頁數與實際渲染頁數。與 union 層的 `phase=download` 以欄位區分（單檔含 `file_id`、`index`、`total`）。下載與文件處理可能較久。成功時 **stdout** 輸出 JSON 摘要：
 
+設定與本次專屬 log 初始化完成後，stderr 會先輸出一行可解析的 query 啟動事件：
+
+```json
+{"event":"query_started","status":"started","run_id":"a1b2c3d4","output_dir":"C:/path/to/task/query_results/20260613-131500-manual-test","log_path":"C:/path/to/logs/kbsearch-20260622-083245-123456-a1b2c3d4.log","monitor":"log","stdout":"final_json_on_success"}
+```
+
+`monitor=log` 表示長時間執行時應依 `log_path` 即時監控進度；`stdout=final_json_on_success` 表示 stdout 在程序執行期間不提供啟動摘要，僅在成功或部分成功完成時輸出下列最終 JSON。背景啟動器只需確認程序已建立並等待上述 stderr 啟動事件，不應在啟動當下解析 stdout。
+
 ```json
 {
   "status": "finished_with_errors",
@@ -178,6 +186,9 @@ Query progress: phase=query status=failed run_id=a1b2c3d4 ...
 
 ```text
 <output_dir>/
+  query_plan.json
+  full_text_results.json
+  vector_results.json
   download_failures.json
   warnings.json
   <safe_file_name>-<google_file_id_prefix>/
@@ -191,11 +202,42 @@ Query progress: phase=query status=failed run_id=a1b2c3d4 ...
       0003.png
 ```
 
+### 文件子資料夾產物
+
 - 每個文件子資料夾名稱為 `<safe_file_name>-<google_file_id_prefix>`：`safe_file_name` 在前，`google_file_id` 前綴在後；前綴預設先取前 5 碼，若同一批查詢發生撞名，則逐碼加長至可區分。
-- PDF、Word、PowerPoint、TXT、MD 會產生固定路徑 `pdf/document.pdf` 與逐頁 UTF-8 TXT。
-- `pages/` 只包含向量搜尋命中的頁面。
-- 圖片只在向量搜尋命中時產生 `pages/0001.png`。
-- 其他不支援文件處理的 MIME type 只保留原始下載檔或匯出檔，不列為下載失敗；其中 Google Sheets 會匯出為 XLSX，其他檔案保留原始下載格式。
+- PDF、Word、PowerPoint、TXT、MD、Google Docs 與 Google Slides 會產生固定路徑 `pdf/document.pdf`，以及依頁碼命名的 UTF-8 `text/000N.txt`。
+- `query` 自動整理的 `pages/` 只放本次相似度搜尋或全文關鍵字定位命中的頁面。兩種搜尋命中同一頁時共用一份 `000N.png`；查詢流程內發現目標 PNG 已存在時直接沿用。
+- PNG、JPG、JPEG、WEBP 視為單頁文件，但只在相似度搜尋命中時產生 `pages/0001.png`。Google Drive 全文搜尋或 OCR 命中圖片時，因無逐頁文字可供定位，只保留檔案層級結果。
+- Google Sheets 匯出為 XLSX。其他不支援轉換及逐頁處理的 MIME type 只保留原始下載檔，不會因未產生 PDF、逐頁文字或頁面 PNG 而列為下載失敗。
+
+### `full_text_results.json`
+
+`full_text_results.json` 保留 Google Drive 關鍵字搜尋的檔案順序。Google Drive 原始結果不含頁碼；下載並產生逐頁文字後，系統只使用 Drive query 中正向 `fullText contains '<關鍵字>'` 的值定位頁面。`name`、metadata 與其他查詢條件不會用於頁面定位。
+
+頁面定位採不分大小寫的字面子字串比對，不推導同義詞，也不模擬 Google Drive 的索引規則。每個定位成功的頁面寫入該檔案的 `pages`：`page_number` 是頁碼，`keyword` 是該頁命中的全文關鍵字。同頁命中多個關鍵字時，依查詢條件中的出現順序去重，再以逗號加空白串接；頁面依 `page_number` 由小到大排列。
+
+查詢不含 `fullText contains`、逐頁文字沒有命中，或檔案無法產生逐頁文字時，`pages` 為空陣列，檔案層級結果仍會保留。資料結構如下：
+
+```json
+[
+  {
+    "google_file_id": "file-1",
+    "name": "Alpha.pdf",
+    "mime_type": "application/pdf",
+    "web_url": "https://drive.google.com/file/d/file-1/view",
+    "pages": [
+      {
+        "page_number": 1,
+        "keyword": "推車"
+      },
+      {
+        "page_number": 6,
+        "keyword": "推車, 安裝"
+      }
+    ]
+  }
+]
+```
 
 ## 指定 PDF 頁面轉圖
 

@@ -106,9 +106,11 @@ if ($wheels.Count -ne 1) { throw "Expected exactly one kbsearch_cli wheel, found
 
 請注意：`.venv` 綁定建立當下該機器的 Python 路徑，不可從其他電腦或開發環境整包複製後直接使用。
 
-### 5. 執行查詢
+### 5. 指令執行
 
-工作目錄為 `agent_runtime\_internal`：
+指令執行的工作目錄為 `agent_runtime\_internal`，首次執行若尚無 `token_cache.json`，程式會開啟瀏覽器完成 Google OAuth 授權，並寫入 `config\token_cache.json`。
+
+以下是查詢指令：
 
 ```powershell
 cd agent_runtime\_internal
@@ -119,11 +121,11 @@ cd agent_runtime\_internal
   --limit 10
 ```
 
-`--output-dir` 與 `--image` 可使用絕對路徑，或使用相對 `_internal/` 工作目錄的路徑。Agent 依目前目錄結構使用相對路徑，例如 `../tasks/<任務資料夾>/query_results/<查詢資料夾>` 與 `../tasks/<任務資料夾>/user-01.png`。`--image` 可重複指定多次。
+指令中的相對路徑以 `agent_runtime\_internal` 為基準；也可改用絕對路徑。查詢結果資料夾應指定為 `../tasks/<任務資料夾>/query_results/<查詢資料夾>`。
 
-完成時 **stdout** 輸出 JSON，含 `run_id`、`log_path` 與 `output_dir`。若部分檔案下載或處理失敗，狀態為 `finished_with_errors`，並提供失敗數量、Google Drive 原檔連結、向量命中頁碼或關鍵字查詢條件，以及 `download_failures.json` 路徑；其他成功檔案仍會保留。每次 query 會在 `agent_runtime\_internal\logs\` 建立獨立的 `kbsearch-<日期時間>-<run_id>.log`，並於啟動時依 `KBSEARCH_QUERY_LOG_RETENTION_DAYS` 清理過期 log。
+執行期間可直接從終端查看進度與錯誤；每次查詢的完整 log 會寫入 `agent_runtime\_internal\logs\`，查詢結果與下載檔案則寫入 `--output-dir` 指定的任務資料夾。CLI 參數、終端輸出、查詢結果格式與產物結構統一參考 [`query_cli/README.md` 的「手動測試」章節](../query_cli/README.md#手動測試)。
 
-需要補充產生指定頁面的 PNG 時，同樣在 `agent_runtime\_internal` 工作目錄執行：
+以下是產生單頁 PNG 的指令：
 
 ```powershell
 .\.venv\Scripts\kbsearch.exe render-pdf-pages `
@@ -132,9 +134,7 @@ cd agent_runtime\_internal
   --output-dir "../tasks/<任務資料夾>/query_results/<查詢資料夾>/<文件資料夾>/pages"
 ```
 
-`--pdf` 與 `--output-dir` 使用相對 `_internal/` 工作目錄的路徑；也可改用絕對路徑。`--output-dir` 應指定到同一文件資料夾內的 `pages/`。
-
-首次執行若尚無 `token_cache.json`，程式會開啟瀏覽器完成 Google OAuth 授權，並寫入 `config\token_cache.json`。
+`--pdf` 與 `--output-dir` 使用相對 `_internal/` 工作目錄的路徑；也可改用絕對路徑。`--output-dir` 應指定到同一文件資料夾內的 `pages/`。且指定頁碼的頁面圖檔已存在時直接覆蓋。
 
 ---
 
