@@ -3,7 +3,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from kbsearch_cli.models import FullTextSearchResult, PageSearchResult, VectorFileSearchResult
+from kbsearch_cli.models import (
+    FullTextPageSearchResult,
+    FullTextSearchResult,
+    PageSearchResult,
+    VectorFileSearchResult,
+)
 from kbsearch_cli.output import QueryResultWriter, safe_path_name
 
 
@@ -33,6 +38,7 @@ class QueryOutputTests(unittest.TestCase):
                         name="Spec.pdf",
                         mime_type="application/pdf",
                         web_url="https://drive/file-1",
+                        pages=[FullTextPageSearchResult(page_number=2, keyword="spec")],
                     )
                 ],
                 vector_results=[
@@ -61,6 +67,10 @@ class QueryOutputTests(unittest.TestCase):
             warnings_json = json.loads((bundle.path / "warnings.json").read_text(encoding="utf-8"))
 
         self.assertEqual(full_text_json[0]["google_file_id"], "file-1")
+        self.assertEqual(
+            full_text_json[0]["pages"],
+            [{"page_number": 2, "keyword": "spec"}],
+        )
         self.assertEqual(vector_json[0]["pages"][0]["page_number"], 1)
         self.assertEqual(query_plan_json["drive_query"], "fullText contains 'spec' and trashed = false")
         self.assertEqual(warnings_json, [])

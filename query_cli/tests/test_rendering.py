@@ -282,6 +282,33 @@ class RenderingTests(unittest.TestCase):
             self.assertTrue(existing_path.read_bytes().startswith(b"\x89PNG"))
             self.assertFalse((pages_dir / "0002.png").exists())
 
+    def test_process_reuses_existing_query_page_pngs_without_overwriting(self):
+        renderer = DocumentPageRenderer(dpi=72)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source_path = root / "source.pdf"
+            _create_pdf(source_path, ["alpha keyword", "second page"])
+            output_dir = root / "result"
+            pages_dir = output_dir / "pages"
+            pages_dir.mkdir(parents=True)
+            existing_path = pages_dir / "0001.png"
+            existing_path.write_bytes(b"existing")
+
+            processed = renderer.process(
+                source_path,
+                "application/pdf",
+                output_dir,
+                [],
+                full_text_keywords=["alpha"],
+            )
+
+            self.assertEqual(
+                [page.to_dict() for page in processed.full_text_pages],
+                [{"page_number": 1, "keyword": "alpha"}],
+            )
+            self.assertEqual([path.name for path in processed.page_paths], ["0001.png"])
+            self.assertEqual(existing_path.read_bytes(), b"existing")
+
     def test_render_pdf_pages_rejects_page_beyond_document(self):
         renderer = DocumentPageRenderer()
         with tempfile.TemporaryDirectory() as temp_dir:

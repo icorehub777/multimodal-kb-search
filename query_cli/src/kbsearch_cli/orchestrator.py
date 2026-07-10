@@ -3,15 +3,17 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable, Mapping
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Protocol
 
 from kbsearch_cli.errors import QueryCliError
+from kbsearch_cli.full_text import extract_full_text_keywords
 from kbsearch_cli.logging_config import LOGGER_NAME
 from kbsearch_cli.models import (
     DownloadFailureResult,
     DownloadedFileResult,
+    FullTextPageSearchResult,
     FullTextSearchResult,
     ProcessedDocument,
     QueryResultBundle,
@@ -60,6 +62,7 @@ class DocumentProcessor(Protocol):
         mime_type: str,
         output_dir: Path,
         page_numbers: list[int],
+        full_text_keywords: list[str] | None = None,
     ) -> ProcessedDocument:
         raise NotImplementedError
 
@@ -72,6 +75,7 @@ class _DownloadTarget:
     google_drive_url: str
     vector_page_numbers: list[int]
     full_text_query: str | None
+    full_text_keywords: list[str]
 
 
 @dataclass(frozen=True)
@@ -79,6 +83,7 @@ class _DownloadBatchResult:
     downloaded_files: list[DownloadedFileResult]
     failures: list[DownloadFailureResult]
     warnings: list[QueryWarningResult]
+    full_text_pages_by_file_id: dict[str, list[FullTextPageSearchResult]]
 
 
 class QueryOrchestrator:
@@ -197,11 +202,13 @@ class QueryOrchestrator:
             for result in vector_candidates
             if result.google_file_id in metadata_by_file_id
         ]
+        full_text_keywords = extract_full_text_keywords(drive_query)
         download_targets = _build_download_targets(
             full_text_results,
             vector_results,
             metadata_by_file_id,
             drive_query,
+            full_text_keywords,
         )
         union_breakdown = _union_breakdown(full_text_results, vector_results)
         bundle = self._result_writer.create_bundle(
@@ -266,6 +273,12 @@ class QueryOrchestrator:
             download_targets,
             progress=progress,
         )
+        full_text_results = _apply_full_text_pages(
+            full_text_results,
+            download_batch.full_text_pages_by_file_id,
+        )
+        bundle = replace(bundle, full_text_results=full_text_results)
+        self._result_writer.write_full_text_results(bundle, full_text_results)
         self._result_writer.write_download_failures(bundle, download_batch.failures)
         self._result_writer.write_warnings(bundle, download_batch.warnings)
         logger.info(
@@ -349,6 +362,7 @@ class QueryOrchestrator:
         downloaded_files: list[DownloadedFileResult] = []
         failures: list[DownloadFailureResult] = []
         warnings: list[QueryWarningResult] = []
+        full_text_pages_by_file_id: dict[str, list[FullTextPageSearchResult]] = {}
         used_dir_names: set[str] = set()
         total = len(download_targets)
         for index, target in enumerate(download_targets, start=1):
@@ -395,7 +409,12 @@ class QueryOrchestrator:
                     mime_type,
                     file_dir,
                     target.vector_page_numbers,
+                    target.full_text_keywords,
                 )
+                if target.full_text_query is not None:
+                    full_text_pages_by_file_id[target.google_file_id] = (
+                        processed.full_text_pages
+                    )
                 if target.vector_page_numbers and not processed.page_paths:
                     warning = QueryWarningResult(
                         code="vector_pages_unrendered",
@@ -486,6 +505,7 @@ class QueryOrchestrator:
             downloaded_files=downloaded_files,
             failures=failures,
             warnings=warnings,
+            full_text_pages_by_file_id=full_text_pages_by_file_id,
         )
 
 
@@ -493,7 +513,8 @@ def _build_download_targets(
     full_text_results: list[FullTextSearchResult],
     vector_results: list[VectorFileSearchResult],
     metadata_by_file_id: dict[str, FullTextSearchResult],
-    drive_query: str,
+    drive_query: str | None,
+    full_text_keywords: list[str],
 ) -> list[_DownloadTarget]:
     full_text_by_id = {
         result.google_file_id: result for result in full_text_results
@@ -530,9 +551,25 @@ def _build_download_targets(
                     else []
                 ),
                 full_text_query=drive_query if full_text_result is not None else None,
+                full_text_keywords=(
+                    full_text_keywords if full_text_result is not None else []
+                ),
             )
         )
     return targets
+
+
+def _apply_full_text_pages(
+    full_text_results: list[FullTextSearchResult],
+    full_text_pages_by_file_id: dict[str, list[FullTextPageSearchResult]],
+) -> list[FullTextSearchResult]:
+    return [
+        replace(
+            result,
+            pages=full_text_pages_by_file_id.get(result.google_file_id, []),
+        )
+        for result in full_text_results
+    ]
 
 
 @dataclass(frozen=True)

@@ -7,6 +7,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from kbsearch_cli.errors import DocumentRenderError
+from kbsearch_cli.full_text import locate_full_text_keyword_pages
 from kbsearch_cli.models import ProcessedDocument
 
 CJK_TEXT_FONT_NAME = "KBSearchTextCJK"
@@ -60,7 +61,9 @@ class DocumentPageRenderer:
         mime_type: str,
         output_dir: Path,
         page_numbers: list[int],
+        full_text_keywords: list[str] | None = None,
     ) -> ProcessedDocument:
+        keywords = full_text_keywords or []
         document_type = classify_document_type(mime_type)
         if document_type in {"spreadsheet", "download_only"}:
             return ProcessedDocument(pdf_path=None, text_paths=[], page_paths=[])
@@ -72,16 +75,30 @@ class DocumentPageRenderer:
             return ProcessedDocument(
                 pdf_path=None,
                 text_paths=[],
-                page_paths=self._render_image(source_path, output_dir / "pages"),
+                page_paths=self._render_image(
+                    source_path,
+                    output_dir / "pages",
+                    overwrite=False,
+                ),
             )
 
         pdf_path = self.prepare_pdf(source_path, mime_type, output_dir)
         text_paths = self.extract_pdf_text(pdf_path, output_dir / "text")
-        page_paths = self.render_pdf_pages(pdf_path, output_dir / "pages", page_numbers)
+        full_text_pages = locate_full_text_keyword_pages(text_paths, keywords)
+        render_page_numbers = sorted(
+            set(page_numbers) | {page.page_number for page in full_text_pages}
+        )
+        page_paths = self.render_pdf_pages(
+            pdf_path,
+            output_dir / "pages",
+            render_page_numbers,
+            overwrite=False,
+        )
         return ProcessedDocument(
             pdf_path=pdf_path,
             text_paths=text_paths,
             page_paths=page_paths,
+            full_text_pages=full_text_pages,
         )
 
     def prepare_pdf(self, source_path: Path, mime_type: str, output_dir: Path) -> Path:
@@ -205,6 +222,8 @@ class DocumentPageRenderer:
         pdf_path: Path,
         output_dir: Path,
         page_numbers: list[int],
+        *,
+        overwrite: bool = True,
     ) -> list[Path]:
         try:
             import fitz
@@ -233,8 +252,11 @@ class DocumentPageRenderer:
                             f"(page_count={page_count}, requested={invalid_pages})."
                         )
                     for page_number in selected_pages:
-                        page = document[page_number - 1]
                         output_path = output_dir / f"{page_number:04d}.png"
+                        if output_path.exists() and not overwrite:
+                            paths.append(output_path)
+                            continue
+                        page = document[page_number - 1]
                         page.get_pixmap(dpi=self._dpi).save(output_path)
                         paths.append(output_path)
             except DocumentRenderError:
@@ -245,7 +267,13 @@ class DocumentPageRenderer:
             fitz.TOOLS.mupdf_display_errors(previous_display_errors)
         return paths
 
-    def _render_image(self, image_path: Path, output_dir: Path) -> list[Path]:
+    def _render_image(
+        self,
+        image_path: Path,
+        output_dir: Path,
+        *,
+        overwrite: bool,
+    ) -> list[Path]:
         try:
             from PIL import Image
         except ImportError as exc:
@@ -253,6 +281,8 @@ class DocumentPageRenderer:
 
         output_dir.mkdir(parents=True, exist_ok=True)
         output_path = output_dir / "0001.png"
+        if output_path.exists() and not overwrite:
+            return [output_path]
         with Image.open(image_path) as image:
             image.convert("RGB").save(output_path, format="PNG")
         return [output_path]

@@ -15,6 +15,37 @@ def format_progress_message(phase: str, fields: Mapping[str, object]) -> str:
     return "Query progress: " + " ".join(parts)
 
 
+def format_query_started_event(
+    *,
+    run_id: str,
+    output_dir: Path,
+    log_path: Path,
+) -> str:
+    payload = build_query_started_event_payload(
+        run_id=run_id,
+        output_dir=output_dir,
+        log_path=log_path,
+    )
+    return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+
+
+def build_query_started_event_payload(
+    *,
+    run_id: str,
+    output_dir: Path,
+    log_path: Path,
+) -> dict[str, str]:
+    return {
+        "event": "query_started",
+        "status": "started",
+        "run_id": run_id,
+        "output_dir": output_dir.as_posix(),
+        "log_path": log_path.as_posix(),
+        "monitor": "log",
+        "stdout": "final_json_on_success",
+    }
+
+
 def format_query_success_output(
     result: QueryRunResult,
     *,

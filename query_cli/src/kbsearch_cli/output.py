@@ -63,6 +63,16 @@ class QueryResultWriter:
             [failure.to_dict() for failure in failures],
         )
 
+    def write_full_text_results(
+        self,
+        bundle: QueryResultBundle,
+        full_text_results: list[FullTextSearchResult],
+    ) -> None:
+        _write_json(
+            bundle.full_text_results_path,
+            [result.to_dict() for result in full_text_results],
+        )
+
     def write_warnings(
         self,
         bundle: QueryResultBundle,

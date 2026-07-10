@@ -8,7 +8,11 @@ from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 
-from kbsearch_cli.cli_output import format_progress_message, format_query_success_output
+from kbsearch_cli.cli_output import (
+    format_progress_message,
+    format_query_started_event,
+    format_query_success_output,
+)
 from kbsearch_cli.config import ConfigError, load_query_cli_config
 from kbsearch_cli.errors import QueryCliError
 from kbsearch_cli.factories import create_query_orchestrator
@@ -249,6 +253,15 @@ def main(argv: list[str] | None = None) -> int:
                 output_dir,
                 config.query_log_retention_days,
                 removed_logs,
+            )
+            _write_terminal(
+                format_query_started_event(
+                    run_id=run_id,
+                    output_dir=output_dir,
+                    log_path=log_path,
+                ),
+                stream=sys.stderr,
+                logger=logger,
             )
             progress(
                 "query",

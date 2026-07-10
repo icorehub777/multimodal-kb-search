@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 from kbsearch_cli.models import (
+    FullTextPageSearchResult,
     FullTextSearchResult,
     PageSearchResult,
     ProcessedDocument,
@@ -105,8 +106,10 @@ class FakeDocumentProcessor:
     def __init__(self):
         self.processed = []
 
-    def process(self, source_path, mime_type, output_dir, page_numbers):
-        self.processed.append((source_path.name, mime_type, list(page_numbers)))
+    def process(self, source_path, mime_type, output_dir, page_numbers, full_text_keywords=None):
+        self.processed.append(
+            (source_path.name, mime_type, list(page_numbers), list(full_text_keywords or []))
+        )
         if classify_document_type(mime_type) in {"spreadsheet", "download_only"}:
             return ProcessedDocument(None, [], [])
         pdf_path = source_path
@@ -294,7 +297,7 @@ class QueryOrchestratorTests(unittest.TestCase):
         )
         self.assertEqual(failures[0]["google_file_id"], "file-1")
         self.assertEqual(failures[0]["vector_page_numbers"], [2])
-        self.assertEqual(processor.processed, [("Beta.pdf", "application/pdf", [])])
+        self.assertEqual(processor.processed, [("Beta.pdf", "application/pdf", [], ["alpha"])])
         self.assertTrue(
             any(
                 phase == "download"
@@ -306,10 +309,16 @@ class QueryOrchestratorTests(unittest.TestCase):
 
     def test_run_records_processing_stage_when_document_processing_fails(self):
         class PartiallyFailingProcessor(FakeDocumentProcessor):
-            def process(self, source_path, mime_type, output_dir, page_numbers):
+            def process(self, source_path, mime_type, output_dir, page_numbers, full_text_keywords=None):
                 if source_path.name == "Alpha.pdf":
                     raise RuntimeError("invalid pdf")
-                return super().process(source_path, mime_type, output_dir, page_numbers)
+                return super().process(
+                    source_path,
+                    mime_type,
+                    output_dir,
+                    page_numbers,
+                    full_text_keywords,
+                )
 
         with tempfile.TemporaryDirectory() as temp_dir:
             orchestrator = QueryOrchestrator(
@@ -419,8 +428,8 @@ class QueryOrchestratorTests(unittest.TestCase):
             self.assertEqual(
                 processor.processed,
                 [
-                    ("Alpha.pdf", "application/pdf", [2]),
-                    ("Beta.pdf", "application/pdf", []),
+                    ("Alpha.pdf", "application/pdf", [2], ["alpha"]),
+                    ("Beta.pdf", "application/pdf", [], ["alpha"]),
                 ],
             )
             self.assertEqual(result.download_failure_count, 0)
@@ -477,10 +486,92 @@ class QueryOrchestratorTests(unittest.TestCase):
             self.assertEqual(
                 processor.processed,
                 [
-                    ("file-1.pdf", "application/pdf", [2]),
-                    ("Orders.xlsx", "application/vnd.google-apps.spreadsheet", []),
+                    ("file-1.pdf", "application/pdf", [2], []),
+                    ("Orders.xlsx", "application/vnd.google-apps.spreadsheet", [], ["orders"]),
                 ],
             )
+
+    def test_run_rewrites_full_text_results_with_localized_keyword_pages(self):
+        class LocalizingProcessor(FakeDocumentProcessor):
+            def process(self, source_path, mime_type, output_dir, page_numbers, full_text_keywords=None):
+                self.processed.append(
+                    (source_path.name, mime_type, list(page_numbers), list(full_text_keywords or []))
+                )
+                text_dir = output_dir / "text"
+                text_dir.mkdir()
+                (text_dir / "0001.txt").write_text("alpha only", encoding="utf-8")
+                (text_dir / "0002.txt").write_text("alpha beta", encoding="utf-8")
+                pages = (
+                    [
+                        FullTextPageSearchResult(1, "alpha"),
+                        FullTextPageSearchResult(2, "alpha, beta"),
+                    ]
+                    if source_path.name == "Alpha.pdf"
+                    else []
+                )
+                rendered_numbers = sorted(
+                    set(page_numbers) | {page.page_number for page in pages}
+                )
+                page_dir = output_dir / "pages"
+                page_paths = []
+                if rendered_numbers:
+                    page_dir.mkdir()
+                    for page_number in rendered_numbers:
+                        page_path = page_dir / f"{page_number:04d}.png"
+                        page_path.write_bytes(b"png")
+                        page_paths.append(page_path)
+                return ProcessedDocument(
+                    pdf_path=source_path,
+                    text_paths=sorted(text_dir.glob("*.txt")),
+                    page_paths=page_paths,
+                    full_text_pages=pages,
+                )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            processor = LocalizingProcessor()
+            orchestrator = QueryOrchestrator(
+                google_drive=FakeGoogleDriveClient(),
+                backend=FakeBackendClient(),
+                result_writer=QueryResultWriter(),
+                document_processor=processor,
+            )
+
+            result = orchestrator.run(
+                output_dir=_create_output_dir(temp_dir, "full-text-pages"),
+                vector_query="alpha",
+                drive_query="fullText contains 'alpha' or fullText contains 'beta'",
+                limit=10,
+                min_score=0.5,
+            )
+            full_text_json = json.loads(
+                result.bundle.full_text_results_path.read_text(encoding="utf-8")
+            )
+            dir_names = _expected_dir_names([("file-1", "Alpha.pdf"), ("file-2", "Beta.pdf")])
+            alpha_page_1_exists = (
+                result.bundle.path / dir_names["file-1"] / "pages" / "0001.png"
+            ).exists()
+            alpha_page_2_exists = (
+                result.bundle.path / dir_names["file-1"] / "pages" / "0002.png"
+            ).exists()
+
+        self.assertEqual(
+            full_text_json[0]["pages"],
+            [
+                {"page_number": 1, "keyword": "alpha"},
+                {"page_number": 2, "keyword": "alpha, beta"},
+            ],
+        )
+        self.assertEqual(full_text_json[1]["pages"], [])
+        self.assertEqual(result.bundle.full_text_results[0].pages[0].keyword, "alpha")
+        self.assertEqual(
+            processor.processed,
+            [
+                ("Alpha.pdf", "application/pdf", [2], ["alpha", "beta"]),
+                ("Beta.pdf", "application/pdf", [], ["alpha", "beta"]),
+            ],
+        )
+        self.assertTrue(alpha_page_1_exists)
+        self.assertTrue(alpha_page_2_exists)
 
     def test_run_counts_unsupported_full_text_mime_as_downloaded_file(self):
         class UnsupportedMimeGoogleDriveClient(FakeGoogleDriveClient):

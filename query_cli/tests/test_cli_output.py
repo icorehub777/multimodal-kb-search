@@ -3,7 +3,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from kbsearch_cli.cli_output import build_query_success_payload, format_progress_message
+from kbsearch_cli.cli_output import (
+    build_query_started_event_payload,
+    build_query_success_payload,
+    format_progress_message,
+)
 from kbsearch_cli.models import (
     DownloadedFileResult,
     DownloadFailureResult,
@@ -15,6 +19,26 @@ from kbsearch_cli.models import (
 
 
 class CliOutputTests(unittest.TestCase):
+    def test_build_query_started_event_payload_points_agent_to_log_monitoring(self):
+        payload = build_query_started_event_payload(
+            run_id="run12345",
+            output_dir=Path("C:/tmp/query/run"),
+            log_path=Path("C:/tmp/logs/kbsearch-run12345.log"),
+        )
+
+        self.assertEqual(
+            payload,
+            {
+                "event": "query_started",
+                "status": "started",
+                "run_id": "run12345",
+                "output_dir": "C:/tmp/query/run",
+                "log_path": "C:/tmp/logs/kbsearch-run12345.log",
+                "monitor": "log",
+                "stdout": "final_json_on_success",
+            },
+        )
+
     def test_format_progress_message_uses_stable_key_value_format(self):
         message = format_progress_message(
             "download",

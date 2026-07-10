@@ -1,8 +1,17 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
+
+
+@dataclass(frozen=True)
+class FullTextPageSearchResult:
+    page_number: int
+    keyword: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
 
 
 @dataclass(frozen=True)
@@ -11,9 +20,12 @@ class FullTextSearchResult:
     name: str
     mime_type: str
     web_url: str
+    pages: list[FullTextPageSearchResult] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        data = asdict(self)
+        data["pages"] = [page.to_dict() for page in self.pages]
+        return data
 
 
 @dataclass(frozen=True)
@@ -98,6 +110,7 @@ class ProcessedDocument:
     pdf_path: Path | None
     text_paths: list[Path]
     page_paths: list[Path]
+    full_text_pages: list[FullTextPageSearchResult] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

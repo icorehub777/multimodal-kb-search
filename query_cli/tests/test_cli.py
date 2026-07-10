@@ -175,6 +175,20 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["warning_count"], 0)
         self.assertEqual(payload["warnings_path"], (bundle_path / "warnings.json").as_posix())
         self.assertEqual(payload["warnings"], [])
+        first_stderr_line = stderr.getvalue().splitlines()[0]
+        started_event = json.loads(first_stderr_line)
+        self.assertEqual(
+            started_event,
+            {
+                "event": "query_started",
+                "status": "started",
+                "run_id": "run12345",
+                "output_dir": bundle_path.as_posix(),
+                "log_path": log_context.log_path.as_posix(),
+                "monitor": "log",
+                "stdout": "final_json_on_success",
+            },
+        )
         self.assertIn(
             "Query progress: phase=query status=started run_id=run12345",
             stderr.getvalue(),
