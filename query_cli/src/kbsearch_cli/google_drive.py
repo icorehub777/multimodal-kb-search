@@ -19,7 +19,8 @@ GOOGLE_NATIVE_EXPORTS = {
         ".xlsx",
     ),
 }
-DRIVE_SEARCH_FIELDS = "files(id,name,mimeType,webViewLink)"
+GOOGLE_NATIVE_MIME_PREFIX = "application/vnd.google-apps."
+DRIVE_SEARCH_FIELDS = "files(id,name,mimeType,webViewLink,capabilities/canDownload)"
 DRIVE_METADATA_FIELDS = "id,name,mimeType,webViewLink"
 
 
@@ -48,13 +49,10 @@ class GoogleDriveQueryClient:
         except Exception as exc:
             raise ExternalServiceError(f"Google Drive search failed: {exc}") from exc
         return [
-            FullTextSearchResult(
-                google_file_id=item["id"],
-                name=item["name"],
-                mime_type=item.get("mimeType", ""),
-                web_url=item.get("webViewLink", ""),
-            )
+            _metadata_from_drive_item(item)
             for item in response.get("files", [])
+            if _is_search_result_downloadable(item)
+            and _is_supported_google_native_mime_type(item.get("mimeType", ""))
         ]
 
     def resolve_accessible_metadata(
@@ -165,3 +163,14 @@ def _write_request_bytes(request: Any, output_path: Path) -> None:
 
 def safe_download_name(name: str) -> str:
     return re.sub(r'[<>:"/\\\\|?*]', "_", name).strip() or "downloaded_file"
+
+
+def _is_search_result_downloadable(item: dict[str, Any]) -> bool:
+    capabilities = item.get("capabilities") or {}
+    return capabilities.get("canDownload") is not False
+
+
+def _is_supported_google_native_mime_type(mime_type: str) -> bool:
+    if not mime_type.startswith(GOOGLE_NATIVE_MIME_PREFIX):
+        return True
+    return mime_type in GOOGLE_NATIVE_EXPORTS

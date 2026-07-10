@@ -7,12 +7,15 @@ from kbsearch_cli.google_drive import GoogleDriveQueryClient
 
 
 class FakeListRequest:
-    def __init__(self, failure=None):
+    def __init__(self, failure=None, files=None):
         self.failure = failure
+        self.files = files
 
     def execute(self):
         if self.failure is not None:
             raise self.failure
+        if self.files is not None:
+            return {"files": self.files}
         return {
             "files": [
                 {
@@ -20,24 +23,26 @@ class FakeListRequest:
                     "name": "Spec.pdf",
                     "mimeType": "application/pdf",
                     "webViewLink": "https://drive/file-1",
+                    "capabilities": {"canDownload": True},
                 }
             ]
         }
 
 
 class FakeFilesResource:
-    def __init__(self, failure=None):
+    def __init__(self, failure=None, files=None):
         self.list_kwargs = None
         self.failure = failure
+        self.files = files
 
     def list(self, **kwargs):
         self.list_kwargs = kwargs
-        return FakeListRequest(self.failure)
+        return FakeListRequest(self.failure, self.files)
 
 
 class FakeDriveService:
-    def __init__(self, failure=None):
-        self.files_resource = FakeFilesResource(failure)
+    def __init__(self, failure=None, files=None):
+        self.files_resource = FakeFilesResource(failure, files)
 
     def files(self):
         return self.files_resource
@@ -59,6 +64,97 @@ class GoogleDriveQueryClientTests(unittest.TestCase):
             "(fullText contains 'ABC' or name contains 'ABC') and trashed = false",
         )
         self.assertEqual(drive_service.files_resource.list_kwargs["pageSize"], 7)
+        self.assertIn(
+            "capabilities/canDownload",
+            drive_service.files_resource.list_kwargs["fields"],
+        )
+
+    def test_search_excludes_items_with_can_download_false(self):
+        client = GoogleDriveQueryClient(
+            FakeDriveService(
+                files=[
+                    {
+                        "id": "file-1",
+                        "name": "Allowed.pdf",
+                        "mimeType": "application/pdf",
+                        "webViewLink": "https://drive/file-1",
+                        "capabilities": {"canDownload": True},
+                    },
+                    {
+                        "id": "file-2",
+                        "name": "Blocked.pdf",
+                        "mimeType": "application/pdf",
+                        "webViewLink": "https://drive/file-2",
+                        "capabilities": {"canDownload": False},
+                    },
+                ]
+            )
+        )
+
+        results = client.search("fullText contains 'x'", 10)
+
+        self.assertEqual([result.google_file_id for result in results], ["file-1"])
+
+    def test_search_keeps_items_when_can_download_is_not_returned(self):
+        client = GoogleDriveQueryClient(
+            FakeDriveService(
+                files=[
+                    {
+                        "id": "file-1",
+                        "name": "Legacy.pdf",
+                        "mimeType": "application/pdf",
+                        "webViewLink": "https://drive/file-1",
+                    }
+                ]
+            )
+        )
+
+        results = client.search("fullText contains 'x'", 10)
+
+        self.assertEqual([result.google_file_id for result in results], ["file-1"])
+
+    def test_search_excludes_unsupported_google_native_mime_types(self):
+        client = GoogleDriveQueryClient(
+            FakeDriveService(
+                files=[
+                    {
+                        "id": "doc-1",
+                        "name": "Doc",
+                        "mimeType": "application/vnd.google-apps.document",
+                        "webViewLink": "https://drive/doc-1",
+                        "capabilities": {"canDownload": True},
+                    },
+                    {
+                        "id": "sheet-1",
+                        "name": "Sheet",
+                        "mimeType": "application/vnd.google-apps.spreadsheet",
+                        "webViewLink": "https://drive/sheet-1",
+                        "capabilities": {"canDownload": True},
+                    },
+                    {
+                        "id": "form-1",
+                        "name": "Form",
+                        "mimeType": "application/vnd.google-apps.form",
+                        "webViewLink": "https://drive/form-1",
+                        "capabilities": {"canDownload": True},
+                    },
+                    {
+                        "id": "site-1",
+                        "name": "Site",
+                        "mimeType": "application/vnd.google-apps.site",
+                        "webViewLink": "https://drive/site-1",
+                        "capabilities": {"canDownload": True},
+                    },
+                ]
+            )
+        )
+
+        results = client.search("fullText contains 'x'", 10)
+
+        self.assertEqual(
+            [result.google_file_id for result in results],
+            ["doc-1", "sheet-1"],
+        )
 
     def test_search_wraps_google_drive_errors(self):
         client = GoogleDriveQueryClient(FakeDriveService(failure=RuntimeError("bad q")))
