@@ -30,22 +30,42 @@ class FakeListRequest:
 
 
 class FakeFilesResource:
-    def __init__(self, failure=None, files=None):
+    def __init__(self, failure=None, files=None, parent_payloads=None):
         self.list_kwargs = None
+        self.get_calls = []
         self.failure = failure
         self.files = files
+        self.parent_payloads = parent_payloads or {}
 
     def list(self, **kwargs):
         self.list_kwargs = kwargs
         return FakeListRequest(self.failure, self.files)
 
+    def get(self, **kwargs):
+        self.get_calls.append(kwargs)
+        return FakeGetRequest(payload=self.parent_payloads[kwargs["fileId"]])
+
+
+class FakeDrivesResource:
+    def __init__(self, drive_payloads=None):
+        self.get_calls = []
+        self.drive_payloads = drive_payloads or {}
+
+    def get(self, **kwargs):
+        self.get_calls.append(kwargs)
+        return FakeGetRequest(payload=self.drive_payloads[kwargs["driveId"]])
+
 
 class FakeDriveService:
-    def __init__(self, failure=None, files=None):
-        self.files_resource = FakeFilesResource(failure, files)
+    def __init__(self, failure=None, files=None, parent_payloads=None, drive_payloads=None):
+        self.files_resource = FakeFilesResource(failure, files, parent_payloads)
+        self.drives_resource = FakeDrivesResource(drive_payloads)
 
     def files(self):
         return self.files_resource
+
+    def drives(self):
+        return self.drives_resource
 
 
 class GoogleDriveQueryClientTests(unittest.TestCase):
@@ -67,6 +87,77 @@ class GoogleDriveQueryClientTests(unittest.TestCase):
         self.assertIn(
             "capabilities/canDownload",
             drive_service.files_resource.list_kwargs["fields"],
+        )
+        self.assertIn("parents", drive_service.files_resource.list_kwargs["fields"])
+        self.assertIn("driveId", drive_service.files_resource.list_kwargs["fields"])
+
+    def test_search_resolves_source_location_from_parent_chain(self):
+        drive_service = FakeDriveService(
+            files=[
+                {
+                    "id": "file-1",
+                    "name": "Spec.pdf",
+                    "mimeType": "application/pdf",
+                    "webViewLink": "https://drive/file-1",
+                    "parents": ["folder-2"],
+                    "capabilities": {"canDownload": True},
+                }
+            ],
+            parent_payloads={
+                "folder-2": {"id": "folder-2", "name": "Products", "parents": ["folder-1"]},
+                "folder-1": {"id": "folder-1", "name": "Drive Root"},
+            },
+        )
+        client = GoogleDriveQueryClient(drive_service)
+
+        results = client.search("fullText contains 'x'", 10)
+
+        self.assertEqual(results[0].source_location, "Drive Root/Products/Spec.pdf")
+        self.assertEqual(
+            drive_service.files_resource.get_calls,
+            [
+                {
+                    "fileId": "folder-2",
+                    "fields": "id,name,parents",
+                    "supportsAllDrives": True,
+                },
+                {
+                    "fileId": "folder-1",
+                    "fields": "id,name,parents",
+                    "supportsAllDrives": True,
+                },
+            ],
+        )
+
+    def test_search_uses_shared_drive_name_as_source_location_root(self):
+        drive_service = FakeDriveService(
+            files=[
+                {
+                    "id": "file-1",
+                    "name": "Spec.pdf",
+                    "mimeType": "application/pdf",
+                    "webViewLink": "https://drive/file-1",
+                    "parents": ["folder-2"],
+                    "driveId": "shared-drive-1",
+                    "capabilities": {"canDownload": True},
+                }
+            ],
+            parent_payloads={
+                "folder-2": {"id": "folder-2", "name": "Products", "parents": ["folder-1"]},
+                "folder-1": {"id": "folder-1", "name": "雲端硬碟"},
+            },
+            drive_payloads={
+                "shared-drive-1": {"id": "shared-drive-1", "name": "KBSearch_Test"},
+            },
+        )
+        client = GoogleDriveQueryClient(drive_service)
+
+        results = client.search("fullText contains 'x'", 10)
+
+        self.assertEqual(results[0].source_location, "KBSearch_Test/Products/Spec.pdf")
+        self.assertEqual(
+            drive_service.drives_resource.get_calls,
+            [{"driveId": "shared-drive-1", "fields": "id,name"}],
         )
 
     def test_search_excludes_items_with_can_download_false(self):

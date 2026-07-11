@@ -38,6 +38,7 @@ class QueryOutputTests(unittest.TestCase):
                         name="Spec.pdf",
                         mime_type="application/pdf",
                         web_url="https://drive/file-1",
+                        source_location="Drive/Spec.pdf",
                         pages=[FullTextPageSearchResult(page_number=2, keyword="spec")],
                     )
                 ],
@@ -67,6 +68,7 @@ class QueryOutputTests(unittest.TestCase):
             warnings_json = json.loads((bundle.path / "warnings.json").read_text(encoding="utf-8"))
 
         self.assertEqual(full_text_json[0]["google_file_id"], "file-1")
+        self.assertEqual(full_text_json[0]["source_location"], "Drive/Spec.pdf")
         self.assertEqual(
             full_text_json[0]["pages"],
             [{"page_number": 2, "keyword": "spec"}],

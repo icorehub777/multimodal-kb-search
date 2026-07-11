@@ -20,6 +20,7 @@ class FullTextSearchResult:
     name: str
     mime_type: str
     web_url: str
+    source_location: str = ""
     pages: list[FullTextPageSearchResult] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:

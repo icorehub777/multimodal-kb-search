@@ -20,22 +20,31 @@ GOOGLE_NATIVE_EXPORTS = {
     ),
 }
 GOOGLE_NATIVE_MIME_PREFIX = "application/vnd.google-apps."
-DRIVE_SEARCH_FIELDS = "files(id,name,mimeType,webViewLink,capabilities/canDownload)"
+DRIVE_SEARCH_FIELDS = "files(id,name,mimeType,webViewLink,parents,driveId,capabilities/canDownload)"
 DRIVE_METADATA_FIELDS = "id,name,mimeType,webViewLink"
+DRIVE_PARENT_FIELDS = "id,name,parents"
+DRIVE_SHARED_DRIVE_FIELDS = "id,name"
 
 
-def _metadata_from_drive_item(item: dict[str, Any]) -> FullTextSearchResult:
+def _metadata_from_drive_item(
+    item: dict[str, Any],
+    *,
+    source_location: str = "",
+) -> FullTextSearchResult:
     return FullTextSearchResult(
         google_file_id=item["id"],
         name=item["name"],
         mime_type=item.get("mimeType", ""),
         web_url=item.get("webViewLink", ""),
+        source_location=source_location,
     )
 
 
 class GoogleDriveQueryClient:
     def __init__(self, drive_service: Any) -> None:
         self._drive_service = drive_service
+        self._parent_metadata_cache: dict[str, dict[str, Any]] = {}
+        self._shared_drive_name_cache: dict[str, str] = {}
 
     def search(self, drive_query: str, limit: int) -> list[FullTextSearchResult]:
         try:
@@ -49,11 +58,72 @@ class GoogleDriveQueryClient:
         except Exception as exc:
             raise ExternalServiceError(f"Google Drive search failed: {exc}") from exc
         return [
-            _metadata_from_drive_item(item)
+            _metadata_from_drive_item(
+                item,
+                source_location=self._source_location_from_item(item),
+            )
             for item in response.get("files", [])
             if _is_search_result_downloadable(item)
             and _is_supported_google_native_mime_type(item.get("mimeType", ""))
         ]
+
+    def _source_location_from_item(self, item: dict[str, Any]) -> str:
+        names = [str(item.get("name") or "")]
+        parent_ids = [str(parent_id) for parent_id in item.get("parents") or []]
+        seen_parent_ids: set[str] = set()
+        while parent_ids:
+            parent_id = parent_ids[0]
+            if parent_id in seen_parent_ids:
+                break
+            seen_parent_ids.add(parent_id)
+            parent = self._get_parent_metadata(parent_id)
+            parent_name = str(parent.get("name") or "")
+            if parent_name:
+                names.append(parent_name)
+            parent_ids = [str(parent_id) for parent_id in parent.get("parents") or []]
+        parts = list(reversed([name for name in names if name]))
+        drive_id = str(item.get("driveId") or "")
+        if drive_id:
+            shared_drive_name = self._get_shared_drive_name(drive_id)
+            if parts:
+                parts[0] = shared_drive_name
+            else:
+                parts.append(shared_drive_name)
+        return "/".join(parts)
+
+    def _get_parent_metadata(self, parent_id: str) -> dict[str, Any]:
+        cached = self._parent_metadata_cache.get(parent_id)
+        if cached is not None:
+            return cached
+        try:
+            metadata = self._drive_service.files().get(
+                fileId=parent_id,
+                fields=DRIVE_PARENT_FIELDS,
+                supportsAllDrives=True,
+            ).execute()
+        except Exception as exc:
+            raise ExternalServiceError(
+                f"Google Drive parent metadata lookup failed (file_id={parent_id}): {exc}"
+            ) from exc
+        self._parent_metadata_cache[parent_id] = metadata
+        return metadata
+
+    def _get_shared_drive_name(self, drive_id: str) -> str:
+        cached = self._shared_drive_name_cache.get(drive_id)
+        if cached is not None:
+            return cached
+        try:
+            metadata = self._drive_service.drives().get(
+                driveId=drive_id,
+                fields=DRIVE_SHARED_DRIVE_FIELDS,
+            ).execute()
+        except Exception as exc:
+            raise ExternalServiceError(
+                f"Google Drive shared drive metadata lookup failed (drive_id={drive_id}): {exc}"
+            ) from exc
+        name = str(metadata.get("name") or "")
+        self._shared_drive_name_cache[drive_id] = name
+        return name
 
     def resolve_accessible_metadata(
         self,
