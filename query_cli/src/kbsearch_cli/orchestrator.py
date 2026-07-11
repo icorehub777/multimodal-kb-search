@@ -279,6 +279,7 @@ class QueryOrchestrator:
         )
         bundle = replace(bundle, full_text_results=full_text_results)
         self._result_writer.write_full_text_results(bundle, full_text_results)
+        self._result_writer.write_downloaded_files(bundle, download_batch.downloaded_files)
         self._result_writer.write_download_failures(bundle, download_batch.failures)
         self._result_writer.write_warnings(bundle, download_batch.warnings)
         logger.info(

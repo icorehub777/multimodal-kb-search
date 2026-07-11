@@ -67,6 +67,7 @@ class CliOutputTests(unittest.TestCase):
                 query_plan_path=bundle_dir / "query_plan.json",
                 full_text_results_path=bundle_dir / "full_text_results.json",
                 vector_results_path=bundle_dir / "vector_results.json",
+                downloaded_files_path=bundle_dir / "downloaded_files.json",
                 full_text_results=[
                     FullTextSearchResult("file-1", "Alpha.pdf", "application/pdf", "")
                 ],
@@ -143,6 +144,9 @@ class CliOutputTests(unittest.TestCase):
                 "full_text_count": 1,
                 "vector_count": 4,
                 "download_count": 3,
+                "downloaded_files_path": (
+                    bundle_dir / "downloaded_files.json"
+                ).as_posix(),
                 "downloaded_files": [
                     {
                         "google_file_id": "file-1",

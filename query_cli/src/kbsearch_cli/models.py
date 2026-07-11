@@ -135,6 +135,7 @@ class QueryResultBundle:
     query_plan_path: Path
     full_text_results_path: Path
     vector_results_path: Path
+    downloaded_files_path: Path
     download_failures_path: Path
     warnings_path: Path
     full_text_results: list[FullTextSearchResult]

@@ -104,7 +104,7 @@ repo_root/
 
 ## 搜尋結果結構
 
-- 指令成功時 stdout 回傳 JSON：`output_dir` 是本次搜尋結果資料夾；`downloaded_files` 提供每個成功下載檔案的 `google_file_id`、檔名與各項產物路徑（`directory`、`source_path`、`pdf_path`、`text_paths`、`page_paths`），`file_id` 與文件子資料夾的對照一律以此為準。
+- 指令成功時 stdout 回傳 JSON：`output_dir` 是本次搜尋結果資料夾；`downloaded_files` 與 `downloaded_files.json` 提供每個成功下載檔案的 `google_file_id`、檔名與各項產物路徑（`directory`、`source_path`、`pdf_path`、`text_paths`、`page_paths`），`file_id` 與文件子資料夾的對照一律以此為準。
 - 檔案依「相似度命中優先、按分數排序」的順序下載，最相關的檔案最早可用。
 
 ```text
@@ -112,6 +112,7 @@ repo_root/
   query_plan.json          # 本次實際使用的查詢參數
   full_text_results.json   # 關鍵字搜尋結果（含檔案資訊及可定位的全文命中頁與關鍵字）
   vector_results.json      # 相似度搜尋結果（含檔案資訊、命中頁碼與分數）
+  downloaded_files.json    # 成功下載與處理的檔案；含 file_id 與文件子資料夾對照
   download_failures.json   # 下載或處理失敗的檔案；無失敗為空陣列
   warnings.json            # 非失敗但影響閱讀完整性的狀況；無警告為空陣列
   <檔案子資料夾>/          # 兩種結果聯集內每個檔案一個

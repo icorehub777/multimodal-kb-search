@@ -6,6 +6,7 @@ from pathlib import Path
 
 from kbsearch_cli.errors import QueryCliError
 from kbsearch_cli.models import (
+    DownloadedFileResult,
     DownloadFailureResult,
     FullTextSearchResult,
     QueryResultBundle,
@@ -34,11 +35,13 @@ class QueryResultWriter:
         query_plan_path = output_dir / "query_plan.json"
         full_text_path = output_dir / "full_text_results.json"
         vector_path = output_dir / "vector_results.json"
+        downloaded_files_path = output_dir / "downloaded_files.json"
         download_failures_path = output_dir / "download_failures.json"
         warnings_path = output_dir / "warnings.json"
         _write_json(query_plan_path, query_plan)
         _write_json(full_text_path, [result.to_dict() for result in full_text_results])
         _write_json(vector_path, [result.to_dict() for result in vector_results])
+        _write_json(downloaded_files_path, [])
         _write_json(download_failures_path, [])
         _write_json(warnings_path, [])
 
@@ -47,10 +50,21 @@ class QueryResultWriter:
             query_plan_path=query_plan_path,
             full_text_results_path=full_text_path,
             vector_results_path=vector_path,
+            downloaded_files_path=downloaded_files_path,
             download_failures_path=download_failures_path,
             warnings_path=warnings_path,
             full_text_results=full_text_results,
             vector_results=vector_results,
+        )
+
+    def write_downloaded_files(
+        self,
+        bundle: QueryResultBundle,
+        downloaded_files: list[DownloadedFileResult],
+    ) -> None:
+        _write_json(
+            bundle.downloaded_files_path,
+            [downloaded_file.to_dict() for downloaded_file in downloaded_files],
         )
 
     def write_download_failures(

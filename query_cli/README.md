@@ -138,6 +138,7 @@ kbsearch query `
   "full_text_count": 1,
   "vector_count": 4,
   "download_count": 3,
+  "downloaded_files_path": "C:/path/to/tasks/20260613-130000-manual-test/query_results/20260613-131500-initial-query/downloaded_files.json",
   "downloaded_files": [
     {
       "google_file_id": "file-1",
@@ -193,7 +194,7 @@ Query progress: phase=query status=failed run_id=a1b2c3d4 ...
 
 所有檔案皆成功時，`status` 為 `finished` 且 `download_failure_count` 為 `0`。若單一檔案在 metadata 補查、產物目錄建立、下載或文件處理階段失敗，該檔案會被略過，其餘檔案繼續處理；此時指令仍以成功 exit code 完成，但 `status` 為 `finished_with_errors`。
 
-`download_count` 是成功下載的檔案數量，不包含 `download_failure_count`。`downloaded_files` 是成功下載與處理的檔案清單，提供 `google_file_id`、原始檔名、文件子資料夾 `directory`、下載檔 `source_path`、標準 PDF 路徑 `pdf_path`、逐頁文字 `text_paths` 與命中頁圖 `page_paths`。
+`download_count` 是成功下載的檔案數量，不包含 `download_failure_count`。`downloaded_files` 是成功下載與處理的檔案清單，提供 `google_file_id`、原始檔名、文件子資料夾 `directory`、下載檔 `source_path`、標準 PDF 路徑 `pdf_path`、逐頁文字 `text_paths` 與命中頁圖 `page_paths`。完整清單同時寫入 `downloaded_files.json`。
 
 每筆失敗包含 `google_file_id`、檔名、失敗階段、錯誤類型、訊息與 `google_drive_url`，讓使用者可直接到 Google Drive 查看原檔。若檔案來自向量搜尋，`vector_page_numbers` 會列出命中頁碼；若來自關鍵字搜尋，`full_text_query` 會保留本次查詢條件。同時命中兩種搜尋時兩組資訊都會提供。完整清單同時寫入 `download_failures.json`。失敗檔案已建立的部分產物會保留供排錯。
 
@@ -212,6 +213,7 @@ Query progress: phase=query status=failed run_id=a1b2c3d4 ...
   query_plan.json
   full_text_results.json
   vector_results.json
+  downloaded_files.json
   download_failures.json
   warnings.json
   <safe_file_name>-<google_file_id_prefix>/

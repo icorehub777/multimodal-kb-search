@@ -278,10 +278,15 @@ class QueryOrchestratorTests(unittest.TestCase):
             failures = json.loads(
                 result.bundle.download_failures_path.read_text(encoding="utf-8")
             )
+            downloaded_files = json.loads(
+                result.bundle.downloaded_files_path.read_text(encoding="utf-8")
+            )
 
         self.assertEqual(result.download_count, 1)
         self.assertEqual(result.download_failure_count, 1)
         self.assertEqual([item.google_file_id for item in result.downloaded_files], ["file-2"])
+        self.assertEqual(downloaded_files[0]["google_file_id"], "file-2")
+        self.assertIn("Beta.pdf", downloaded_files[0]["directory"])
         self.assertEqual(result.download_failures[0].google_file_id, "file-1")
         self.assertEqual(result.download_failures[0].stage, "download")
         self.assertEqual(result.download_failures[0].error_type, "RuntimeError")

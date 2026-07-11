@@ -106,23 +106,59 @@ def normalize_pages(data: Any) -> list[dict[str, Any]]:
     return pages
 
 
-def find_document_dir(query_dir: Path, result: dict[str, Any]) -> Path | None:
-    google_file_id = result.get("google_file_id") or ""
-    name_stem = Path(str(result.get("name") or "")).stem
-    id_variants = {google_file_id, google_file_id.rstrip("_")}
-    candidates = [p for p in query_dir.iterdir() if p.is_dir() and p.name not in {"pdf", "text", "pages"}]
+def normalize_downloaded_files(data: Any) -> dict[str, dict[str, Any]]:
+    if not isinstance(data, list):
+        return {}
 
+    downloaded_files: dict[str, dict[str, Any]] = {}
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+        google_file_id = str(item.get("google_file_id") or "")
+        if not google_file_id:
+            continue
+        downloaded_files[google_file_id] = item
+    return downloaded_files
+
+
+def resolve_recorded_path(query_dir: Path, raw_path: Any) -> Path | None:
+    if not raw_path:
+        return None
+    path = Path(str(raw_path))
+    candidates = [path] if path.is_absolute() else [Path.cwd() / path, query_dir / path]
     for candidate in candidates:
-        if any(file_id and file_id in candidate.name for file_id in id_variants):
-            return candidate
-    for candidate in candidates:
-        if name_stem and name_stem[:24] in candidate.name:
+        if candidate.exists():
             return candidate
     return None
 
 
-def find_page_image(query_dir: Path, result: dict[str, Any], page_number: int) -> Path | None:
-    document_dir = find_document_dir(query_dir, result)
+def find_document_dir(
+    query_dir: Path,
+    result: dict[str, Any],
+    downloaded_files: dict[str, dict[str, Any]],
+) -> Path | None:
+    downloaded_file = downloaded_files.get(str(result.get("google_file_id") or ""))
+    if downloaded_file is None:
+        return None
+    return resolve_recorded_path(query_dir, downloaded_file.get("directory"))
+
+
+def find_page_image(
+    query_dir: Path,
+    result: dict[str, Any],
+    page_number: int,
+    downloaded_files: dict[str, dict[str, Any]],
+) -> Path | None:
+    downloaded_file = downloaded_files.get(str(result.get("google_file_id") or ""))
+    if downloaded_file is None:
+        return None
+
+    for raw_page_path in downloaded_file.get("page_paths") or []:
+        image_path = resolve_recorded_path(query_dir, raw_page_path)
+        if image_path is not None and image_path.name in {f"{page_number:04d}.png", f"{page_number}.png"}:
+            return image_path
+
+    document_dir = find_document_dir(query_dir, result, downloaded_files)
     if document_dir is None:
         return None
 
@@ -185,6 +221,56 @@ def inject_styles() -> None:
         <style>
           .block-container {
             padding-top: 3rem;
+            max-width: 100%;
+            overflow-x: hidden;
+          }
+          html,
+          body,
+          section[data-testid="stMain"] {
+            scrollbar-gutter: stable;
+          }
+          section[data-testid="stMain"] {
+            overflow-y: scroll !important;
+          }
+          div[data-testid="stVerticalBlock"],
+          div[data-testid="stHorizontalBlock"],
+          div[data-testid="stLayoutWrapper"],
+          div[data-testid="column"],
+          div[data-testid="stTabs"],
+          div[data-testid="stTabContent"],
+          div[data-testid="stExpander"],
+          div[data-testid="stExpanderDetails"] {
+            min-width: 0 !important;
+            max-width: 100% !important;
+          }
+          div[data-testid="stVerticalBlock"],
+          div[data-testid="stLayoutWrapper"] {
+            width: 100% !important;
+          }
+          div[data-testid="stHorizontalBlock"],
+          div[data-testid="stTabContent"],
+          div[data-testid="stExpanderDetails"] {
+            width: 100% !important;
+            overflow-x: hidden;
+          }
+          div[data-testid="stSelectbox"],
+          div[data-testid="stSelectbox"] > div,
+          div[data-testid="stSelectbox"] div[data-baseweb="select"] {
+            width: 100% !important;
+            min-width: 0 !important;
+            max-width: 100% !important;
+          }
+          div[data-testid="stLayoutWrapper"]:has(div[data-testid="stSelectbox"]) {
+            width: calc(100vw - 182px) !important;
+            min-width: calc(100vw - 182px) !important;
+            max-width: calc(100vw - 182px) !important;
+          }
+          @media (max-width: 900px) {
+            div[data-testid="stLayoutWrapper"]:has(div[data-testid="stSelectbox"]) {
+              width: 100% !important;
+              min-width: 0 !important;
+              max-width: 100% !important;
+            }
           }
           div[data-testid="stExpander"] details summary p {
             font-size: 0.95rem !important;
@@ -539,17 +625,19 @@ def run_app() -> None:
     plan_state = read_json(selected_query.path / "query_plan.json", {})
     vector_state = read_json(selected_query.path / "vector_results.json", [])
     keyword_state = read_json(selected_query.path / "full_text_results.json", [])
+    downloaded_files_state = read_json(selected_query.path / "downloaded_files.json", [])
     vector_results = normalize_results(vector_state.data) if vector_state.ok else []
     keyword_results = normalize_results(keyword_state.data) if keyword_state.ok else []
+    downloaded_files = normalize_downloaded_files(downloaded_files_state.data) if downloaded_files_state.ok else {}
 
     render_conditions(selected_query, plan_state)
 
     tab_vector, tab_keyword = st.tabs(["**相似度搜尋清單**", "**關鍵字搜尋清單**"])
     inject_tab_tooltips(result_summary(vector_results), result_summary(keyword_results))
     with tab_vector:
-        render_result_tab(st, selected_query, vector_state, vector_results)
+        render_result_tab(st, selected_query, vector_state, vector_results, downloaded_files)
     with tab_keyword:
-        render_result_tab(st, selected_query, keyword_state, keyword_results)
+        render_result_tab(st, selected_query, keyword_state, keyword_results, downloaded_files)
 
 
 def render_result_tab(
@@ -557,6 +645,7 @@ def render_result_tab(
     query: QueryResult,
     result_state: JsonState,
     results: list[dict[str, Any]],
+    downloaded_files: dict[str, dict[str, Any]],
 ) -> None:
     if not result_state.ok:
         st.error(result_state.error)
@@ -578,7 +667,7 @@ def render_result_tab(
 
             columns = st.columns(4)
             for index, page in enumerate(pages):
-                image_path = find_page_image(query.path, result, page["page_number"])
+                image_path = find_page_image(query.path, result, page["page_number"], downloaded_files)
                 with columns[index % 4]:
                     if image_path is None:
                         st.markdown(

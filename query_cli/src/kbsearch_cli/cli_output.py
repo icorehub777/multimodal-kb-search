@@ -70,6 +70,7 @@ def build_query_success_payload(
         "full_text_count": result.full_text_count,
         "vector_count": result.vector_count,
         "download_count": result.download_count,
+        "downloaded_files_path": result.bundle.downloaded_files_path.as_posix(),
         "downloaded_files": [
             downloaded_file.to_dict() for downloaded_file in result.downloaded_files
         ],
