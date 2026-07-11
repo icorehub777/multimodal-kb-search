@@ -64,3 +64,5 @@ query_cli/query_results/*
 !query_cli/query_results/.gitkeep
 agent_runtime/tasks/*
 !agent_runtime/tasks/.gitkeep
+query_cli/tasks/*
+!query_cli/tasks/.gitkeep

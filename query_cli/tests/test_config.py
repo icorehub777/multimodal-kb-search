@@ -21,6 +21,8 @@ class QueryCliConfigTests(unittest.TestCase):
                         "GOOGLE_OAUTH_CLIENT_CONFIG=config/oauth_client.json",
                         "GOOGLE_OAUTH_TOKEN_CACHE=config/token_cache.json",
                         "KBSEARCH_QUERY_LOGS_ROOT=logs",
+                        "KBSEARCH_TASKS_ROOT=tasks",
+                        "KBSEARCH_VIEWER_PORT=8502",
                         "KBSEARCH_QUERY_LOG_RETENTION_DAYS=30",
                         "KBSEARCH_CJK_FONT_PATH=C:/Windows/Fonts/msjh.ttc",
                     ]
@@ -43,6 +45,8 @@ class QueryCliConfigTests(unittest.TestCase):
             internal_root / "config" / "token_cache.json",
         )
         self.assertEqual(config.query_logs_root, internal_root / "logs")
+        self.assertEqual(config.tasks_root, internal_root / "tasks")
+        self.assertEqual(config.viewer_port, 8502)
         self.assertEqual(config.query_log_retention_days, 30)
         self.assertEqual(config.cjk_font_path, Path("C:/Windows/Fonts/msjh.ttc"))
 
@@ -67,7 +71,29 @@ class QueryCliConfigTests(unittest.TestCase):
                 config = load_query_cli_config(env_file)
 
         self.assertEqual(config.query_logs_root, cwd / "logs")
+        self.assertEqual(config.tasks_root, cwd / "tasks")
+        self.assertEqual(config.viewer_port, 8501)
         self.assertEqual(config.query_log_retention_days, 14)
+
+    def test_load_query_cli_config_rejects_invalid_viewer_port(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            env_file = Path(temp_dir) / ".env"
+            env_file.write_text(
+                "\n".join(
+                    [
+                        "KBSEARCH_SECURE_BACKEND_BASE_URL=http://127.0.0.1:8000",
+                        "GOOGLE_OAUTH_CLIENT_CONFIG=client.json",
+                        "GOOGLE_OAUTH_TOKEN_CACHE=token.json",
+                        "KBSEARCH_VIEWER_PORT=70000",
+                        "KBSEARCH_CJK_FONT_PATH=C:/Windows/Fonts/msjh.ttc",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            with patch.dict(os.environ, {}, clear=True):
+                with self.assertRaisesRegex(ConfigError, "KBSEARCH_VIEWER_PORT"):
+                    load_query_cli_config(env_file)
 
     def test_load_query_cli_config_accepts_zero_log_retention_days(self):
         with tempfile.TemporaryDirectory() as temp_dir:

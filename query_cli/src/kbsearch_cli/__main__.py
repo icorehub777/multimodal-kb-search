@@ -25,6 +25,7 @@ from kbsearch_cli.logging_config import (
 from kbsearch_cli.output import reserve_output_directory
 from kbsearch_cli.rendering import DocumentPageRenderer, parse_page_numbers
 from kbsearch_cli.startup_probe import probe_startup_environment
+from kbsearch_cli.viewer_launcher import run_viewer
 
 
 ProgressCallback = Callable[[str, dict[str, object]], None]
@@ -148,7 +149,21 @@ def main(argv: list[str] | None = None) -> int:
     render_parser.add_argument("--pages", required=True)
     render_parser.add_argument("--output-dir", required=True)
 
+    subparsers.add_parser("view-results")
+
     args = parser.parse_args(argv)
+
+    if args.command == "view-results":
+        try:
+            config = load_query_cli_config()
+            return run_viewer(
+                tasks_dir=config.tasks_root,
+                host="127.0.0.1",
+                port=config.viewer_port,
+            )
+        except (ConfigError, RuntimeError) as exc:
+            print(f"View results failed: {exc}", file=sys.stderr)
+            return 1
 
     if args.command == "render-pdf-pages":
         try:

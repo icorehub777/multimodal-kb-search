@@ -3,12 +3,13 @@ from __future__ import annotations
 import base64
 import html
 import json
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 
-TASKS_DIR = Path(__file__).resolve().parent / "tasks"
+DEFAULT_TASKS_DIR = Path.cwd() / "tasks"
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
 
 
@@ -26,7 +27,16 @@ class QueryResult:
     path: Path
 
 
-def discover_query_results(tasks_dir: Path = TASKS_DIR) -> list[QueryResult]:
+def viewer_tasks_dir() -> Path:
+    value = os.getenv("KBSEARCH_VIEWER_TASKS_DIR")
+    if value:
+        return Path(value).expanduser().resolve()
+    return DEFAULT_TASKS_DIR.resolve()
+
+
+def discover_query_results(tasks_dir: Path | None = None) -> list[QueryResult]:
+    if tasks_dir is None:
+        tasks_dir = viewer_tasks_dir()
     if not tasks_dir.exists():
         return []
 
@@ -138,7 +148,7 @@ def find_condition_images(query_dir: Path, plan: dict[str, Any]) -> list[Path]:
             path,
             query_dir / path,
             query_dir.parent.parent / path,
-            TASKS_DIR / path,
+            viewer_tasks_dir() / path,
             Path(__file__).resolve().parent / path,
         ]
         for candidate in candidates:
@@ -490,6 +500,13 @@ def render_drive_path(st: Any, result: dict[str, Any]) -> None:
     st.markdown(f'<div class="drive-path">{html.escape(display_path)}</div>', unsafe_allow_html=True)
 
 
+def query_param_value(st: Any, name: str) -> str:
+    value = st.query_params.get(name, "")
+    if isinstance(value, list):
+        return str(value[0]) if value else ""
+    return str(value)
+
+
 def run_app() -> None:
     import streamlit as st
 
@@ -499,17 +516,25 @@ def run_app() -> None:
 
     query_results = discover_query_results()
     if not query_results:
-        st.info("目前沒有找到任何搜尋任務。")
+        st.info(f"找不到查詢結果資料夾：{viewer_tasks_dir()}")
         return
 
     tasks = sorted({result.task_name for result in query_results}, reverse=True)
+    requested_task = query_param_value(st, "task")
+    task_index = tasks.index(requested_task) if requested_task in tasks else 0
     selector_cols = st.columns(2)
     with selector_cols[0]:
-        selected_task = st.selectbox("**搜尋任務**", tasks)
+        selected_task = st.selectbox("**搜尋任務**", tasks, index=task_index)
     task_queries = [result for result in query_results if result.task_name == selected_task]
+    query_names = [result.query_name for result in task_queries]
+    requested_query = query_param_value(st, "query")
+    query_index = query_names.index(requested_query) if requested_query in query_names else 0
     with selector_cols[1]:
-        selected_query_name = st.selectbox("**搜尋結果**", [result.query_name for result in task_queries])
+        selected_query_name = st.selectbox("**搜尋結果**", query_names, index=query_index)
     selected_query = next(result for result in task_queries if result.query_name == selected_query_name)
+    if query_param_value(st, "task") != selected_task or query_param_value(st, "query") != selected_query_name:
+        st.query_params["task"] = selected_task
+        st.query_params["query"] = selected_query_name
 
     plan_state = read_json(selected_query.path / "query_plan.json", {})
     vector_state = read_json(selected_query.path / "vector_results.json", [])

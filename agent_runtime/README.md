@@ -42,7 +42,7 @@ Get-Command soffice
 soffice --version
 ```
 
-查詢結果的 PDF 與 PNG 處理由 `kbsearch` 自身完成。若未來仍需讓 Codex 的 PDF Skill 或 Documents Skill 自行將 PDF 頁面渲染為 PNG，才需另外安裝 Poppler。
+搜尋結果的 PDF 與 PNG 處理由 `kbsearch` 自身完成。若未來仍需讓 Codex 的 PDF Skill 或 Documents Skill 自行將 PDF 頁面渲染為 PNG，才需另外安裝 Poppler。
 
 Poppler 安裝與設定步驟：
 
@@ -84,6 +84,8 @@ Get-ChildItem "C:\Windows\Fonts" -Include *.ttf,*.ttc -Recurse | Select-Object -
 ```
 - `KBSEARCH_SECURE_BACKEND_BASE_URL`：改為運作端可連線的 backend URL
 - `KBSEARCH_QUERY_LOG_RETENTION_DAYS`：per-run query log 保留天數，預設 `14`；設為 `0` 停用自動清理。
+- `KBSEARCH_TASKS_ROOT`：因為是在 `_internal` 資料夾執行指令，所以須改為 `..\tasks`
+- `KBSEARCH_VIEWER_PORT`：搜尋結果檢視頁使用的 port，預設使用 Streamlit 標準 `8501`。
 
 ### 4. 建立 .venv 並安裝 wheel
 
@@ -110,31 +112,26 @@ if ($wheels.Count -ne 1) { throw "Expected exactly one kbsearch_cli wheel, found
 
 指令執行的工作目錄為 `agent_runtime\_internal`，首次執行若尚無 `token_cache.json`，程式會開啟瀏覽器完成 Google OAuth 授權，並寫入 `config\token_cache.json`。
 
-以下是查詢指令：
+可執行的 `kbsearch` 指令如下；CLI 參數、終端輸出、搜尋結果格式與產物結構統一參考 [`query_cli/README.md` 的「手動測試」章節](../query_cli/README.md#手動測試)。
+
+#### 相似度 / 關鍵字搜尋
 
 ```powershell
 cd agent_runtime\_internal
-.\.venv\Scripts\kbsearch.exe query `
-  --output-dir "../tasks/20260613-130000-agent-runtime-test/query_results/20260613-131500-initial-query" `
-  --vector-query "測試向量查詢文字" `
-  --drive-query "(fullText contains '關鍵字' or name contains '關鍵字') and trashed = false" `
-  --limit 10
+.\.venv\Scripts\kbsearch.exe query
 ```
 
-指令中的相對路徑以 `agent_runtime\_internal` 為基準；也可改用絕對路徑。查詢結果資料夾應指定為 `../tasks/<任務資料夾>/query_results/<查詢資料夾>`。
-
-執行期間可直接從終端查看進度與錯誤；每次查詢的完整 log 會寫入 `agent_runtime\_internal\logs\`，查詢結果與下載檔案則寫入 `--output-dir` 指定的任務資料夾。CLI 參數、終端輸出、查詢結果格式與產物結構統一參考 [`query_cli/README.md` 的「手動測試」章節](../query_cli/README.md#手動測試)。
-
-以下是產生單頁 PNG 的指令：
+#### 開啟搜尋結果檢視頁
 
 ```powershell
-.\.venv\Scripts\kbsearch.exe render-pdf-pages `
-  --pdf "../tasks/<任務資料夾>/query_results/<查詢資料夾>/<文件資料夾>/pdf/document.pdf" `
-  --pages "3,5,8-10" `
-  --output-dir "../tasks/<任務資料夾>/query_results/<查詢資料夾>/<文件資料夾>/pages"
+.\.venv\Scripts\kbsearch.exe view-results
 ```
 
-`--pdf` 與 `--output-dir` 使用相對 `_internal/` 工作目錄的路徑；也可改用絕對路徑。`--output-dir` 應指定到同一文件資料夾內的 `pages/`。且指定頁碼的頁面圖檔已存在時直接覆蓋。
+#### 產生單頁 PNG
+
+```powershell
+.\.venv\Scripts\kbsearch.exe render-pdf-pages
+```
 
 ---
 

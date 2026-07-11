@@ -34,6 +34,27 @@ class CliTests(unittest.TestCase):
     def tearDown(self):
         _close_query_cli_log_handlers()
 
+    def test_view_results_uses_configured_tasks_root_without_arguments(self):
+        config = type(
+            "Config",
+            (),
+            {"tasks_root": Path("C:/runtime/tasks"), "viewer_port": 8502},
+        )()
+
+        with patch("kbsearch_cli.__main__.load_query_cli_config", return_value=config) as load_config, patch(
+            "kbsearch_cli.__main__.run_viewer",
+            return_value=0,
+        ) as run_viewer:
+            exit_code = main(["view-results"])
+
+        self.assertEqual(exit_code, 0)
+        load_config.assert_called_once_with()
+        run_viewer.assert_called_once_with(
+            tasks_dir=Path("C:/runtime/tasks"),
+            host="127.0.0.1",
+            port=8502,
+        )
+
     def test_query_runs_startup_probe_orchestrator_and_prints_json_summary(self):
         bundle_path = Path("C:/tmp/query/20260531-120000-客戶")
         bundle = QueryResultBundle(

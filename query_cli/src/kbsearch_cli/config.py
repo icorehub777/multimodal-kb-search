@@ -15,6 +15,8 @@ class QueryCliConfig:
     google_oauth_client_config: Path
     google_oauth_token_cache: Path
     query_logs_root: Path
+    tasks_root: Path
+    viewer_port: int
     query_log_retention_days: int
     cjk_font_path: Path
 
@@ -37,6 +39,10 @@ def load_query_cli_config(env_file: str | Path | None = None) -> QueryCliConfig:
         query_logs_root=_resolve_cwd_path(
             _optional_str("KBSEARCH_QUERY_LOGS_ROOT", str(DEFAULT_LOGS_ROOT)),
         ),
+        tasks_root=_resolve_cwd_path(
+            _optional_str("KBSEARCH_TASKS_ROOT", "tasks"),
+        ),
+        viewer_port=_optional_port("KBSEARCH_VIEWER_PORT", 8501),
         query_log_retention_days=_optional_non_negative_int(
             "KBSEARCH_QUERY_LOG_RETENTION_DAYS",
             14,
@@ -104,4 +110,17 @@ def _optional_non_negative_int(name: str, default: int) -> int:
         raise ConfigError(f"Config {name} must be an integer.") from exc
     if parsed < 0:
         raise ConfigError(f"Config {name} must be zero or a positive integer.")
+    return parsed
+
+
+def _optional_port(name: str, default: int) -> int:
+    value = os.getenv(name)
+    if value is None or value.strip() == "":
+        return default
+    try:
+        parsed = int(value.strip())
+    except ValueError as exc:
+        raise ConfigError(f"Config {name} must be an integer.") from exc
+    if parsed < 1 or parsed > 65535:
+        raise ConfigError(f"Config {name} must be between 1 and 65535.")
     return parsed

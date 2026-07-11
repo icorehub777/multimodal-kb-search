@@ -12,6 +12,7 @@ dependencies = [
     "PyMuPDF>=1.24",
     "reportlab>=4.0",
     "Pillow>=10.0",
+    "streamlit>=1.36",
 ]
 
 [project.scripts]

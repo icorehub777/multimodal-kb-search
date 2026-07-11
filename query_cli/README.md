@@ -1,6 +1,11 @@
 # KBSearch Query CLI
 
-`query_cli/` 提供 `kbsearch` 指令給 Agent 使用。它負責查詢流程、Google Drive 關鍵字搜尋、文件下載與查詢結果檔案整理；embedding 與 Qdrant 查詢透過 `secure_backend` HTTP API 完成。
+`query_cli/` 提供 `kbsearch` 指令作為 Agent 使用的工具集合。
+
+它提供的指令包括：
+- 相似度/關鍵字搜尋：可執行多模態向量庫相似度搜尋 (透過 secure_backend 的 API 服務) 與 Google Drive 關鍵字搜尋 (透過 Google Drive API)，並針對搜尋結果中的檔案進行下載、內容整理轉換。
+- PDF 檔單頁圖片轉出：指定 PDF 檔與頁碼後，可轉出此頁的 PNG 圖片檔。
+- 搜尋結果檢視網頁啟動：開啟搜尋結果檢視網頁。
 
 ## 開發測試環境準備
 
@@ -55,63 +60,81 @@ KBSEARCH_SECURE_BACKEND_BASE_URL=http://127.0.0.1:8000
 GOOGLE_OAUTH_CLIENT_CONFIG=config/oauth_client.json
 GOOGLE_OAUTH_TOKEN_CACHE=config/token_cache.json
 KBSEARCH_QUERY_LOGS_ROOT=logs
+KBSEARCH_TASKS_ROOT=tasks
+KBSEARCH_VIEWER_PORT=8501
 KBSEARCH_QUERY_LOG_RETENTION_DAYS=14
 KBSEARCH_CJK_FONT_PATH=C:\Windows\Fonts\msjh.ttc
 ```
-
-Google Docs 與 Google Slides 固定由 Drive API 匯出為 PDF，Google Sheets 固定匯出為 XLSX。上傳至 Drive 的 XLS/XLSX 下載原始檔。
 
 LibreOffice 的 `soffice` 必須可從系統 `PATH` 找到，並須設定 `KBSEARCH_CJK_FONT_PATH`。
 
 `config/oauth_client.json` 為 Google OAuth **Desktop 用戶端憑證**，須向**內部 Google / GCP 管理者**申請並取得 JSON 後，手動放到 `config/oauth_client.json`（程式不會自動產生）。`config/token_cache.json` 則在首次執行 `kbsearch query`、完成 browser 授權後由程式寫入；若 token 無法 refresh 或驗證失敗，程式會刪除該檔並在下次 query 時重新開啟 browser 登入。兩者皆不納版控。
 
-每次 `kbsearch query` 會先建立呼叫端指定的查詢結果目錄，再執行 startup 檢查：OAuth client、`secure_backend /healthz`、系統 `PATH` 中的 `soffice` 與 CJK 字型。若已有 token cache 也會驗證 Google Drive 授權。
-
 ## 手動測試
 
-若要做向量搜尋，執行前請確認 `secure_backend` 已在本機啟動（`KBSEARCH_SECURE_BACKEND_BASE_URL` 可連線）後，在 `query_cli/` 目錄下執行：
+### 相似度 / 關鍵字搜尋
+
+若要做相似度搜尋，執行前請確認 `secure_backend` 已在本機啟動（`KBSEARCH_SECURE_BACKEND_BASE_URL` 可連線）。
+
+手動測試時需保持與 `agent_runtime` 中一樣的資料夾結構 (如此搜尋結果網頁才能正確解析)。也就是在根目錄的 tasks 資料夾下先建立任務資料夾，且若有搜尋用圖片，亦須將其放在任務資料夾中：
+
+```text
+tasks/<task-name>/
+tasks/<task-name>/<image-file>
+```
+
+並在執行查詢指令時，將搜尋結果資料夾路徑參數指向以下路徑，此指令會自行建立 `<query-name>` 資料夾：
+
+```text
+tasks/<task-name>/query_results/<query-name>
+```
+
+接下來請在 `query_cli/` 目錄下，執行以下指令：
+
+若是由 Agent 執行此指令，必須以 sandbox 外部同意方式執行查詢，讓 OAuth 能正確開啟瀏覽器登入頁。
 
 ```powershell
 kbsearch query `
-  --output-dir "C:\path\to\task\query_results\20260613-131500-manual-test" `
+  --output-dir "C:\path\to\tasks\20260613-130000-manual-test\query_results\20260613-131500-initial-query" `
   --vector-query "附圖為產品外觀，請找出操作手冊中與此零件安裝相關的說明" `
   --drive-query "(fullText contains '推車' or name contains '推車') and trashed = false" `
-  --image "C:\path\to\photo.png" `
+  --image "C:\path\to\tasks\20260613-130000-manual-test\photo.png" `
   --limit 10 `
   --min-score 0.5
 ```
 
 參數說明：
 
-- `--output-dir`：本次查詢結果的輸出資料夾路徑，必須使用尚不存在的新路徑；父目錄不存在時會自動建立。
-- `--vector-query`：語意查詢文字；可與 `--image` 一起或單獨送給 `secure_backend` 做向量搜尋。向量搜尋僅涵蓋 importer 已同步的文件。與 `--image` 皆省略時不執行向量搜尋。
+- `--output-dir`：本次搜尋結果的輸出資料夾路徑，必須使用 `tasks/<task-name>/query_results/<query-name>/` 結構中的 `<query-name>` 目錄。指令執行時會自動建立 `<query-name>` 目錄，若執行前該目錄已存在，指令會執行失敗。
+- `--vector-query`：語意查詢文字；可與 `--image` 一起或單獨送給 `secure_backend` 做相似度搜尋。相似度搜尋僅涵蓋 importer 已同步的文件。與 `--image` 皆省略時不執行相似度搜尋。
 - `--drive-query`：Google Drive API `q` 語法，原樣送出，用於檔名、全文或 metadata 的關鍵字搜尋。搜尋範圍依目前使用者的 Drive 權限決定，不受 importer 同步來源資料夾限制。省略時不執行關鍵字搜尋。
-- `--image`：本機圖片路徑（PNG/JPEG 等），可重複指定；可單獨指定（不需 `--vector-query`），此時以空字串 query 搭配圖片做向量搜尋。也可與 `--vector-query` 併用。
-- `--limit`：向量與 Drive 搜尋各別的結果筆數上限，預設 `10`。
-- `--min-score`：向量相似度下限；省略則不過濾低分結果。
+- `--image`：本機圖片路徑（PNG/JPEG 等），可重複指定；可與 `--vector-query` 一起或單獨送給 `secure_backend` 做相似度搜尋。相似度搜尋僅涵蓋 importer 已同步的文件。與 `--vector-query` 皆省略時不執行相似度搜尋。
+- `--limit`：相似度與關鍵字搜尋各別的結果筆數上限，預設 `10`。
+- `--min-score`：相似度搜尋時的相似度分數下限；省略則不過濾低分結果。
 
 `--vector-query`、`--drive-query`、`--image` 至少要提供其中一個；三者皆未提供時指令會顯示失敗。
-
-Startup 檢查會依實際路線調整：`secure_backend /healthz` 只在有 `--vector-query` 或 `--image` 時才呼叫；Google Drive 授權、`soffice`、CJK 字型檢查一律執行（Drive 用於存取權檢查與檔案下載，兩條路線皆需要）。
-
 `--output-dir` 與 `--image` 均可使用絕對或相對路徑；相對路徑以執行指令時的目前工作目錄解析。
 
-執行中會在 **stderr** 輸出進度；每個下載檔案輸出 `phase=download status=started` 與 `phase=download status=finished`，完成訊息包含文字頁數與實際渲染頁數。與 union 層的 `phase=download` 以欄位區分（單檔含 `file_id`、`index`、`total`）。下載與文件處理可能較久。成功時 **stdout** 輸出 JSON 摘要：
+指令啟動時會先載入設定並建立本次專屬 log，接著建立呼叫端指定的搜尋結果目錄，再執行 startup 檢查：OAuth client、`secure_backend /healthz` (只在有 `--vector-query` 或 `--image` 時才呼叫)、系統 `PATH` 中的 `soffice` 與 CJK 字型。若已有 token cache 也會驗證 Google Drive 授權。
+
+下載與轉換搜尋結果檔案的詳細動作，請參考設計文件。
+
+執行中會在 **stderr** 輸出進度；下載階段會先輸出 union 層的 `phase=download status=started`，並包含 `union_count` 等摘要。單檔下載成功時會輸出 `phase=download status=started` 與 `phase=download status=finished`，完成訊息包含文字頁數與實際渲染頁數；單檔失敗時會輸出 `phase=download status=failed`。單檔進度可用 `file_id`、`index`、`total` 與 union 層進度區分。下載與文件處理可能較久。成功時 **stdout** 輸出 JSON 摘要：
 
 設定與本次專屬 log 初始化完成後，stderr 會先輸出一行可解析的 query 啟動事件：
 
 ```json
-{"event":"query_started","status":"started","run_id":"a1b2c3d4","output_dir":"C:/path/to/task/query_results/20260613-131500-manual-test","log_path":"C:/path/to/logs/kbsearch-20260622-083245-123456-a1b2c3d4.log","monitor":"log","stdout":"final_json_on_success"}
+{"event":"query_started","status":"started","run_id":"a1b2c3d4","output_dir":"C:/path/to/tasks/20260613-130000-manual-test/query_results/20260613-131500-initial-query","log_path":"C:/path/to/logs/kbsearch-20260622-083245-123456-a1b2c3d4.log","monitor":"log","stdout":"final_json_on_success"}
 ```
 
-`monitor=log` 表示長時間執行時應依 `log_path` 即時監控進度；`stdout=final_json_on_success` 表示 stdout 在程序執行期間不提供啟動摘要，僅在成功或部分成功完成時輸出下列最終 JSON。背景啟動器只需確認程序已建立並等待上述 stderr 啟動事件，不應在啟動當下解析 stdout。
+`monitor=log` 表示長時間執行時應依 `log_path` 即時監控進度；`stdout=final_json_on_success` 表示 stdout 在程序執行期間不提供啟動摘要，僅在成功或部分成功完成時輸出下列最終 JSON。
 
 ```json
 {
   "status": "finished_with_errors",
   "run_id": "a1b2c3d4",
   "log_path": "C:/path/to/logs/kbsearch-20260622-083245-123456-a1b2c3d4.log",
-  "output_dir": "C:/path/to/task/query_results/20260613-131500-manual-test",
+  "output_dir": "C:/path/to/tasks/20260613-130000-manual-test/query_results/20260613-131500-initial-query",
   "full_text_count": 1,
   "vector_count": 4,
   "download_count": 3,
@@ -119,21 +142,21 @@ Startup 檢查會依實際路線調整：`secure_backend /healthz` 只在有 `--
     {
       "google_file_id": "file-1",
       "name": "Alpha.pdf",
-      "directory": "C:/path/to/task/query_results/20260613-131500-manual-test/Alpha.pdf-abcde",
-      "source_path": "C:/path/to/task/query_results/20260613-131500-manual-test/Alpha.pdf-abcde/Alpha.pdf",
-      "pdf_path": "C:/path/to/task/query_results/20260613-131500-manual-test/Alpha.pdf-abcde/pdf/document.pdf",
+      "directory": "C:/path/to/tasks/20260613-130000-manual-test/query_results/20260613-131500-initial-query/Alpha.pdf-abcde",
+      "source_path": "C:/path/to/tasks/20260613-130000-manual-test/query_results/20260613-131500-initial-query/Alpha.pdf-abcde/Alpha.pdf",
+      "pdf_path": "C:/path/to/tasks/20260613-130000-manual-test/query_results/20260613-131500-initial-query/Alpha.pdf-abcde/pdf/document.pdf",
       "text_paths": [
-        "C:/path/to/task/query_results/20260613-131500-manual-test/Alpha.pdf-abcde/text/0001.txt"
+        "C:/path/to/tasks/20260613-130000-manual-test/query_results/20260613-131500-initial-query/Alpha.pdf-abcde/text/0001.txt"
       ],
       "page_paths": [
-        "C:/path/to/task/query_results/20260613-131500-manual-test/Alpha.pdf-abcde/pages/0003.png"
+        "C:/path/to/tasks/20260613-130000-manual-test/query_results/20260613-131500-initial-query/Alpha.pdf-abcde/pages/0003.png"
       ]
     }
   ],
   "download_failure_count": 1,
-  "download_failures_path": "C:/path/to/task/query_results/20260613-131500-manual-test/download_failures.json",
+  "download_failures_path": "C:/path/to/tasks/20260613-130000-manual-test/query_results/20260613-131500-initial-query/download_failures.json",
   "warning_count": 1,
-  "warnings_path": "C:/path/to/task/query_results/20260613-131500-manual-test/warnings.json",
+  "warnings_path": "C:/path/to/tasks/20260613-130000-manual-test/query_results/20260613-131500-initial-query/warnings.json",
   "download_failures": [
     {
       "google_file_id": "file-4",
@@ -176,13 +199,13 @@ Query progress: phase=query status=failed run_id=a1b2c3d4 ...
 
 `warnings` 記錄非失敗但會影響閱讀完整性的狀況，完整清單同時寫入 `warnings.json`。例如 `vector_pages_unrendered` 表示向量搜尋命中頁碼存在，但該檔案沒有產生對應的 `pages/*.png`；常見原因是 Drive 上同一個 `file_id` 的檔案在同步後變成不支援文件處理的 MIME type。此時檔案仍算下載成功，但 Agent 應改以原始下載檔或其他工具能力判讀，並在必要時向使用者說明該向量命中頁面無法直接閱讀。
 
-查詢開始前會以不可覆蓋既有目錄的方式建立 `output_dir`；若路徑已存在，指令會在實際查詢前失敗。查詢途中失敗時，已建立的目錄與部分產物會保留，不得重用相同路徑。詳細清單與下載檔案見該資料夾內的 JSON 與子目錄。
+設定與本次專屬 log 初始化完成後，會以不可覆蓋既有目錄的方式建立 `output_dir`；若路徑已存在，指令會在 startup 檢查、實際搜尋與下載前失敗。查詢途中失敗時，已建立的目錄與部分產物會保留，不得重用相同路徑。詳細清單與下載檔案見該資料夾內的 JSON 與子目錄。
 
 設定成功載入後，每次查詢會在 `KBSEARCH_QUERY_LOGS_ROOT` 建立獨立 log，檔名格式為 `kbsearch-<日期時間>-<run_id>.log`。每行均包含 `run_id`，且最後記錄成功、部分成功或失敗終態。stderr 與成功 stdout 也會提供該次 log 絕對路徑。
 
 `KBSEARCH_QUERY_LOG_RETENTION_DAYS` 控制 per-run log 保留天數，預設 `14`。每次 query 啟動時會刪除較舊的 `kbsearch-*.log`；設為 `0` 可停用自動清理。清理失敗時該次 query 會記錄錯誤並停止。
 
-查詢結果資料夾會包含失敗清單；每個成功下載的檔案子資料夾會保留下載檔，並依 Google Drive MIME type 與匯出結果產生：
+搜尋結果資料夾會包含失敗清單；每個成功下載的檔案子資料夾會保留下載檔，並依 Google Drive MIME type 與匯出結果產生：
 
 ```text
 <output_dir>/
@@ -202,7 +225,7 @@ Query progress: phase=query status=failed run_id=a1b2c3d4 ...
       0003.png
 ```
 
-### 文件子資料夾產物
+#### 文件子資料夾產物
 
 - 每個文件子資料夾名稱為 `<safe_file_name>-<google_file_id_prefix>`：`safe_file_name` 在前，`google_file_id` 前綴在後；前綴預設先取前 5 碼，若同一批查詢發生撞名，則逐碼加長至可區分。
 - PDF、Word、PowerPoint、TXT、MD、Google Docs 與 Google Slides 會產生固定路徑 `pdf/document.pdf`，以及依頁碼命名的 UTF-8 `text/000N.txt`。
@@ -210,13 +233,13 @@ Query progress: phase=query status=failed run_id=a1b2c3d4 ...
 - PNG、JPG、JPEG、WEBP 視為單頁文件，但只在相似度搜尋命中時產生 `pages/0001.png`。Google Drive 全文搜尋或 OCR 命中圖片時，因無逐頁文字可供定位，只保留檔案層級結果。
 - Google Sheets 匯出為 XLSX。其他不支援轉換及逐頁處理的 MIME type 只保留原始下載檔，不會因未產生 PDF、逐頁文字或頁面 PNG 而列為下載失敗。
 
-### `full_text_results.json`
+#### `full_text_results.json`
 
 `full_text_results.json` 保留 Google Drive 關鍵字搜尋的檔案順序。Google Drive 原始結果不含頁碼；下載並產生逐頁文字後，系統只使用 Drive query 中正向 `fullText contains '<關鍵字>'` 的值定位頁面。`name`、metadata 與其他查詢條件不會用於頁面定位。
 
 頁面定位採不分大小寫的字面子字串比對，不推導同義詞，也不模擬 Google Drive 的索引規則。每個定位成功的頁面寫入該檔案的 `pages`：`page_number` 是頁碼，`keyword` 是該頁命中的全文關鍵字。同頁命中多個關鍵字時，依查詢條件中的出現順序去重，再以逗號加空白串接；頁面依 `page_number` 由小到大排列。
 
-查詢不含 `fullText contains`、逐頁文字沒有命中，或檔案無法產生逐頁文字時，`pages` 為空陣列，檔案層級結果仍會保留。資料結構如下：
+查詢不含 `fullText contains`、逐頁文字沒有命中，或檔案無法產生逐頁文字時，`pages` 為空陣列，檔案層級結果仍會保留。`source_location` 是 Google Drive 顯示路徑；個人雲端硬碟根目錄顯示為 `雲端硬碟`，共用雲端硬碟根目錄顯示為該共用雲端硬碟名稱。資料結構如下：
 
 ```json
 [
@@ -225,6 +248,7 @@ Query progress: phase=query status=failed run_id=a1b2c3d4 ...
     "name": "Alpha.pdf",
     "mime_type": "application/pdf",
     "web_url": "https://drive.google.com/file/d/file-1/view",
+    "source_location": "KBSearch_Test/Products/Alpha.pdf",
     "pages": [
       {
         "page_number": 1,
@@ -239,9 +263,53 @@ Query progress: phase=query status=failed run_id=a1b2c3d4 ...
 ]
 ```
 
-## 指定 PDF 頁面轉圖
+#### `vector_results.json`
 
-Agent 可指定 PDF 路徑與頁碼，將額外需要閱讀的頁面轉為 PNG：
+`vector_results.json` 保留 `secure_backend` 相似度搜尋回傳的檔案順序。檔案層級的 `score` 是該檔案整體相似度分數，`pages` 內的 `score` 是各命中頁面的相似度分數。資料結構如下：
+
+```json
+[
+  {
+    "google_file_id": "file-1",
+    "source_name": "Alpha.pdf",
+    "source_location": "KBSearch_Test/Products/Alpha.pdf",
+    "source_url": "https://drive.google.com/file/d/file-1/view",
+    "google_drive_version": "7",
+    "google_drive_modified_time": "2026-05-24T00:00:00Z",
+    "score": 0.91,
+    "pages": [
+      {
+        "page_number": 3,
+        "score": 0.88
+      }
+    ]
+  }
+]
+```
+
+### 開啟搜尋結果檢視網頁
+
+查詢完成後，可啟動搜尋結果檢視頁。檢視頁會從 `KBSEARCH_TASKS_ROOT` 讀取任務資料夾，並使用 `KBSEARCH_VIEWER_PORT` 指定的 port：
+
+```powershell
+kbsearch view-results
+```
+
+指令啟動後會輸出可開啟的 `viewer_url`，以及可預設載入指定任務與搜尋結果的網址範例。若同一個 port 上已有 KBSearch 檢視頁，會先關閉後重啟；若該 port 被其他服務占用，指令會停止並提示調整 `KBSEARCH_VIEWER_PORT`。
+
+```json
+{
+  "status": "starting",
+  "viewer_url": "http://127.0.0.1:8501/",
+  "task_query_url_example": "http://127.0.0.1:8501/?task=<task-name>&query=<query-name>",
+  "tasks_dir": "C:\\path\\to\\tasks",
+  "restarted_process_count": 0
+}
+```
+
+### 指定 PDF 頁面轉圖
+
+指定 PDF 路徑與頁碼，將額外需要閱讀的頁面轉為 PNG：
 
 ```powershell
 kbsearch render-pdf-pages `
@@ -251,18 +319,22 @@ kbsearch render-pdf-pages `
 ```
 
 - `--pdf`：要處理的 `pdf/document.pdf` 路徑。
-- `--output-dir`：完整輸出資料夾位置路徑。以目前設計，Agent 需指定到同一文件子資料夾內的 `pages/`；目錄不存在時會建立，已存在時直接使用。
+- `--output-dir`：完整輸出資料夾位置路徑。以目前設計，需指定到同一文件子資料夾內的 `pages/`；目錄不存在時會建立，已存在時直接使用。
 - `--pages`：頁碼從 `1` 開始，支援逗號清單與區間。
 
 `--pdf` 與 `--output-dir` 均可使用絕對或相對路徑；相對路徑以執行指令時的目前工作目錄解析。
 
 指定頁面的同名 PNG 會直接覆蓋，其他既有頁面不受影響。成功時 stdout 會輸出包含頁碼與 PNG 路徑的 JSON。
 
+
 ## 離線單元測試
+
+在 repo 根目錄執行：
 
 ```powershell
 python -m unittest discover -s query_cli\tests
 ```
+
 
 ## 正式環境部署
 
