@@ -43,7 +43,10 @@ class FakeFilesResource:
 
     def get(self, **kwargs):
         self.get_calls.append(kwargs)
-        return FakeGetRequest(payload=self.parent_payloads[kwargs["fileId"]])
+        result = self.parent_payloads[kwargs["fileId"]]
+        if isinstance(result, Exception):
+            return FakeGetRequest(failure=result)
+        return FakeGetRequest(payload=result)
 
 
 class FakeDrivesResource:
@@ -53,7 +56,10 @@ class FakeDrivesResource:
 
     def get(self, **kwargs):
         self.get_calls.append(kwargs)
-        return FakeGetRequest(payload=self.drive_payloads[kwargs["driveId"]])
+        result = self.drive_payloads[kwargs["driveId"]]
+        if isinstance(result, Exception):
+            return FakeGetRequest(failure=result)
+        return FakeGetRequest(payload=result)
 
 
 class FakeDriveService:
@@ -158,6 +164,64 @@ class GoogleDriveQueryClientTests(unittest.TestCase):
         self.assertEqual(
             drive_service.drives_resource.get_calls,
             [{"driveId": "shared-drive-1", "fields": "id,name"}],
+        )
+
+    def test_search_keeps_result_when_parent_lookup_fails(self):
+        drive_service = FakeDriveService(
+            files=[
+                {
+                    "id": "file-1",
+                    "name": "Spec.pdf",
+                    "mimeType": "application/pdf",
+                    "webViewLink": "https://drive/file-1",
+                    "parents": ["folder-2"],
+                    "capabilities": {"canDownload": True},
+                }
+            ],
+            parent_payloads={
+                "folder-2": RuntimeError("parent not found"),
+            },
+        )
+        client = GoogleDriveQueryClient(drive_service)
+
+        with self.assertLogs("kbsearch_cli", level="WARNING") as logs:
+            results = client.search("fullText contains 'x'", 10)
+
+        self.assertEqual(results[0].google_file_id, "file-1")
+        self.assertEqual(results[0].source_location, "Spec.pdf")
+        self.assertTrue(
+            any("Google Drive parent metadata lookup skipped" in message for message in logs.output)
+        )
+
+    def test_search_keeps_result_when_shared_drive_lookup_fails(self):
+        drive_service = FakeDriveService(
+            files=[
+                {
+                    "id": "file-1",
+                    "name": "Spec.pdf",
+                    "mimeType": "application/pdf",
+                    "webViewLink": "https://drive/file-1",
+                    "parents": ["folder-2"],
+                    "driveId": "shared-drive-1",
+                    "capabilities": {"canDownload": True},
+                }
+            ],
+            parent_payloads={
+                "folder-2": {"id": "folder-2", "name": "Products"},
+            },
+            drive_payloads={
+                "shared-drive-1": RuntimeError("shared drive not found"),
+            },
+        )
+        client = GoogleDriveQueryClient(drive_service)
+
+        with self.assertLogs("kbsearch_cli", level="WARNING") as logs:
+            results = client.search("fullText contains 'x'", 10)
+
+        self.assertEqual(results[0].google_file_id, "file-1")
+        self.assertEqual(results[0].source_location, "Products/Spec.pdf")
+        self.assertTrue(
+            any("Google Drive shared drive metadata lookup skipped" in message for message in logs.output)
         )
 
     def test_search_excludes_items_with_can_download_false(self):

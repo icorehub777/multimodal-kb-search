@@ -69,6 +69,7 @@ class GoogleDriveQueryClient:
 
     def _source_location_from_item(self, item: dict[str, Any]) -> str:
         names = [str(item.get("name") or "")]
+        file_id = str(item.get("id") or "")
         parent_ids = [str(parent_id) for parent_id in item.get("parents") or []]
         seen_parent_ids: set[str] = set()
         while parent_ids:
@@ -76,19 +77,41 @@ class GoogleDriveQueryClient:
             if parent_id in seen_parent_ids:
                 break
             seen_parent_ids.add(parent_id)
-            parent = self._get_parent_metadata(parent_id)
+            try:
+                parent = self._get_parent_metadata(parent_id)
+            except ExternalServiceError as exc:
+                logger.warning(
+                    "Google Drive parent metadata lookup skipped file_id=%s parent_id=%s "
+                    "truncated_source_location=%s error=%s",
+                    file_id,
+                    parent_id,
+                    _join_source_location_parts(names),
+                    exc,
+                )
+                break
             parent_name = str(parent.get("name") or "")
             if parent_name:
                 names.append(parent_name)
             parent_ids = [str(parent_id) for parent_id in parent.get("parents") or []]
-        parts = list(reversed([name for name in names if name]))
+        parts = _source_location_parts(names)
         drive_id = str(item.get("driveId") or "")
         if drive_id:
-            shared_drive_name = self._get_shared_drive_name(drive_id)
-            if parts:
-                parts[0] = shared_drive_name
+            try:
+                shared_drive_name = self._get_shared_drive_name(drive_id)
+            except ExternalServiceError as exc:
+                logger.warning(
+                    "Google Drive shared drive metadata lookup skipped file_id=%s drive_id=%s "
+                    "truncated_source_location=%s error=%s",
+                    file_id,
+                    drive_id,
+                    "/".join(parts),
+                    exc,
+                )
             else:
-                parts.append(shared_drive_name)
+                if parts:
+                    parts[0] = shared_drive_name
+                else:
+                    parts.append(shared_drive_name)
         return "/".join(parts)
 
     def _get_parent_metadata(self, parent_id: str) -> dict[str, Any]:
@@ -233,6 +256,14 @@ def _write_request_bytes(request: Any, output_path: Path) -> None:
 
 def safe_download_name(name: str) -> str:
     return re.sub(r'[<>:"/\\\\|?*]', "_", name).strip() or "downloaded_file"
+
+
+def _source_location_parts(names_from_file_to_root: list[str]) -> list[str]:
+    return list(reversed([name for name in names_from_file_to_root if name]))
+
+
+def _join_source_location_parts(names_from_file_to_root: list[str]) -> str:
+    return "/".join(_source_location_parts(names_from_file_to_root))
 
 
 def _is_search_result_downloadable(item: dict[str, Any]) -> bool:
