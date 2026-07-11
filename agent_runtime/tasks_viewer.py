@@ -1,0 +1,610 @@
+from __future__ import annotations
+
+import base64
+import html
+import json
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+
+TASKS_DIR = Path(__file__).resolve().parent / "tasks"
+IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
+
+
+@dataclass(frozen=True)
+class JsonState:
+    ok: bool
+    data: Any
+    error: str = ""
+
+
+@dataclass(frozen=True)
+class QueryResult:
+    task_name: str
+    query_name: str
+    path: Path
+
+
+def discover_query_results(tasks_dir: Path = TASKS_DIR) -> list[QueryResult]:
+    if not tasks_dir.exists():
+        return []
+
+    results: list[QueryResult] = []
+    task_dirs = sorted((p for p in tasks_dir.iterdir() if p.is_dir()), key=lambda p: p.name, reverse=True)
+    for task_dir in task_dirs:
+        query_results_dir = task_dir / "query_results"
+        if not query_results_dir.exists():
+            continue
+        query_dirs = sorted((p for p in query_results_dir.iterdir() if p.is_dir()), key=lambda p: p.name, reverse=True)
+        for query_dir in query_dirs:
+            results.append(QueryResult(task_name=task_dir.name, query_name=query_dir.name, path=query_dir))
+    return results
+
+
+def read_json(path: Path, default: Any) -> JsonState:
+    if not path.exists():
+        return JsonState(ok=True, data=default)
+    try:
+        return JsonState(ok=True, data=json.loads(path.read_text(encoding="utf-8")))
+    except Exception as exc:
+        return JsonState(ok=False, data=default, error=f"{path.name}: {exc}")
+
+
+def normalize_results(data: Any) -> list[dict[str, Any]]:
+    if not isinstance(data, list):
+        return []
+
+    normalized: list[dict[str, Any]] = []
+    for index, item in enumerate(data):
+        if not isinstance(item, dict):
+            continue
+        normalized.append(
+            {
+                "index": index,
+                "google_file_id": str(item.get("google_file_id") or ""),
+                "name": item.get("source_name") or item.get("name") or item.get("google_file_id") or f"未命名檔案 {index + 1}",
+                "location": item.get("source_location") or "",
+                "url": item.get("source_url") or item.get("web_url") or "",
+                "score": item.get("score"),
+                "pages": normalize_pages(item.get("pages")),
+            }
+        )
+    return normalized
+
+
+def normalize_pages(data: Any) -> list[dict[str, Any]]:
+    if not isinstance(data, list):
+        return []
+
+    pages: list[dict[str, Any]] = []
+    for index, item in enumerate(data):
+        if not isinstance(item, dict):
+            continue
+        page_number = item.get("page_number") or item.get("page") or index + 1
+        try:
+            page_number = int(page_number)
+        except (TypeError, ValueError):
+            continue
+        pages.append(
+            {
+                "page_number": page_number,
+                "score": item.get("score"),
+                "keyword": item.get("keyword") or item.get("query") or "",
+            }
+        )
+    return pages
+
+
+def find_document_dir(query_dir: Path, result: dict[str, Any]) -> Path | None:
+    google_file_id = result.get("google_file_id") or ""
+    name_stem = Path(str(result.get("name") or "")).stem
+    id_variants = {google_file_id, google_file_id.rstrip("_")}
+    candidates = [p for p in query_dir.iterdir() if p.is_dir() and p.name not in {"pdf", "text", "pages"}]
+
+    for candidate in candidates:
+        if any(file_id and file_id in candidate.name for file_id in id_variants):
+            return candidate
+    for candidate in candidates:
+        if name_stem and name_stem[:24] in candidate.name:
+            return candidate
+    return None
+
+
+def find_page_image(query_dir: Path, result: dict[str, Any], page_number: int) -> Path | None:
+    document_dir = find_document_dir(query_dir, result)
+    if document_dir is None:
+        return None
+
+    pages_dir = document_dir / "pages"
+    for file_name in (f"{page_number:04d}.png", f"{page_number}.png"):
+        image_path = pages_dir / file_name
+        if image_path.exists():
+            return image_path
+    return None
+
+
+def find_condition_images(query_dir: Path, plan: dict[str, Any]) -> list[Path]:
+    image_paths = plan.get("image_paths")
+    if not isinstance(image_paths, list):
+        return []
+
+    images: list[Path] = []
+    for raw_path in image_paths:
+        if not raw_path:
+            continue
+        path = Path(str(raw_path))
+        candidates = [
+            path,
+            query_dir / path,
+            query_dir.parent.parent / path,
+            TASKS_DIR / path,
+            Path(__file__).resolve().parent / path,
+        ]
+        for candidate in candidates:
+            if candidate.exists() and candidate.suffix.lower() in IMAGE_EXTENSIONS:
+                images.append(candidate)
+                break
+    return images
+
+
+def format_score(value: Any) -> str:
+    if isinstance(value, (int, float)):
+        return f"{value:.4f}".rstrip("0").rstrip(".")
+    return ""
+
+
+def image_to_data_uri(path: Path) -> str:
+    mime_type = "image/png"
+    suffix = path.suffix.lower()
+    if suffix in {".jpg", ".jpeg"}:
+        mime_type = "image/jpeg"
+    elif suffix == ".webp":
+        mime_type = "image/webp"
+    elif suffix == ".gif":
+        mime_type = "image/gif"
+    encoded = base64.b64encode(path.read_bytes()).decode("ascii")
+    return f"data:{mime_type};base64,{encoded}"
+
+
+def inject_styles() -> None:
+    import streamlit as st
+
+    st.markdown(
+        """
+        <style>
+          .block-container {
+            padding-top: 3rem;
+          }
+          div[data-testid="stExpander"] details summary p {
+            font-size: 0.95rem !important;
+            font-weight: 700 !important;
+          }
+          div[data-testid="stExpanderDetails"] {
+            padding: 22px !important;
+          }
+          label[data-testid="stWidgetLabel"] p {
+            font-size: 0.95rem !important;
+            font-weight: 700 !important;
+          }
+          div[role="tab"] p {
+            font-size: 0.95rem !important;
+            font-weight: 700 !important;
+          }
+          .condition-lines {
+            font-size: 0.9rem !important;
+            line-height: 1.6;
+            color: inherit;
+            padding: 0;
+          }
+          .condition-lines div {
+            margin: 0 0 0.38rem;
+            overflow-wrap: anywhere;
+          }
+          .condition-lines div:last-child {
+            margin-bottom: 0;
+          }
+          div[data-testid="stExpanderDetails"] div[data-testid="stMarkdownContainer"]:has(.condition-lines) {
+            margin-bottom: 0 !important;
+          }
+          .condition-images {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin: 4px 0 8px;
+          }
+          .condition-images img {
+            width: 120px;
+            max-height: 120px;
+            object-fit: contain;
+            border: 1px solid #d8dde6;
+            border-radius: 6px;
+            background: #fff;
+          }
+          .drive-path {
+            margin: 0 0 22px;
+            overflow-wrap: anywhere;
+            font-size: 0.88rem;
+          }
+          .empty-result {
+            margin: 14px 0;
+            text-align: center;
+            color: rgba(250, 250, 250, 0.65);
+            font-size: 1rem;
+          }
+          .muted-centered-message {
+            margin: 10px 0;
+            text-align: center;
+            color: rgba(250, 250, 250, 0.65);
+            font-size: 1rem;
+          }
+          .page-thumb-card {
+            display: block;
+            width: 100%;
+            margin: 0 0 18px;
+            padding: 10px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            background: #fff;
+            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12);
+            cursor: pointer;
+          }
+          .page-thumb-card:focus {
+            outline: 2px solid #2563eb;
+            outline-offset: 2px;
+          }
+          .page-thumb-card img {
+            display: block;
+            width: 100%;
+            max-height: 340px;
+            object-fit: contain;
+            background: #fff;
+          }
+          .page-thumb-caption {
+            margin-top: 8px;
+            text-align: center;
+            color: #111827;
+            font-size: 0.9rem;
+            line-height: 1.45;
+          }
+          .kbsearch-image-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 2147483647;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+            background: rgba(0, 0, 0, 0.72);
+          }
+          .kbsearch-image-modal.is-open {
+            display: flex;
+          }
+          .kbsearch-image-modal__panel {
+            position: relative;
+            max-width: min(98vw, 1800px);
+            max-height: 96vh;
+          }
+          .kbsearch-image-modal__image {
+            display: block;
+            max-width: 98vw;
+            max-height: 96vh;
+            object-fit: contain;
+            background: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.45);
+            border-radius: 4px;
+          }
+          .kbsearch-image-modal__close {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: 36px;
+            height: 36px;
+            border: 0;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.9);
+            color: #111827;
+            font-size: 24px;
+            line-height: 36px;
+            cursor: pointer;
+            box-shadow: 0 1px 6px rgba(0, 0, 0, 0.28);
+          }
+          button[title="View fullscreen"],
+          button[aria-label="Fullscreen"] {
+            display: none !important;
+          }
+          @media (prefers-color-scheme: light) {
+            .empty-result {
+              color: rgba(49, 51, 63, 0.65);
+            }
+            .muted-centered-message {
+              color: rgba(49, 51, 63, 0.65);
+            }
+          }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def inject_image_modal_script() -> None:
+    import streamlit.components.v1 as components
+
+    components.html(
+        """
+        <script>
+          (() => {
+            const doc = window.parent.document;
+
+            const ensureModal = () => {
+              let modal = doc.getElementById("kbsearch-image-modal");
+              if (modal) {
+                return modal;
+              }
+
+              modal = doc.createElement("div");
+              modal.id = "kbsearch-image-modal";
+              modal.className = "kbsearch-image-modal";
+              modal.innerHTML = `
+                <div class="kbsearch-image-modal__panel">
+                  <button type="button" class="kbsearch-image-modal__close" aria-label="關閉圖片">×</button>
+                  <img class="kbsearch-image-modal__image" alt="">
+                </div>
+              `;
+              doc.body.appendChild(modal);
+
+              const close = () => modal.classList.remove("is-open");
+              modal.addEventListener("click", (event) => {
+                if (event.target === modal) {
+                  close();
+                }
+              });
+              modal.querySelector(".kbsearch-image-modal__close").addEventListener("click", close);
+              doc.addEventListener("keydown", (event) => {
+                if (event.key === "Escape") {
+                  close();
+                }
+              });
+              return modal;
+            };
+
+            const openModal = (trigger) => {
+              const modal = ensureModal();
+              const image = modal.querySelector(".kbsearch-image-modal__image");
+              image.src = trigger.dataset.kbsearchFullSrc || "";
+              image.alt = trigger.dataset.kbsearchTitle || "";
+              modal.classList.add("is-open");
+            };
+
+            const bindTriggers = () => {
+              doc.querySelectorAll(".kbsearch-image-trigger:not([data-kbsearch-bound])").forEach((trigger) => {
+                trigger.dataset.kbsearchBound = "true";
+                trigger.addEventListener("click", () => openModal(trigger));
+                trigger.addEventListener("keydown", (event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    openModal(trigger);
+                  }
+                });
+              });
+            };
+
+            bindTriggers();
+            if (!window.parent.__kbsearchImageModalObserver) {
+              window.parent.__kbsearchImageModalObserver = new MutationObserver(bindTriggers);
+              window.parent.__kbsearchImageModalObserver.observe(doc.body, {
+                childList: true,
+                subtree: true,
+              });
+            }
+          })();
+        </script>
+        """,
+        height=0,
+    )
+
+
+def render_conditions(query: QueryResult, plan_state: JsonState) -> None:
+    import streamlit as st
+
+    if not plan_state.ok:
+        st.warning(plan_state.error)
+        return
+
+    plan = plan_state.data if isinstance(plan_state.data, dict) else {}
+    image_paths = find_condition_images(query.path, plan)
+    image_html = ""
+    if image_paths:
+        image_tags = "".join(
+            f'<img src="{image_to_data_uri(path)}" alt="{html.escape(path.name)}">' for path in image_paths
+        )
+        image_html = f'<div class="condition-images">{image_tags}</div>'
+
+    with st.expander("**搜尋條件**", expanded=True):
+        st.markdown(
+            f"""
+            <div class="condition-lines">
+              <div><strong>相似度搜尋：</strong>{html.escape(str(plan.get("vector_query") or "未設定"))}</div>
+              <div><strong>關鍵字搜尋：</strong>{html.escape(str(plan.get("drive_query") or "未設定"))}</div>
+              <div><strong>圖片條件：</strong>{image_html or "未設定"}</div>
+              <div><strong>筆數上限：</strong>{html.escape(str(plan.get("limit") if plan.get("limit") is not None else "未設定"))}</div>
+              <div><strong>最低相似度分數：</strong>{html.escape(str(plan.get("min_score") if plan.get("min_score") is not None else "未設定"))}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+
+def result_summary(results: list[dict[str, Any]]) -> str:
+    page_count = sum(len(result["pages"]) for result in results)
+    return f"總檔案：{len(results)}；總結果數量：{page_count or len(results)}；命中頁面：{page_count}"
+
+
+def inject_tab_tooltips(vector_summary: str, keyword_summary: str) -> None:
+    import streamlit.components.v1 as components
+
+    payload = json.dumps(
+        {
+            "相似度搜尋清單": vector_summary,
+            "關鍵字搜尋清單": keyword_summary,
+        },
+        ensure_ascii=False,
+    )
+    components.html(
+        f"""
+        <script>
+          const tooltips = {payload};
+          const applyTooltips = () => {{
+            const tabs = window.parent.document.querySelectorAll('[role="tab"]');
+            tabs.forEach((tab) => {{
+              const label = tab.innerText.trim();
+              const normalized = label.replaceAll('*', '').trim();
+              if (tooltips[normalized]) {{
+                tab.setAttribute('title', tooltips[normalized]);
+              }}
+            }});
+          }};
+          applyTooltips();
+          setTimeout(applyTooltips, 500);
+        </script>
+        """,
+        height=0,
+    )
+
+
+def render_drive_path(st: Any, result: dict[str, Any]) -> None:
+    location = str(result.get("location") or "")
+    url = str(result.get("url") or "")
+    display_path = location or url
+    if not display_path:
+        return
+
+    if url:
+        st.markdown(
+            f'<div class="drive-path"><a href="{html.escape(url)}" target="_blank" rel="noreferrer">'
+            f'{html.escape(display_path)}</a></div>',
+            unsafe_allow_html=True,
+        )
+        return
+
+    st.markdown(f'<div class="drive-path">{html.escape(display_path)}</div>', unsafe_allow_html=True)
+
+
+def run_app() -> None:
+    import streamlit as st
+
+    st.set_page_config(page_title="知識庫搜尋結果檢視", layout="wide")
+    inject_styles()
+    inject_image_modal_script()
+
+    query_results = discover_query_results()
+    if not query_results:
+        st.info("目前沒有找到任何搜尋任務。")
+        return
+
+    tasks = sorted({result.task_name for result in query_results}, reverse=True)
+    selector_cols = st.columns(2)
+    with selector_cols[0]:
+        selected_task = st.selectbox("**搜尋任務**", tasks)
+    task_queries = [result for result in query_results if result.task_name == selected_task]
+    with selector_cols[1]:
+        selected_query_name = st.selectbox("**搜尋結果**", [result.query_name for result in task_queries])
+    selected_query = next(result for result in task_queries if result.query_name == selected_query_name)
+
+    plan_state = read_json(selected_query.path / "query_plan.json", {})
+    vector_state = read_json(selected_query.path / "vector_results.json", [])
+    keyword_state = read_json(selected_query.path / "full_text_results.json", [])
+    vector_results = normalize_results(vector_state.data) if vector_state.ok else []
+    keyword_results = normalize_results(keyword_state.data) if keyword_state.ok else []
+
+    render_conditions(selected_query, plan_state)
+
+    tab_vector, tab_keyword = st.tabs(["**相似度搜尋清單**", "**關鍵字搜尋清單**"])
+    inject_tab_tooltips(result_summary(vector_results), result_summary(keyword_results))
+    with tab_vector:
+        render_result_tab(st, selected_query, vector_state, vector_results)
+    with tab_keyword:
+        render_result_tab(st, selected_query, keyword_state, keyword_results)
+
+
+def render_result_tab(
+    st: Any,
+    query: QueryResult,
+    result_state: JsonState,
+    results: list[dict[str, Any]],
+) -> None:
+    if not result_state.ok:
+        st.error(result_state.error)
+
+    if not results:
+        st.markdown('<div class="empty-result">無資料</div>', unsafe_allow_html=True)
+        return
+
+    for result in results:
+        with st.expander(str(result["name"]), expanded=True):
+            render_drive_path(st, result)
+            pages = result["pages"]
+            if not pages:
+                st.markdown(
+                    '<div class="muted-centered-message">此檔案沒有命中頁面資料。</div>',
+                    unsafe_allow_html=True,
+                )
+                continue
+
+            columns = st.columns(4)
+            for index, page in enumerate(pages):
+                image_path = find_page_image(query.path, result, page["page_number"])
+                with columns[index % 4]:
+                    if image_path is None:
+                        st.markdown(
+                            f'<div class="muted-centered-message">{format_page_caption(page)}<br>找不到縮圖</div>',
+                            unsafe_allow_html=True,
+                        )
+                        continue
+
+                    render_page_thumbnail(st, image_path, page)
+
+
+def format_page_caption(page: dict[str, Any]) -> str:
+    lines = [f"第 {page['page_number']} 頁"]
+    page_score = format_score(page["score"])
+    if page_score:
+        lines.append(f"相似度分數：{page_score}")
+    if page["keyword"]:
+        lines.append(f"命中關鍵字：{page['keyword']}")
+    return "<br>".join(html.escape(line) for line in lines)
+
+
+def page_caption_text(page: dict[str, Any]) -> str:
+    lines = [f"第 {page['page_number']} 頁"]
+    page_score = format_score(page["score"])
+    if page_score:
+        lines.append(f"相似度分數：{page_score}")
+    if page["keyword"]:
+        lines.append(f"命中關鍵字：{page['keyword']}")
+    return " / ".join(lines)
+
+
+def render_page_thumbnail(st: Any, image_path: Path, page: dict[str, Any]) -> None:
+    image_uri = image_to_data_uri(image_path)
+    title = page_caption_text(page)
+    st.markdown(
+        f"""
+        <div
+          class="page-thumb-card kbsearch-image-trigger"
+          role="button"
+          tabindex="0"
+          aria-label="{html.escape(title, quote=True)}"
+          data-kbsearch-full-src="{html.escape(image_uri, quote=True)}"
+          data-kbsearch-title="{html.escape(title, quote=True)}"
+        >
+          <img src="{html.escape(image_uri, quote=True)}" alt="{html.escape(title, quote=True)}">
+          <div class="page-thumb-caption">{format_page_caption(page)}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+if __name__ == "__main__":
+    run_app()
