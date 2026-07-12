@@ -226,11 +226,39 @@ def inject_styles() -> None:
           }
           html,
           body,
+          #root,
+          div[data-testid="stApp"],
+          div[data-testid="stAppViewContainer"],
           section[data-testid="stMain"] {
             scrollbar-gutter: stable;
           }
+          html,
+          body {
+            height: auto !important;
+            min-height: 100% !important;
+            overflow-y: auto !important;
+          }
+          #root,
+          #root > div,
+          div[data-testid="stScreencast"],
+          div[data-testid="stApp"],
+          div[data-testid="stAppViewContainer"],
+          div[data-testid="stAppViewContainer"] > div {
+            height: auto !important;
+            min-height: 100vh !important;
+            overflow: visible !important;
+          }
+          div[data-testid="stApp"],
+          div[data-testid="stAppViewContainer"] {
+            position: static !important;
+          }
           section[data-testid="stMain"] {
-            overflow-y: scroll !important;
+            height: auto !important;
+            overflow: visible !important;
+          }
+          div[data-testid="stMainBlockContainer"] {
+            height: auto !important;
+            overflow-y: visible !important;
           }
           div[data-testid="stVerticalBlock"],
           div[data-testid="stHorizontalBlock"],
@@ -238,8 +266,7 @@ def inject_styles() -> None:
           div[data-testid="column"],
           div[data-testid="stTabs"],
           div[data-testid="stTabContent"],
-          div[data-testid="stExpander"],
-          div[data-testid="stExpanderDetails"] {
+          div[data-testid="stExpander"] {
             min-width: 0 !important;
             max-width: 100% !important;
           }
@@ -247,9 +274,7 @@ def inject_styles() -> None:
           div[data-testid="stLayoutWrapper"] {
             width: 100% !important;
           }
-          div[data-testid="stHorizontalBlock"],
-          div[data-testid="stTabContent"],
-          div[data-testid="stExpanderDetails"] {
+          div[data-testid="stTabContent"] {
             width: 100% !important;
             overflow-x: hidden;
           }
@@ -265,6 +290,11 @@ def inject_styles() -> None:
             min-width: calc(100vw - 182px) !important;
             max-width: calc(100vw - 182px) !important;
           }
+          div[data-testid="stLayoutWrapper"]:has(div[data-testid="stSelectbox"]) div[data-testid="stHorizontalBlock"] {
+            width: 100% !important;
+            overflow-x: hidden;
+            overflow-y: visible !important;
+          }
           @media (max-width: 900px) {
             div[data-testid="stLayoutWrapper"]:has(div[data-testid="stSelectbox"]) {
               width: 100% !important;
@@ -278,6 +308,9 @@ def inject_styles() -> None:
           }
           div[data-testid="stExpanderDetails"] {
             padding: 22px !important;
+            min-width: 0 !important;
+            max-width: 100% !important;
+            overflow: visible !important;
           }
           label[data-testid="stWidgetLabel"] p {
             font-size: 0.95rem !important;
