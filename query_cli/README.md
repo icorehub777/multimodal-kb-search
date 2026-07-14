@@ -216,7 +216,7 @@ Query progress: phase=query status=failed run_id=a1b2c3d4 ...
   downloaded_files.json
   download_failures.json
   warnings.json
-  <safe_file_name>-<google_file_id_prefix>/
+  <safe_file_name_prefix>-<google_file_id_prefix>/
     <downloaded file>
     pdf/
       document.pdf
@@ -229,7 +229,7 @@ Query progress: phase=query status=failed run_id=a1b2c3d4 ...
 
 #### 文件子資料夾產物
 
-- 每個文件子資料夾名稱為 `<safe_file_name>-<google_file_id_prefix>`：`safe_file_name` 在前，`google_file_id` 前綴在後；前綴預設先取前 5 碼，若同一批查詢發生撞名，則逐碼加長至可區分。
+- 每個文件子資料夾名稱為 `<safe_file_name_prefix>-<google_file_id_prefix>`：檔名前綴在前，`google_file_id` 前綴在後，整個資料夾名稱最多 48 個字元。`google_file_id` 前綴預設先取前 5 碼；若同一批查詢發生撞名，則逐碼加長至可區分，並同步縮短檔名前綴。
 - PDF、Word、PowerPoint、TXT、MD、Google Docs 與 Google Slides 會產生固定路徑 `pdf/document.pdf`，以及依頁碼命名的 UTF-8 `text/000N.txt`。
 - `query` 自動整理的 `pages/` 只放本次相似度搜尋或全文關鍵字定位命中的頁面。兩種搜尋命中同一頁時共用一份 `000N.png`；查詢流程內發現目標 PNG 已存在時直接沿用。
 - PNG、JPG、JPEG、WEBP 視為單頁文件，但只在相似度搜尋命中時產生 `pages/0001.png`。Google Drive 全文搜尋或 OCR 命中圖片時，因無逐頁文字可供定位，只保留檔案層級結果。
@@ -315,9 +315,9 @@ kbsearch view-results
 
 ```powershell
 kbsearch render-pdf-pages `
-  --pdf "C:\path\to\<safe_file_name>-<google_file_id_prefix>\pdf\document.pdf" `
+  --pdf "C:\path\to\<safe_file_name_prefix>-<google_file_id_prefix>\pdf\document.pdf" `
   --pages "3,5,8-10" `
-  --output-dir "C:\path\to\<safe_file_name>-<google_file_id_prefix>\pages"
+  --output-dir "C:\path\to\<safe_file_name_prefix>-<google_file_id_prefix>\pages"
 ```
 
 - `--pdf`：要處理的 `pdf/document.pdf` 路徑。

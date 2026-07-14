@@ -11,7 +11,11 @@ from kbsearch_cli.models import (
     VectorFileSearchResult,
 )
 from kbsearch_cli.errors import QueryCliError
-from kbsearch_cli.orchestrator import QueryOrchestrator, _build_unique_file_dir_name
+from kbsearch_cli.orchestrator import (
+    MAX_DOCUMENT_DIR_NAME_LENGTH,
+    QueryOrchestrator,
+    _build_unique_file_dir_name,
+)
 from kbsearch_cli.output import QueryResultWriter, safe_path_name
 from kbsearch_cli.google_drive import safe_download_name
 from kbsearch_cli.rendering import DocumentPageRenderer, classify_document_type
@@ -193,6 +197,39 @@ class QueryOrchestratorTests(unittest.TestCase):
             ),
             "untitled-abcde",
         )
+
+    def test_build_unique_file_dir_name_limits_directory_name_length(self):
+        used: set[str] = set()
+
+        directory_name = _build_unique_file_dir_name(
+            "Very long customer presentation filename " * 4 + ".pdf",
+            "abcde12345",
+            used_dir_names=used,
+        )
+
+        self.assertLessEqual(len(directory_name), MAX_DOCUMENT_DIR_NAME_LENGTH)
+        self.assertTrue(directory_name.endswith("-abcde"))
+
+    def test_build_unique_file_dir_name_extends_id_prefix_within_length_limit(self):
+        used: set[str] = set()
+        long_name = "Very long repeated product deck filename " * 4 + ".pdf"
+
+        first = _build_unique_file_dir_name(
+            long_name,
+            "abcde12345",
+            used_dir_names=used,
+        )
+        second = _build_unique_file_dir_name(
+            long_name,
+            "abcdf67890",
+            used_dir_names=used,
+        )
+
+        self.assertLessEqual(len(first), MAX_DOCUMENT_DIR_NAME_LENGTH)
+        self.assertLessEqual(len(second), MAX_DOCUMENT_DIR_NAME_LENGTH)
+        self.assertTrue(first.endswith("-abcde"))
+        self.assertTrue(second.endswith("-abcdf"))
+        self.assertNotEqual(first, second)
 
     def test_run_records_metadata_failure_and_continues(self):
         class NoVectorBackendClient:

@@ -25,6 +25,7 @@ from kbsearch_cli.output import QueryResultWriter, safe_path_name
 
 logger = logging.getLogger(LOGGER_NAME)
 ProgressCallback = Callable[[str, Mapping[str, object]], None]
+MAX_DOCUMENT_DIR_NAME_LENGTH = 48
 
 
 class GoogleDriveClient(Protocol):
@@ -633,19 +634,29 @@ def _build_unique_file_dir_name(
         id_prefix = safe_file_id[:prefix_length].strip(" .")
         if not id_prefix:
             id_prefix = "file"
-        candidate = f"{safe_file_name}-{id_prefix}"
+        candidate = _build_limited_document_dir_name(safe_file_name, id_prefix)
         if candidate not in used_dir_names:
             used_dir_names.add(candidate)
             return candidate
         if prefix_length >= len(safe_file_id):
             suffix = 2
             while True:
-                fallback = f"{safe_file_name}-{safe_file_id}-{suffix}"
+                fallback_id = f"{safe_file_id}-{suffix}"
+                fallback = _build_limited_document_dir_name(safe_file_name, fallback_id)
                 if fallback not in used_dir_names:
                     used_dir_names.add(fallback)
                     return fallback
                 suffix += 1
         prefix_length += 1
+
+
+def _build_limited_document_dir_name(safe_file_name: str, id_suffix: str) -> str:
+    suffix = id_suffix.strip(" .") or "file"
+    max_name_length = MAX_DOCUMENT_DIR_NAME_LENGTH - len(suffix) - 1
+    if max_name_length < 1:
+        return suffix[-MAX_DOCUMENT_DIR_NAME_LENGTH:]
+    name = safe_file_name[:max_name_length].rstrip(" ._-") or "file"
+    return f"{name}-{suffix}"
 
 
 def _report(
