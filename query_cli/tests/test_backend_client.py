@@ -38,10 +38,29 @@ class BackendClientTests(unittest.TestCase):
                 )
 
         self.assertEqual(captured["url"], "http://backend/search/vector")
+        self.assertIsNone(captured["timeout"])
         self.assertNotIn("image_paths", captured["json"])
         self.assertEqual(captured["json"]["images"][0]["filename"], "sample.png")
         self.assertEqual(captured["json"]["images"][0]["mime_type"], "image/png")
         self.assertEqual(base64.b64decode(captured["json"]["images"][0]["base64_data"]), b"png-bytes")
+
+    def test_search_uses_configured_timeout_when_provided(self):
+        class FakeResponse:
+            status_code = 200
+
+            @staticmethod
+            def json():
+                return {"results": []}
+
+        with patch("requests.post", return_value=FakeResponse()) as post:
+            SecureBackendClient("http://backend", timeout_seconds=90).search(
+                query="alpha",
+                image_paths=[],
+                limit=5,
+                min_score=0.4,
+            )
+
+        self.assertEqual(post.call_args.kwargs["timeout"], 90)
 
     def test_search_wraps_unreachable_backend_errors(self):
         import requests
