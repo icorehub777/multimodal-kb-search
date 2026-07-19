@@ -3,7 +3,7 @@ from io import BytesIO
 import unittest
 from unittest.mock import ANY, MagicMock, patch
 
-from app.errors import InvalidRequestError
+from app.errors import InvalidRequestError, PayloadTooLargeError
 from app.embedding import (
     DashScopeQueryEmbeddingClient,
     _image_data_uri_from_payload,
@@ -98,6 +98,22 @@ class EmbeddingTests(unittest.TestCase):
             _image_data_uri_from_payload(image, max_bytes=1_000_000, jpeg_quality=95)
 
         self.assertIn("Invalid image payload: broken.jpg", str(ctx.exception))
+
+    def test_image_data_uri_from_payload_rejects_uncompressible_image_as_payload_too_large(self):
+        image = QueryImage(
+            filename="huge.png",
+            mime_type="image/png",
+            base64_data=base64.b64encode(_png_bytes((1, 1))).decode("ascii"),
+        )
+
+        with patch(
+            "app.embedding._compress_image_bytes_for_dashscope",
+            side_effect=PayloadTooLargeError("too large"),
+        ):
+            with self.assertRaises(PayloadTooLargeError) as ctx:
+                _image_data_uri_from_payload(image, max_bytes=1, jpeg_quality=95)
+
+        self.assertIn("Image payload exceeds DashScope image size limit: huge.png", str(ctx.exception))
 
     def test_client_uses_configured_image_preparation_settings(self):
         image = QueryImage(

@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from app.errors import InvalidRequestError
+from app.errors import InvalidRequestError, PayloadTooLargeError
 from app.factory import _http_exception_from_error, _run_startup_probe, create_app
 from app.logging_config import LOGGER_NAME
 from app.models import PageSearchResult, VectorFileSearchResult
@@ -70,6 +70,20 @@ class AppTests(unittest.TestCase):
             {
                 "error": "InvalidRequestError",
                 "message": "Invalid image payload: broken.jpg",
+            },
+        )
+
+    def test_payload_too_large_error_maps_to_413_response_detail(self):
+        response_error = _http_exception_from_error(
+            PayloadTooLargeError("Image payload exceeds DashScope image size limit: huge.png")
+        )
+
+        self.assertEqual(response_error.status_code, 413)
+        self.assertEqual(
+            response_error.detail,
+            {
+                "error": "PayloadTooLargeError",
+                "message": "Image payload exceeds DashScope image size limit: huge.png",
             },
         )
 

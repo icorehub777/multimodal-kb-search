@@ -6,7 +6,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException
 
 from app.config import BackendConfig, ConfigError, load_backend_config
-from app.errors import BackendError, InvalidRequestError
+from app.errors import BackendError, InvalidRequestError, PayloadTooLargeError
 from app.factories import create_vector_search_service
 from app.logging_config import LOGGER_NAME, configure_backend_logging
 from app.models import VectorSearchRequest, VectorSearchResponse
@@ -90,7 +90,12 @@ def create_app(
 
 
 def _http_exception_from_error(exc: Exception) -> HTTPException:
-    status_code = 400 if isinstance(exc, InvalidRequestError) else 500
+    if isinstance(exc, PayloadTooLargeError):
+        status_code = 413
+    elif isinstance(exc, InvalidRequestError):
+        status_code = 400
+    else:
+        status_code = 500
     return HTTPException(
         status_code=status_code,
         detail={"error": exc.__class__.__name__, "message": str(exc)},

@@ -13,6 +13,10 @@ class InvalidRequestError(BackendError):
     """Raised when a request payload is well-formed JSON but semantically invalid."""
 
 
+class PayloadTooLargeError(InvalidRequestError):
+    """Raised when a request payload exceeds service processing limits."""
+
+
 class ExternalServiceError(BackendError):
     """Raised when an external service call fails."""
 

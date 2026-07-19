@@ -6,7 +6,7 @@ from http import HTTPStatus
 from io import BytesIO
 from typing import Protocol
 
-from app.errors import ExternalServiceError, InvalidRequestError
+from app.errors import ExternalServiceError, InvalidRequestError, PayloadTooLargeError
 from app.models import QueryImage
 
 
@@ -109,6 +109,11 @@ def _image_data_uri_from_payload(
             max_bytes=max_bytes,
             jpeg_quality=jpeg_quality,
         )
+    except PayloadTooLargeError as exc:
+        raise PayloadTooLargeError(
+            f"Image payload exceeds DashScope image size limit: {image.filename} "
+            f"(max_bytes={max_bytes})."
+        ) from exc
     except OSError as exc:
         raise InvalidRequestError(f"Invalid image payload: {image.filename}") from exc
     encoded = base64.b64encode(compressed).decode("ascii")
@@ -161,4 +166,4 @@ def _compress_image_bytes_for_dashscope(
             break
         image = image.resize(next_size, Image.Resampling.LANCZOS)
 
-    raise RuntimeError(f"Unable to compress image under DashScope size limit ({max_bytes} bytes).")
+    raise PayloadTooLargeError(f"Unable to compress image under DashScope size limit ({max_bytes} bytes).")
