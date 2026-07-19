@@ -14,6 +14,8 @@ class BackendConfig:
     dashscope_api_key: str
     dashscope_embedding_model: str
     dashscope_vector_size: int
+    dashscope_image_max_bytes: int
+    dashscope_jpeg_quality: int
     qdrant_url: str
     qdrant_api_key: str | None
     qdrant_collection: str
@@ -35,6 +37,18 @@ def load_backend_config(env_file: str | Path | None = DEFAULT_ENV_FILE) -> Backe
         dashscope_api_key=_required_str("DASHSCOPE_API_KEY"),
         dashscope_embedding_model=_required_str("DASHSCOPE_EMBEDDING_MODEL"),
         dashscope_vector_size=_required_int("DASHSCOPE_VECTOR_SIZE"),
+        dashscope_image_max_bytes=_optional_int_in_range(
+            "DASHSCOPE_IMAGE_MAX_BYTES",
+            9_728_000,
+            minimum=1,
+            maximum=10_485_760,
+        ),
+        dashscope_jpeg_quality=_optional_int_in_range(
+            "DASHSCOPE_JPEG_QUALITY",
+            95,
+            minimum=1,
+            maximum=100,
+        ),
         qdrant_url=_required_str("QDRANT_URL"),
         qdrant_api_key=_optional_str("QDRANT_API_KEY"),
         qdrant_collection=_required_str("QDRANT_COLLECTION"),
@@ -69,3 +83,22 @@ def _required_int(name: str) -> int:
         return int(value)
     except ValueError as exc:
         raise ConfigError(f"Config {name} must be an integer.") from exc
+
+
+def _optional_int_in_range(
+    name: str,
+    default: int,
+    *,
+    minimum: int,
+    maximum: int,
+) -> int:
+    value = os.getenv(name)
+    if value is None or value.strip() == "":
+        return default
+    try:
+        parsed = int(value.strip())
+    except ValueError as exc:
+        raise ConfigError(f"Config {name} must be an integer.") from exc
+    if parsed < minimum or parsed > maximum:
+        raise ConfigError(f"Config {name} must be between {minimum} and {maximum}.")
+    return parsed

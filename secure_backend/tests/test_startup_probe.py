@@ -12,6 +12,8 @@ def _backend_config() -> BackendConfig:
         dashscope_api_key="dashscope-key",
         dashscope_embedding_model="qwen3-vl-embedding",
         dashscope_vector_size=4,
+        dashscope_image_max_bytes=9_728_000,
+        dashscope_jpeg_quality=95,
         qdrant_url="https://qdrant.example.com",
         qdrant_api_key="qdrant-key",
         qdrant_collection="kbsearch",

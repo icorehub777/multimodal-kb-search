@@ -228,14 +228,14 @@ def _page_render_dpi(
 class PageImageRenderer:
     def render_pages(self, image_path: Path, output_dir: Path) -> list[PageImage]:
         try:
-            from PIL import Image
+            from PIL import Image, ImageOps
         except ImportError as exc:
             raise DocumentConversionError("Pillow is required for image page rendering.") from exc
 
         output_dir.mkdir(parents=True, exist_ok=True)
         output_path = page_png_path(output_dir, 1)
         with Image.open(image_path) as image:
-            image.convert("RGB").save(output_path, format="PNG")
+            ImageOps.exif_transpose(image).convert("RGB").save(output_path, format="PNG")
         return [PageImage(page_number=1, path=output_path)]
 
 

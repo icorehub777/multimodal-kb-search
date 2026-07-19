@@ -234,6 +234,24 @@ class ConversionTests(unittest.TestCase):
             self.assertEqual(pages[0].path.name, "0001.png")
             self.assertTrue(pages[0].path.read_bytes().startswith(b"\x89PNG"))
 
+    def test_image_page_renderer_applies_exif_orientation(self):
+        from app.conversion import PageImageRenderer
+        from PIL import Image
+
+        renderer = PageImageRenderer()
+
+        with TemporaryDirectory() as temp_dir:
+            source = Path(temp_dir) / "rotated.jpg"
+            image = Image.new("RGB", (2, 3), color=(255, 0, 0))
+            exif = image.getexif()
+            exif[274] = 6
+            image.save(source, format="JPEG", exif=exif)
+
+            pages = renderer.render_pages(source, Path(temp_dir) / "pages")
+
+            with Image.open(pages[0].path) as rendered:
+                self.assertEqual(rendered.size, (3, 2))
+
     def test_text_to_pdf_preserves_chinese_text(self):
         try:
             import fitz
