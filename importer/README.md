@@ -58,7 +58,7 @@ importer/
 | `DASHSCOPE_API_KEY` | DashScope API key |
 | `DASHSCOPE_EMBEDDING_MODEL` | Embedding 模型 |
 | `DASHSCOPE_VECTOR_SIZE` | 向量維度（須與 `QDRANT_VECTOR_SIZE` 相同） |
-| `DASHSCOPE_IMAGE_MAX_BYTES` | 送入 Qwen embedding API 的圖片上限；範圍 1–10,485,760 bytes，預設 9,728,000，低於 API 的 10,240 KB 硬限制以保留傳輸餘裕 |
+| `DASHSCOPE_IMAGE_MAX_BYTES` | 送入 Qwen embedding API 的圖片上限；範圍 1–10,485,760 bytes，預設 9,728,000。真實 DashScope API 實測此限制以 base64 解碼後的圖片 bytes 計，不以 base64 字串或整個 request payload 計 |
 | `DASHSCOPE_JPEG_QUALITY` | 圖片超過上限時轉 JPEG 的起始品質；範圍 1–100，預設 95，以保留 embedding 所需細節 |
 | `QDRANT_URL` | 本機測試時用 `http://127.0.0.1:6333`；docker 部署時用 `http://qdrant:6333` |
 | `QDRANT_API_KEY` | 選填；地端預設不啟用 API key，雲端託管時再填 |
