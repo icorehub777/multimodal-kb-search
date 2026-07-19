@@ -6,7 +6,8 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from app.factory import _run_startup_probe, create_app
+from app.errors import InvalidRequestError
+from app.factory import _http_exception_from_error, _run_startup_probe, create_app
 from app.logging_config import LOGGER_NAME
 from app.models import PageSearchResult, VectorFileSearchResult
 from app.config import BackendConfig
@@ -59,6 +60,18 @@ class AppTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["results"][0]["google_file_id"], "file-1")
         self.assertEqual(response.json()["results"][0]["pages"][0]["page_number"], 1)
+
+    def test_invalid_request_error_maps_to_400_response_detail(self):
+        response_error = _http_exception_from_error(InvalidRequestError("Invalid image payload: broken.jpg"))
+
+        self.assertEqual(response_error.status_code, 400)
+        self.assertEqual(
+            response_error.detail,
+            {
+                "error": "InvalidRequestError",
+                "message": "Invalid image payload: broken.jpg",
+            },
+        )
 
     def test_search_vector_writes_application_log_file(self):
         temp_dir = self._create_temp_dir_with_log_cleanup()

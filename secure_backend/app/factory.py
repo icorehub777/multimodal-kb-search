@@ -6,7 +6,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException
 
 from app.config import BackendConfig, ConfigError, load_backend_config
-from app.errors import BackendError
+from app.errors import BackendError, InvalidRequestError
 from app.factories import create_vector_search_service
 from app.logging_config import LOGGER_NAME, configure_backend_logging
 from app.models import VectorSearchRequest, VectorSearchResponse
@@ -63,6 +63,17 @@ def create_app(
             )
             logger.info("search_vector succeeded result_count=%s limit=%s", len(response.results), request.limit)
             return response
+        except InvalidRequestError as exc:
+            logger.warning(
+                "search_vector rejected_request error=%s message=%s query_length=%s image_count=%s limit=%s min_score=%s",
+                exc.__class__.__name__,
+                exc,
+                len(request.query),
+                len(request.images),
+                request.limit,
+                request.min_score,
+            )
+            raise _http_exception_from_error(exc) from exc
         except (ConfigError, BackendError, RuntimeError) as exc:
             logger.exception(
                 "search_vector failed error=%s message=%s query_length=%s image_count=%s limit=%s min_score=%s",
@@ -73,12 +84,17 @@ def create_app(
                 request.limit,
                 request.min_score,
             )
-            raise HTTPException(
-                status_code=500,
-                detail={"error": exc.__class__.__name__, "message": str(exc)},
-            ) from exc
+            raise _http_exception_from_error(exc) from exc
 
     return app
+
+
+def _http_exception_from_error(exc: Exception) -> HTTPException:
+    status_code = 400 if isinstance(exc, InvalidRequestError) else 500
+    return HTTPException(
+        status_code=status_code,
+        detail={"error": exc.__class__.__name__, "message": str(exc)},
+    )
 
 
 def _run_startup_probe(config: BackendConfig, logger: logging.Logger) -> None:

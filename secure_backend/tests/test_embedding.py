@@ -3,6 +3,7 @@ from io import BytesIO
 import unittest
 from unittest.mock import ANY, MagicMock, patch
 
+from app.errors import InvalidRequestError
 from app.embedding import (
     DashScopeQueryEmbeddingClient,
     _image_data_uri_from_payload,
@@ -73,6 +74,30 @@ class EmbeddingTests(unittest.TestCase):
             )
 
         compress.assert_called_once_with(ANY, max_bytes=1, jpeg_quality=90)
+
+    def test_image_data_uri_from_payload_rejects_invalid_base64(self):
+        image = QueryImage(
+            filename="broken.jpg",
+            mime_type="image/jpeg",
+            base64_data="not-base64",
+        )
+
+        with self.assertRaises(InvalidRequestError) as ctx:
+            _image_data_uri_from_payload(image, max_bytes=1_000_000, jpeg_quality=95)
+
+        self.assertIn("Invalid base64 image payload: broken.jpg", str(ctx.exception))
+
+    def test_image_data_uri_from_payload_rejects_unrecognized_image_content(self):
+        image = QueryImage(
+            filename="broken.jpg",
+            mime_type="image/jpeg",
+            base64_data=base64.b64encode(b"not image bytes").decode("ascii"),
+        )
+
+        with self.assertRaises(InvalidRequestError) as ctx:
+            _image_data_uri_from_payload(image, max_bytes=1_000_000, jpeg_quality=95)
+
+        self.assertIn("Invalid image payload: broken.jpg", str(ctx.exception))
 
     def test_client_uses_configured_image_preparation_settings(self):
         image = QueryImage(

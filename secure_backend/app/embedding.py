@@ -6,7 +6,7 @@ from http import HTTPStatus
 from io import BytesIO
 from typing import Protocol
 
-from app.errors import ExternalServiceError
+from app.errors import ExternalServiceError, InvalidRequestError
 from app.models import QueryImage
 
 
@@ -93,18 +93,24 @@ def _image_data_uri_from_payload(
     try:
         image_bytes = base64.b64decode(base64_data, validate=True)
     except binascii.Error as exc:
-        raise ExternalServiceError(f"Invalid base64 image payload: {image.filename}") from exc
+        raise InvalidRequestError(f"Invalid base64 image payload: {image.filename}") from exc
 
-    normalized = _normalize_image_bytes_for_dashscope(image_bytes)
+    try:
+        normalized = _normalize_image_bytes_for_dashscope(image_bytes)
+    except OSError as exc:
+        raise InvalidRequestError(f"Invalid image payload: {image.filename}") from exc
     if len(normalized) <= max_bytes:
         encoded = base64.b64encode(normalized).decode("ascii")
         return f"data:image/png;base64,{encoded}"
 
-    compressed = _compress_image_bytes_for_dashscope(
-        normalized,
-        max_bytes=max_bytes,
-        jpeg_quality=jpeg_quality,
-    )
+    try:
+        compressed = _compress_image_bytes_for_dashscope(
+            normalized,
+            max_bytes=max_bytes,
+            jpeg_quality=jpeg_quality,
+        )
+    except OSError as exc:
+        raise InvalidRequestError(f"Invalid image payload: {image.filename}") from exc
     encoded = base64.b64encode(compressed).decode("ascii")
     return f"data:image/jpeg;base64,{encoded}"
 
