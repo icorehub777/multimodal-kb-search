@@ -226,6 +226,23 @@ class RenderingTests(unittest.TestCase):
             self.assertEqual([path.name for path in vector_hit.page_paths], ["0001.png"])
             self.assertFalse((root / "pdf").exists())
 
+    def test_process_applies_exif_orientation_to_vector_hit_image(self):
+        from PIL import Image
+
+        renderer = DocumentPageRenderer()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source_path = root / "rotated.jpg"
+            image = Image.new("RGB", (2, 3), color=(255, 0, 0))
+            exif = image.getexif()
+            exif[274] = 6
+            image.save(source_path, format="JPEG", exif=exif)
+
+            processed = renderer.process(source_path, "image/jpeg", root, [1])
+
+            with Image.open(processed.page_paths[0]) as rendered:
+                self.assertEqual(rendered.size, (3, 2))
+
     def test_prepare_pdf_rejects_image_mime_type(self):
         renderer = DocumentPageRenderer()
         with tempfile.TemporaryDirectory() as temp_dir:

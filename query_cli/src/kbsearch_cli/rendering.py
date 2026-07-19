@@ -275,7 +275,7 @@ class DocumentPageRenderer:
         overwrite: bool,
     ) -> list[Path]:
         try:
-            from PIL import Image
+            from PIL import Image, ImageOps
         except ImportError as exc:
             raise DocumentRenderError("Pillow is required for image page rendering.") from exc
 
@@ -284,7 +284,7 @@ class DocumentPageRenderer:
         if output_path.exists() and not overwrite:
             return [output_path]
         with Image.open(image_path) as image:
-            image.convert("RGB").save(output_path, format="PNG")
+            ImageOps.exif_transpose(image).convert("RGB").save(output_path, format="PNG")
         return [output_path]
 
 
