@@ -38,6 +38,29 @@ KBSearch/
 - `query_cli/`：打包成 Python package，安裝到 `agent_runtime` 使用的 Python 環境中，提供 `kbsearch` 指令。
 - `agent_runtime/`：正式環境中 Agent 進行 KB search 的工作目錄；正式運行時只需要這個目錄、已安裝的 `kbsearch` 指令。
 
+## 本機開發測試環境準備
+
+除 `agent_runtime/` 子專案使用 `agent_runtime/_internal/.venv` 環境外，其他 Python 子專案一律使用 repo 共用 conda 環境 `kbsearch`。
+
+先檢查環境是否存在：
+
+```powershell
+conda env list | Select-String kbsearch
+```
+
+若沒有 `kbsearch`，先建立環境：
+
+```powershell
+conda create -n kbsearch python=3.12 pip setuptools wheel
+```
+
+進入環境並安裝跨子專案的共用開發測試依賴 (在 repo 根目錄執行)：
+
+```powershell
+conda activate kbsearch
+python -m pip install -r requirements-dev.txt
+```
+
 各子專案的開發測試環境準備與正式環境部署規劃寫在各自的 `README.md`。
 
 ## 補充說明
