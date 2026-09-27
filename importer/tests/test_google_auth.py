@@ -25,6 +25,24 @@ class GoogleAuthTests(unittest.TestCase):
                         subject_email="user@example.com",
                     )
 
+    def test_dwd_refresh_network_failure_mentions_network_dns(self):
+        class FakeCredentials:
+            service_account_email = "svc@example.com"
+
+            def refresh(self, _request):
+                raise RuntimeError("Failed to resolve 'oauth2.googleapis.com'")
+
+        with patch(
+            "google.oauth2.service_account.Credentials.from_service_account_file",
+            return_value=FakeCredentials(),
+        ):
+            with patch("app.google_auth.ensure_google_application_credentials", return_value="/tmp/key.json"):
+                with self.assertRaisesRegex(ExternalServiceError, "network/DNS"):
+                    get_dwd_access_token(
+                        service_account_email="svc@example.com",
+                        subject_email="user@example.com",
+                    )
+
     def test_dwd_refresh_returns_access_token(self):
         class FakeCredentials:
             service_account_email = "svc@example.com"

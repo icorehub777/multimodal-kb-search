@@ -53,10 +53,16 @@ def get_dwd_access_token_with_expiry(
     except ExternalServiceError:
         raise
     except Exception as exc:
-        raise ExternalServiceError(
+        message = (
             "Google Domain-Wide Delegation credential refresh failed. "
             "Verify gcp-adc.json, GOOGLE_DWD_SUBJECT_EMAIL, and Workspace DWD scopes."
-        ) from exc
+        )
+        if _looks_like_network_or_dns_error(exc):
+            message += (
+                " The underlying refresh error looks like a network/DNS failure; "
+                "verify that the importer container can resolve and reach oauth2.googleapis.com."
+            )
+        raise ExternalServiceError(message) from exc
 
     token = credentials.token
     if not token:
@@ -69,6 +75,20 @@ def get_dwd_access_token_with_expiry(
         expires_at = int(expiry.replace(tzinfo=timezone.utc).timestamp())
 
     return str(token), expires_at
+
+
+def _looks_like_network_or_dns_error(exc: Exception) -> bool:
+    text = str(exc).lower()
+    indicators = (
+        "failed to resolve",
+        "name or service not known",
+        "no address associated with hostname",
+        "nameresolutionerror",
+        "temporary failure in name resolution",
+        "connectionerror",
+        "transporterror",
+    )
+    return any(indicator in text for indicator in indicators)
 
 
 def build_drive_service(access_token: str):
