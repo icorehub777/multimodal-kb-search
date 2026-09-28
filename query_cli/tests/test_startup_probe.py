@@ -1,156 +1,142 @@
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from kbsearch_cli.config import ConfigError, QueryCliConfig
-from kbsearch_cli.errors import ExternalServiceError
+from kbsearch_cli.errors import AuthenticationError, ExternalServiceError
 from kbsearch_cli.startup_probe import probe_startup_environment
 
 
-def _sample_config(
-    root: Path,
-    *,
-    oauth_client_exists: bool = True,
-    token_cache_exists: bool = False,
-    cjk_font_exists: bool = True,
-) -> QueryCliConfig:
-    config_dir = root / "config"
-    config_dir.mkdir(parents=True, exist_ok=True)
-    oauth_client = config_dir / "oauth_client.json"
-    token_cache = config_dir / "token_cache.json"
-    cjk_font = root / "msjh.ttc"
+class FakeCredentialStore:
+    def __init__(self, value: str | None = "credential") -> None:
+        self.value = value
+        self.deleted = False
 
-    if oauth_client_exists:
-        oauth_client.write_text("{}", encoding="utf-8")
-    if token_cache_exists:
-        token_cache.write_text("{}", encoding="utf-8")
+    def read(self) -> str | None:
+        return self.value
+
+    def write(self, value: str) -> None:
+        self.value = value
+
+    def delete(self) -> bool:
+        self.deleted = True
+        self.value = None
+        return True
+
+
+def _sample_config(root: Path, *, cjk_font_exists: bool = True) -> QueryCliConfig:
+    oauth_client = root / "config" / "oauth_client.json"
+    oauth_client.parent.mkdir(parents=True, exist_ok=True)
+    cjk_font = root / "msjh.ttc"
     if cjk_font_exists:
         cjk_font.write_bytes(b"")
-
     return QueryCliConfig(
         secure_backend_base_url="http://127.0.0.1:8000",
         google_oauth_client_config=oauth_client,
-        google_oauth_token_cache=token_cache,
         query_logs_root=root / "logs",
         tasks_root=root / "tasks",
         viewer_port=8501,
         query_log_retention_days=14,
+        log_level="INFO",
         cjk_font_path=cjk_font,
     )
 
 
+def _drive_service(error: Exception | None = None):
+    request = MagicMock()
+    request.execute.side_effect = error
+    service = MagicMock()
+    service.about.return_value.get.return_value = request
+    return service
+
+
 class StartupProbeTests(unittest.TestCase):
-    def test_probe_succeeds_when_local_tools_and_backend_are_ready(self):
+    def test_probe_succeeds_when_services_and_local_tools_are_ready(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             config = _sample_config(Path(temp_dir))
-            fake_response = type("FakeResponse", (), {"status_code": 200})()
-
+            response = type("Response", (), {"status_code": 200})()
             with patch("shutil.which", return_value="soffice"), patch(
-                "requests.get", return_value=fake_response
+                "requests.get", return_value=response
+            ) as get, patch(
+                "kbsearch_cli.startup_probe.load_google_credentials",
+                return_value=object(),
             ):
-                result = probe_startup_environment(config)
+                result = probe_startup_environment(
+                    config,
+                    credential_store=FakeCredentialStore(),
+                    create_drive_service=lambda _: _drive_service(),
+                )
+        self.assertTrue(result.google_drive_authenticated)
+        self.assertEqual(get.call_args.kwargs["timeout"], (10, 30))
 
-        self.assertFalse(result.google_drive_authenticated)
-        self.assertEqual(result.secure_backend_base_url, "http://127.0.0.1:8000")
-
-    def test_probe_fails_when_oauth_client_missing(self):
+    def test_probe_requires_authentication_without_stored_credentials(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            config = _sample_config(Path(temp_dir), oauth_client_exists=False)
-
-            with self.assertRaisesRegex(ConfigError, "Google OAuth client not found"):
-                probe_startup_environment(config)
+            config = _sample_config(Path(temp_dir))
+            with patch("shutil.which", return_value="soffice"), patch(
+                "kbsearch_cli.startup_probe.load_google_credentials", return_value=None
+            ), self.assertRaisesRegex(AuthenticationError, "kbsearch login"):
+                probe_startup_environment(
+                    config,
+                    credential_store=FakeCredentialStore(None),
+                    probe_secure_backend=False,
+                )
 
     def test_probe_fails_when_libreoffice_missing(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             config = _sample_config(Path(temp_dir))
-
             with patch("shutil.which", return_value=None), self.assertRaisesRegex(
-                ConfigError,
-                "LibreOffice command not found in PATH",
+                ConfigError, "LibreOffice command not found"
             ):
-                probe_startup_environment(config)
+                probe_startup_environment(config, probe_secure_backend=False)
 
     def test_probe_fails_when_cjk_font_missing(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             config = _sample_config(Path(temp_dir), cjk_font_exists=False)
-
             with patch("shutil.which", return_value="soffice"), self.assertRaisesRegex(
-                ConfigError,
-                "CJK font not found",
+                ConfigError, "CJK font not found"
             ):
-                probe_startup_environment(config)
+                probe_startup_environment(config, probe_secure_backend=False)
 
     def test_probe_fails_when_secure_backend_unreachable(self):
         import requests
 
         with tempfile.TemporaryDirectory() as temp_dir:
             config = _sample_config(Path(temp_dir))
-
             with patch("shutil.which", return_value="soffice"), patch(
-                "requests.get",
-                side_effect=requests.RequestException("connection refused"),
-            ):
-                with self.assertRaisesRegex(
-                    ExternalServiceError,
-                    "Secure backend unreachable",
-                ):
-                    probe_startup_environment(config)
+                "requests.get", side_effect=requests.RequestException("connection refused")
+            ), self.assertRaisesRegex(ExternalServiceError, "Secure backend unreachable"):
+                probe_startup_environment(config)
 
-    def test_probe_skips_secure_backend_when_probe_secure_backend_false(self):
+    def test_probe_preserves_credential_on_transient_drive_failure(self):
+        store = FakeCredentialStore()
         with tempfile.TemporaryDirectory() as temp_dir:
             config = _sample_config(Path(temp_dir))
-
             with patch("shutil.which", return_value="soffice"), patch(
-                "requests.get"
-            ) as requests_get:
-                result = probe_startup_environment(config, probe_secure_backend=False)
+                "kbsearch_cli.startup_probe.load_google_credentials", return_value=object()
+            ), self.assertRaisesRegex(ExternalServiceError, "validation failed"):
+                probe_startup_environment(
+                    config,
+                    credential_store=store,
+                    create_drive_service=lambda _: _drive_service(RuntimeError("timeout")),
+                    probe_secure_backend=False,
+                )
+        self.assertFalse(store.deleted)
 
-        requests_get.assert_not_called()
-        self.assertFalse(result.google_drive_authenticated)
-        self.assertEqual(result.secure_backend_base_url, "http://127.0.0.1:8000")
-
-    def test_probe_still_checks_local_tools_when_secure_backend_skipped(self):
+    def test_probe_deletes_explicitly_invalid_credential(self):
+        store = FakeCredentialStore()
         with tempfile.TemporaryDirectory() as temp_dir:
-            config = _sample_config(Path(temp_dir), oauth_client_exists=False)
-
-            with self.assertRaisesRegex(ConfigError, "Google OAuth client not found"):
-                probe_startup_environment(config, probe_secure_backend=False)
-
-    def test_probe_validates_google_drive_when_token_cache_exists(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            config = _sample_config(Path(temp_dir), token_cache_exists=True)
-            fake_response = type("FakeResponse", (), {"status_code": 200})()
-            fake_drive_service = type(
-                "FakeDriveService",
-                (),
-                {
-                    "about": lambda self: type(
-                        "AboutResource",
-                        (),
-                        {
-                            "get": lambda self, fields: type(
-                                "AboutRequest",
-                                (),
-                                {"execute": lambda self: {"user": {"emailAddress": "user@example.com"}}},
-                            )()
-                        },
-                    )()
-                },
-            )()
-
+            config = _sample_config(Path(temp_dir))
             with patch("shutil.which", return_value="soffice"), patch(
-                "requests.get", return_value=fake_response
-            ), patch(
-                "kbsearch_cli.startup_probe.load_google_credentials",
-                return_value=type("Credentials", (), {"valid": True})(),
-            ), patch(
-                "kbsearch_cli.factories.build_drive_service",
-                return_value=fake_drive_service,
-            ):
-                result = probe_startup_environment(config)
-
-        self.assertTrue(result.google_drive_authenticated)
+                "kbsearch_cli.startup_probe.load_google_credentials", return_value=object()
+            ), self.assertRaisesRegex(AuthenticationError, "kbsearch login"):
+                probe_startup_environment(
+                    config,
+                    credential_store=store,
+                    create_drive_service=lambda _: _drive_service(RuntimeError("invalid_token")),
+                    probe_secure_backend=False,
+                )
+        self.assertTrue(store.deleted)
 
 
 if __name__ == "__main__":

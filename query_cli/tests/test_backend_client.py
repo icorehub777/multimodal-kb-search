@@ -9,6 +9,35 @@ from kbsearch_cli.errors import ExternalServiceError, QueryCliError
 
 
 class BackendClientTests(unittest.TestCase):
+    def test_search_parses_valid_response_into_typed_models(self):
+        response = type(
+            "Response",
+            (),
+            {
+                "status_code": 200,
+                "json": lambda self: {
+                    "results": [
+                        {
+                            "google_file_id": "file-1",
+                            "source_name": "Manual.pdf",
+                            "source_location": "Drive/Manual.pdf",
+                            "source_url": "https://drive/file-1",
+                            "google_drive_version": "7",
+                            "google_drive_modified_time": "2026-05-24T00:00:00Z",
+                            "score": 0.91,
+                            "pages": [{"page_number": 3, "score": 0.88}],
+                        }
+                    ]
+                },
+            },
+        )()
+
+        with patch("requests.post", return_value=response):
+            results = SecureBackendClient("http://backend").search("alpha", [], 5, None)
+
+        self.assertEqual(results[0].google_file_id, "file-1")
+        self.assertEqual(results[0].pages[0].page_number, 3)
+
     def test_search_sends_image_bytes_instead_of_local_paths(self):
         captured = {}
 
@@ -38,7 +67,7 @@ class BackendClientTests(unittest.TestCase):
                 )
 
         self.assertEqual(captured["url"], "http://backend/search/vector")
-        self.assertIsNone(captured["timeout"])
+        self.assertEqual(captured["timeout"], (10.0, None))
         self.assertNotIn("image_paths", captured["json"])
         self.assertEqual(captured["json"]["images"][0]["filename"], "sample.png")
         self.assertEqual(captured["json"]["images"][0]["mime_type"], "image/png")
@@ -88,6 +117,28 @@ class BackendClientTests(unittest.TestCase):
                 limit=5,
                 min_score=0.4,
             )
+
+    def test_search_rejects_non_json_response(self):
+        response = type(
+            "Response",
+            (),
+            {"status_code": 200, "json": lambda self: (_ for _ in ()).throw(ValueError())},
+        )()
+        with patch("requests.post", return_value=response), self.assertRaisesRegex(
+            ExternalServiceError, "non-JSON"
+        ):
+            SecureBackendClient("http://backend").search("alpha", [], 5, None)
+
+    def test_search_rejects_invalid_response_contract(self):
+        response = type(
+            "Response",
+            (),
+            {"status_code": 200, "json": lambda self: {"results": {}}},
+        )()
+        with patch("requests.post", return_value=response), self.assertRaisesRegex(
+            ExternalServiceError, "invalid response"
+        ):
+            SecureBackendClient("http://backend").search("alpha", [], 5, None)
 
 
 if __name__ == "__main__":

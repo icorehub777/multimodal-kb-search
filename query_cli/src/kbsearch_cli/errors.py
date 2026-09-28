@@ -9,6 +9,14 @@ class ConfigError(QueryCliError):
     """Raised when query CLI configuration is missing or invalid."""
 
 
+class QueryInputError(QueryCliError):
+    """Raised when command input is invalid."""
+
+
+class AuthenticationError(QueryCliError):
+    """Raised when interactive authentication is required."""
+
+
 class ExternalServiceError(QueryCliError):
     """Raised when Google Drive or secure backend calls fail."""
 

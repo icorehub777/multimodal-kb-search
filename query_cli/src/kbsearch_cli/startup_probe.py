@@ -1,25 +1,27 @@
 from __future__ import annotations
 
-import logging
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
-from kbsearch_cli.config import ConfigError, QueryCliConfig
-from kbsearch_cli.errors import ExternalServiceError
-from kbsearch_cli.factories import discard_oauth_token_cache, load_google_credentials
-from kbsearch_cli.logging_config import LOGGER_NAME
+from kbsearch_cli.config import QueryCliConfig
+from kbsearch_cli.credential_store import CredentialStore
+from kbsearch_cli.errors import AuthenticationError, ConfigError, ExternalServiceError
+from kbsearch_cli.factories import (
+    _is_explicitly_invalid_token_error,
+    build_drive_service,
+    get_google_credential_store,
+    load_google_credentials,
+)
 
 CreateDriveService = Callable[[QueryCliConfig], Any]
-logger = logging.getLogger(LOGGER_NAME)
 
 
 @dataclass(frozen=True)
 class StartupProbeResult:
     secure_backend_base_url: str
     google_oauth_client_config: Path
-    google_oauth_token_cache: Path
     google_drive_authenticated: bool
     cjk_font_path: Path
 
@@ -28,30 +30,27 @@ def probe_startup_environment(
     config: QueryCliConfig,
     *,
     create_drive_service: CreateDriveService | None = None,
+    credential_store: CredentialStore | None = None,
     probe_secure_backend: bool = True,
 ) -> StartupProbeResult:
-    """Verify local config paths and external services before running a query."""
+    """Verify local tools and external services before running a query."""
     _probe_local_tools(config)
     if probe_secure_backend:
         _probe_secure_backend(config)
-    google_drive_authenticated = _probe_google_drive_if_configured(
+    _probe_google_drive(
         config,
         create_drive_service=create_drive_service,
+        credential_store=credential_store,
     )
     return StartupProbeResult(
         secure_backend_base_url=config.secure_backend_base_url,
         google_oauth_client_config=config.google_oauth_client_config,
-        google_oauth_token_cache=config.google_oauth_token_cache,
-        google_drive_authenticated=google_drive_authenticated,
+        google_drive_authenticated=True,
         cjk_font_path=config.cjk_font_path,
     )
 
 
 def _probe_local_tools(config: QueryCliConfig) -> None:
-    if not config.google_oauth_client_config.is_file():
-        raise ConfigError(
-            f"Google OAuth client not found: {config.google_oauth_client_config}"
-        )
     if shutil.which("soffice") is None:
         raise ConfigError("LibreOffice command not found in PATH: soffice")
     if not config.cjk_font_path.is_file():
@@ -66,7 +65,7 @@ def _probe_secure_backend(config: QueryCliConfig) -> None:
 
     health_url = f"{config.secure_backend_base_url.rstrip('/')}/healthz"
     try:
-        response = requests.get(health_url, timeout=10)
+        response = requests.get(health_url, timeout=(10, 30))
     except requests.RequestException as exc:
         raise ExternalServiceError(f"Secure backend unreachable ({health_url}): {exc}") from exc
     if response.status_code >= 400:
@@ -75,33 +74,29 @@ def _probe_secure_backend(config: QueryCliConfig) -> None:
         )
 
 
-def _probe_google_drive_if_configured(
+def _probe_google_drive(
     config: QueryCliConfig,
     *,
-    create_drive_service: CreateDriveService | None = None,
-) -> bool:
-    if not config.google_oauth_token_cache.exists():
-        return False
-
-    credentials = load_google_credentials(config)
+    create_drive_service: CreateDriveService | None,
+    credential_store: CredentialStore | None,
+) -> None:
+    store = credential_store or get_google_credential_store()
+    credentials = load_google_credentials(store)
     if credentials is None:
-        return False
-
-    if create_drive_service is not None:
-        drive_service = create_drive_service(config)
-    else:
-        from kbsearch_cli.factories import build_drive_service
-
-        drive_service = build_drive_service(credentials)
-
+        raise AuthenticationError(
+            "Google Drive authentication is required; run `kbsearch login`."
+        )
+    drive_service = (
+        create_drive_service(config)
+        if create_drive_service is not None
+        else build_drive_service(credentials)
+    )
     try:
         drive_service.about().get(fields="user/emailAddress").execute()
     except Exception as exc:
-        if discard_oauth_token_cache(config):
-            logger.warning(
-                "Removed Google OAuth token cache after Drive validation failed (%s): %s",
-                config.google_oauth_token_cache,
-                exc,
-            )
-        return False
-    return True
+        if _is_explicitly_invalid_token_error(exc):
+            store.delete()
+            raise AuthenticationError(
+                "Google Drive authentication has expired; run `kbsearch login`."
+            ) from exc
+        raise ExternalServiceError(f"Google Drive validation failed: {exc}") from exc

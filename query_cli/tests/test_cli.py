@@ -12,7 +12,7 @@ from unittest.mock import ANY, patch
 
 from kbsearch_cli.__main__ import _emit_progress, main
 from kbsearch_cli.config import ConfigError
-from kbsearch_cli.errors import QueryCliError
+from kbsearch_cli.errors import ExternalServiceError, QueryCliError
 from kbsearch_cli.logging_config import (
     LOGGER_NAME,
     QueryLogContext,
@@ -33,6 +33,43 @@ def _close_query_cli_log_handlers() -> None:
 class CliTests(unittest.TestCase):
     def tearDown(self):
         _close_query_cli_log_handlers()
+
+    def test_help_describes_commands_and_query_options(self):
+        with self.assertRaises(SystemExit) as root_exit, redirect_stdout(StringIO()) as root_help:
+            main(["--help"])
+        with self.assertRaises(SystemExit) as query_exit, redirect_stdout(StringIO()) as query_help:
+            main(["query", "--help"])
+
+        self.assertEqual(root_exit.exception.code, 0)
+        self.assertEqual(query_exit.exception.code, 0)
+        self.assertIn("login", root_help.getvalue())
+        self.assertIn("Google Drive OAuth", root_help.getvalue())
+        self.assertIn("執行前不得存在", query_help.getvalue())
+        self.assertIn("secure_backend", query_help.getvalue())
+
+    def test_login_stores_credentials_and_prints_json(self):
+        config = object()
+        with patch(
+            "kbsearch_cli.__main__.load_query_cli_config", return_value=config
+        ), patch("kbsearch_cli.__main__.login_google_drive") as login, redirect_stdout(
+            StringIO()
+        ) as stdout:
+            exit_code = main(["login"])
+
+        self.assertEqual(exit_code, 0)
+        login.assert_called_once_with(config)
+        self.assertEqual(json.loads(stdout.getvalue()), {"status": "finished"})
+
+    def test_query_input_failure_has_error_kind_and_no_side_effects(self):
+        with patch("kbsearch_cli.__main__.load_query_cli_config") as load_config, patch(
+            "kbsearch_cli.__main__.configure_query_cli_logging"
+        ) as configure_logging, redirect_stderr(StringIO()) as stderr:
+            exit_code = main(["query", "--output-dir", "new-output", "--limit", "0", "--drive-query", "x"])
+
+        self.assertEqual(exit_code, 1)
+        self.assertIn("error_kind=input_or_config", stderr.getvalue())
+        load_config.assert_not_called()
+        configure_logging.assert_not_called()
 
     def test_view_results_uses_configured_tasks_root_without_arguments(self):
         config = type(
@@ -102,6 +139,7 @@ class CliTests(unittest.TestCase):
             run_id="run12345",
             log_path=Path("C:/tmp/logs/kbsearch-20260622-083000-run12345.log"),
         )
+        call_order = []
         with patch("kbsearch_cli.__main__.load_query_cli_config") as load_config, patch(
             "kbsearch_cli.__main__.reserve_output_directory",
         ) as reserve_output_directory, patch(
@@ -125,6 +163,9 @@ class CliTests(unittest.TestCase):
         ) as stderr:
             load_config.return_value.query_logs_root = Path("C:/tmp/logs")
             load_config.return_value.query_log_retention_days = 14
+            load_config.return_value.log_level = "INFO"
+            run_startup_probe.side_effect = lambda *args, **kwargs: call_order.append("probe")
+            reserve_output_directory.side_effect = lambda *args, **kwargs: call_order.append("reserve")
             self.assertEqual(
                 main(
                     [
@@ -144,7 +185,7 @@ class CliTests(unittest.TestCase):
                 0,
             )
 
-        configure_logging.assert_called_once_with(log_context)
+        configure_logging.assert_called_once_with(log_context, "INFO")
         cleanup_logs.assert_called_once_with(
             Path("C:/tmp/logs"),
             14,
@@ -152,6 +193,7 @@ class CliTests(unittest.TestCase):
         )
         reserve_output_directory.assert_called_once_with(bundle_path)
         run_startup_probe.assert_called_once()
+        self.assertEqual(call_order, ["probe", "reserve"])
         create_orchestrator.assert_called_once_with(load_config.return_value)
         self.assertEqual(fake_orchestrator.kwargs["output_dir"], bundle_path)
         self.assertIsNotNone(fake_orchestrator.kwargs["progress"])
@@ -252,9 +294,12 @@ class CliTests(unittest.TestCase):
         ), patch(
             "kbsearch_cli.__main__.cleanup_old_query_log_files",
             return_value=0,
+        ), patch(
+            "pathlib.Path.is_file", return_value=True,
         ), redirect_stdout(StringIO()) as stdout, redirect_stderr(StringIO()) as stderr:
             load_config.return_value.query_logs_root = Path("C:/tmp/logs")
             load_config.return_value.query_log_retention_days = 14
+            load_config.return_value.log_level = "INFO"
             exit_code = main(argv)
         return exit_code, fake_orchestrator, stdout, stderr, run_startup_probe
 
@@ -533,7 +578,7 @@ class CliTests(unittest.TestCase):
             config = type(
                 "Config",
                 (),
-                {"query_logs_root": log_root, "query_log_retention_days": 14},
+                {"query_logs_root": log_root, "query_log_retention_days": 14, "log_level": "INFO"},
             )()
             output_dir = Path(temp_dir) / "new-query"
             log_context = QueryLogContext(
@@ -543,7 +588,7 @@ class CliTests(unittest.TestCase):
             try:
                 with patch("kbsearch_cli.__main__.load_query_cli_config", return_value=config), patch(
                     "kbsearch_cli.__main__._run_startup_probe",
-                    side_effect=QueryCliError("Secure backend unreachable"),
+                    side_effect=ExternalServiceError("Secure backend unreachable"),
                 ), patch(
                     "kbsearch_cli.__main__.new_query_run_id",
                     return_value="run12345",
@@ -552,7 +597,7 @@ class CliTests(unittest.TestCase):
                     return_value=log_context,
                 ), patch(
                     "kbsearch_cli.__main__.configure_query_cli_logging",
-                    side_effect=lambda context: configure_query_cli_logging(context),
+                    side_effect=lambda context, level: configure_query_cli_logging(context, level),
                 ), redirect_stderr(StringIO()) as stderr:
                     exit_code = main(
                         [
@@ -570,6 +615,7 @@ class CliTests(unittest.TestCase):
 
             self.assertEqual(exit_code, 1)
             self.assertIn("Secure backend unreachable", stderr.getvalue())
+            self.assertIn("error_kind=external_service", stderr.getvalue())
             self.assertIn("log=", stderr.getvalue())
             self.assertIn(
                 "Query progress: phase=query status=failed run_id=run12345",
@@ -578,9 +624,9 @@ class CliTests(unittest.TestCase):
             log_text = log_context.log_path.read_text(encoding="utf-8")
             self.assertIn("query failed", log_text)
             self.assertIn("run_id=run12345", log_text)
-            self.assertTrue(output_dir.exists())
+            self.assertFalse(output_dir.exists())
 
-    def test_query_rejects_existing_output_dir_before_startup_probe_and_logs_error(self):
+    def test_query_rejects_existing_output_dir_before_config_or_startup_probe(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             output_dir = root / "existing-query"
@@ -589,14 +635,16 @@ class CliTests(unittest.TestCase):
             config = type(
                 "Config",
                 (),
-                {"query_logs_root": log_root, "query_log_retention_days": 14},
+                {"query_logs_root": log_root, "query_log_retention_days": 14, "log_level": "INFO"},
             )()
             log_context = QueryLogContext(
                 run_id="run12345",
                 log_path=log_root / "kbsearch-20260622-083000-run12345.log",
             )
 
-            with patch("kbsearch_cli.__main__.load_query_cli_config", return_value=config), patch(
+            with patch(
+                "kbsearch_cli.__main__.load_query_cli_config", return_value=config
+            ) as load_config, patch(
                 "kbsearch_cli.__main__._run_startup_probe",
             ) as run_startup_probe, patch(
                 "kbsearch_cli.__main__.create_query_orchestrator",
@@ -608,7 +656,7 @@ class CliTests(unittest.TestCase):
                 return_value=log_context,
             ), patch(
                 "kbsearch_cli.__main__.configure_query_cli_logging",
-                side_effect=lambda context: configure_query_cli_logging(context),
+                side_effect=lambda context, level: configure_query_cli_logging(context, level),
             ), redirect_stderr(StringIO()) as stderr:
                 exit_code = main(
                     [
@@ -623,13 +671,11 @@ class CliTests(unittest.TestCase):
                 )
 
             self.assertEqual(exit_code, 1)
+            load_config.assert_not_called()
             run_startup_probe.assert_not_called()
             create_orchestrator.assert_not_called()
             self.assertIn("already exists", stderr.getvalue())
-            self.assertIn(
-                "output directory already exists",
-                log_context.log_path.read_text(encoding="utf-8"),
-            )
+            self.assertFalse(log_context.log_path.exists())
             _close_query_cli_log_handlers()
 
     def test_query_stops_when_log_cleanup_fails(self):
@@ -638,7 +684,7 @@ class CliTests(unittest.TestCase):
             config = type(
                 "Config",
                 (),
-                {"query_logs_root": log_root, "query_log_retention_days": 14},
+                {"query_logs_root": log_root, "query_log_retention_days": 14, "log_level": "INFO"},
             )()
             log_context = QueryLogContext(
                 run_id="run12345",
@@ -653,7 +699,7 @@ class CliTests(unittest.TestCase):
                 return_value=log_context,
             ), patch(
                 "kbsearch_cli.__main__.configure_query_cli_logging",
-                side_effect=lambda context: configure_query_cli_logging(context),
+                side_effect=lambda context, level: configure_query_cli_logging(context, level),
             ), patch(
                 "kbsearch_cli.__main__.cleanup_old_query_log_files",
                 side_effect=OSError("cleanup failed"),
@@ -752,6 +798,21 @@ class CliTests(unittest.TestCase):
             log_text = context.log_path.read_text(encoding="utf-8")
             self.assertIn("run_id=run12345", log_text)
             self.assertIn("query finished status=finished", log_text)
+            self.assertRegex(log_text, r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z INFO")
+            _close_query_cli_log_handlers()
+
+    def test_configure_query_cli_logging_respects_level(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            context = QueryLogContext(
+                run_id="run12345",
+                log_path=Path(temp_dir) / "debug.log",
+            )
+            logger = configure_query_cli_logging(context, "DEBUG")
+            logger.debug("debug details")
+            for handler in logger.handlers:
+                handler.flush()
+
+            self.assertIn("debug details", context.log_path.read_text(encoding="utf-8"))
             _close_query_cli_log_handlers()
 
     def test_progress_output_failure_does_not_fail_query(self):

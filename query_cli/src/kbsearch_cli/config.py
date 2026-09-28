@@ -13,11 +13,11 @@ from kbsearch_cli.errors import ConfigError
 class QueryCliConfig:
     secure_backend_base_url: str
     google_oauth_client_config: Path
-    google_oauth_token_cache: Path
     query_logs_root: Path
     tasks_root: Path
     viewer_port: int
     query_log_retention_days: int
+    log_level: str
     cjk_font_path: Path
 
 
@@ -35,7 +35,6 @@ def load_query_cli_config(env_file: str | Path | None = None) -> QueryCliConfig:
     return QueryCliConfig(
         secure_backend_base_url=_required_str("KBSEARCH_SECURE_BACKEND_BASE_URL"),
         google_oauth_client_config=_resolve_path(_required_str("GOOGLE_OAUTH_CLIENT_CONFIG"), root),
-        google_oauth_token_cache=_resolve_path(_required_str("GOOGLE_OAUTH_TOKEN_CACHE"), root),
         query_logs_root=_resolve_cwd_path(
             _optional_str("KBSEARCH_QUERY_LOGS_ROOT", str(DEFAULT_LOGS_ROOT)),
         ),
@@ -47,6 +46,7 @@ def load_query_cli_config(env_file: str | Path | None = None) -> QueryCliConfig:
             "KBSEARCH_QUERY_LOG_RETENTION_DAYS",
             14,
         ),
+        log_level=_optional_log_level("KBSEARCH_LOG_LEVEL", "INFO"),
         cjk_font_path=_required_absolute_path("KBSEARCH_CJK_FONT_PATH"),
     )
 
@@ -124,3 +124,12 @@ def _optional_port(name: str, default: int) -> int:
     if parsed < 1 or parsed > 65535:
         raise ConfigError(f"Config {name} must be between 1 and 65535.")
     return parsed
+
+
+def _optional_log_level(name: str, default: str) -> str:
+    value = _optional_str(name, default).upper()
+    if value not in {"DEBUG", "INFO", "WARNING", "ERROR"}:
+        raise ConfigError(
+            f"Config {name} must be one of DEBUG, INFO, WARNING or ERROR."
+        )
+    return value

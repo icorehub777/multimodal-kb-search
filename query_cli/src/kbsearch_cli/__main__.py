@@ -5,7 +5,7 @@ import json
 import logging
 import sys
 from collections.abc import Callable
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from kbsearch_cli.cli_output import (
@@ -14,8 +14,13 @@ from kbsearch_cli.cli_output import (
     format_query_success_output,
 )
 from kbsearch_cli.config import ConfigError, load_query_cli_config
-from kbsearch_cli.errors import QueryCliError
-from kbsearch_cli.factories import create_query_orchestrator
+from kbsearch_cli.errors import (
+    AuthenticationError,
+    ExternalServiceError,
+    QueryCliError,
+    QueryInputError,
+)
+from kbsearch_cli.factories import create_query_orchestrator, login_google_drive
 from kbsearch_cli.logging_config import (
     configure_query_cli_logging,
     create_query_log_context,
@@ -78,11 +83,9 @@ def _run_startup_probe(
 ) -> None:
     progress("startup_probe", {"status": "started", "probe_secure_backend": probe_secure_backend})
     logger.info(
-        "startup_probe started secure_backend_base_url=%s oauth_client=%s token_cache=%s "
-        "cjk_font_path=%s probe_secure_backend=%s",
+        "startup_probe started secure_backend_base_url=%s cjk_font_path=%s "
+        "probe_secure_backend=%s",
         config.secure_backend_base_url,
-        config.google_oauth_client_config,
-        config.google_oauth_token_cache,
         config.cjk_font_path,
         probe_secure_backend,
     )
@@ -101,11 +104,10 @@ def _run_startup_probe(
         raise
     logger.info(
         "startup_probe succeeded secure_backend_base_url=%s google_drive_authenticated=%s "
-        "oauth_client=%s token_cache=%s cjk_font_path=%s",
+        "oauth_client=%s cjk_font_path=%s",
         result.secure_backend_base_url,
         result.google_drive_authenticated,
         result.google_oauth_client_config,
-        result.google_oauth_token_cache,
         result.cjk_font_path,
     )
     progress(
@@ -115,10 +117,16 @@ def _run_startup_probe(
             "google_drive_authenticated": result.google_drive_authenticated,
         },
     )
-    if not result.google_drive_authenticated:
-        logger.info(
-            "startup_probe note Google OAuth sign-in required; complete browser authorization during query"
-        )
+
+
+def _error_kind(exc: Exception) -> str:
+    if isinstance(exc, AuthenticationError):
+        return "authentication"
+    if isinstance(exc, ExternalServiceError):
+        return "external_service"
+    if isinstance(exc, (ConfigError, QueryInputError)):
+        return "input_or_config"
+    return "internal"
 
 
 def _print_query_failure(
@@ -126,32 +134,67 @@ def _print_query_failure(
     log_path: Path | None,
     logger: logging.Logger | None,
 ) -> None:
-    message = f"Query failed: {exc}"
+    message = f"Query failed: error_kind={_error_kind(exc)} message={exc}"
     if log_path is not None:
         message = f"{message} log={log_path.resolve()}"
     _write_terminal(message, stream=sys.stderr, logger=logger)
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="kbsearch")
+    parser = argparse.ArgumentParser(
+        prog="kbsearch",
+        description="KBSearch 的 Google Drive 登入、查詢與結果處理工具。",
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    query_parser = subparsers.add_parser("query")
-    query_parser.add_argument("--output-dir", required=True)
-    query_parser.add_argument("--vector-query", default=None)
-    query_parser.add_argument("--drive-query", default=None)
-    query_parser.add_argument("--image", action="append", default=[])
-    query_parser.add_argument("--limit", type=int, default=10)
-    query_parser.add_argument("--min-score", type=float, default=None)
+    subparsers.add_parser(
+        "login",
+        help="以瀏覽器完成 Google Drive OAuth 登入。",
+        description="開啟瀏覽器完成 Google Drive OAuth，並安全儲存目前使用者的授權。",
+    )
 
-    render_parser = subparsers.add_parser("render-pdf-pages")
-    render_parser.add_argument("--pdf", required=True)
-    render_parser.add_argument("--pages", required=True)
-    render_parser.add_argument("--output-dir", required=True)
+    query_parser = subparsers.add_parser(
+        "query",
+        help="執行向量或 Google Drive 關鍵字搜尋。",
+        description="執行搜尋、下載結果並建立可供 Agent 讀取的產物。",
+    )
+    query_parser.add_argument(
+        "--output-dir", required=True, help="本次新建的搜尋結果目錄；執行前不得存在。"
+    )
+    query_parser.add_argument("--vector-query", default=None, help="送往 secure_backend 的語意查詢文字。")
+    query_parser.add_argument("--drive-query", default=None, help="原樣送往 Google Drive API 的 q 查詢式。")
+    query_parser.add_argument("--image", action="append", default=[], help="向量搜尋圖片路徑；可重複指定。")
+    query_parser.add_argument("--limit", type=int, default=10, help="每種搜尋的結果筆數上限，預設 10。")
+    query_parser.add_argument("--min-score", type=float, default=None, help="向量結果最低分數；省略時不過濾。")
 
-    subparsers.add_parser("view-results")
+    render_parser = subparsers.add_parser(
+        "render-pdf-pages",
+        help="將指定 PDF 頁面轉為 PNG。",
+        description="將一或多個 PDF 頁面轉為 PNG 並輸出 JSON 結果。",
+    )
+    render_parser.add_argument("--pdf", required=True, help="來源 PDF 路徑。")
+    render_parser.add_argument("--pages", required=True, help="頁碼清單或區間，例如 3,5,8-10。")
+    render_parser.add_argument("--output-dir", required=True, help="PNG 輸出目錄。")
+
+    subparsers.add_parser(
+        "view-results",
+        help="啟動搜尋結果檢視網頁。",
+        description="依目前設定啟動搜尋結果檢視網頁。",
+    )
 
     args = parser.parse_args(argv)
+
+    if args.command == "login":
+        try:
+            login_google_drive(load_query_cli_config())
+        except (ConfigError, QueryCliError, RuntimeError) as exc:
+            print(
+                f"Login failed: error_kind={_error_kind(exc)} message={exc}",
+                file=sys.stderr,
+            )
+            return 1
+        print(json.dumps({"status": "finished"}, ensure_ascii=False))
+        return 0
 
     if args.command == "view-results":
         try:
@@ -208,13 +251,28 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "query":
         vector_query = _normalize_optional_query(args.vector_query)
         drive_query = _normalize_optional_query(args.drive_query)
+        output_dir = Path(args.output_dir)
+        image_paths = [Path(path) for path in args.image]
 
         if vector_query is None and drive_query is None and not args.image:
-            _write_terminal(
-                "Query failed: at least one of --vector-query, --drive-query or --image must be provided",
-                stream=sys.stderr,
+            input_error = QueryInputError(
+                "at least one of --vector-query, --drive-query or --image must be provided"
             )
+            _print_query_failure(input_error, None, None)
             return 1
+        if output_dir.exists():
+            input_error = QueryInputError(f"Output directory already exists: {output_dir}")
+            _print_query_failure(input_error, None, None)
+            return 1
+        if args.limit < 1:
+            input_error = QueryInputError("--limit must be a positive integer")
+            _print_query_failure(input_error, None, None)
+            return 1
+        for image_path in image_paths:
+            if not image_path.is_file():
+                input_error = QueryInputError(f"Query image not found: {image_path}")
+                _print_query_failure(input_error, None, None)
+                return 1
 
         do_vector_search = vector_query is not None or bool(args.image)
         logger: logging.Logger | None = None
@@ -239,15 +297,14 @@ def main(argv: list[str] | None = None) -> int:
 
         try:
             config = load_query_cli_config()
-            started_at = datetime.now()
+            started_at = datetime.now(timezone.utc)
             log_context = create_query_log_context(
                 config.query_logs_root,
                 run_id=run_id,
                 timestamp=started_at.strftime("%Y%m%d-%H%M%S-%f"),
             )
             log_path = log_context.log_path
-            logger = configure_query_cli_logging(log_context)
-            output_dir = Path(args.output_dir)
+            logger = configure_query_cli_logging(log_context, config.log_level)
             try:
                 removed_logs = cleanup_old_query_log_files(
                     config.query_logs_root,
@@ -286,19 +343,19 @@ def main(argv: list[str] | None = None) -> int:
                     "log": log_path,
                 },
             )
-            reserve_output_directory(output_dir)
-            logger.info("query output directory reserved output_dir=%s", output_dir)
             _run_startup_probe(
                 config,
                 logger,
                 progress,
                 probe_secure_backend=do_vector_search,
             )
+            reserve_output_directory(output_dir)
+            logger.info("query output directory reserved output_dir=%s", output_dir)
             result = create_query_orchestrator(config).run(
                 output_dir=output_dir,
                 vector_query=vector_query,
                 drive_query=drive_query,
-                image_paths=[Path(path) for path in args.image],
+                image_paths=image_paths,
                 limit=args.limit,
                 min_score=args.min_score,
                 progress=progress,
@@ -314,6 +371,7 @@ def main(argv: list[str] | None = None) -> int:
                 "query",
                 {
                     "status": "failed",
+                    "error_kind": _error_kind(exc),
                     "error_type": exc.__class__.__name__,
                     "log": log_path or "",
                 },
@@ -331,6 +389,7 @@ def main(argv: list[str] | None = None) -> int:
                 "query",
                 {
                     "status": "failed",
+                    "error_kind": _error_kind(exc),
                     "error_type": exc.__class__.__name__,
                     "log": log_path or "",
                 },

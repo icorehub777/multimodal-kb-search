@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from uuid import uuid4
 
@@ -26,7 +27,7 @@ def create_query_log_context(
     run_id: str,
     timestamp: str | None = None,
 ) -> QueryLogContext:
-    resolved_timestamp = timestamp or datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+    resolved_timestamp = timestamp or datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-%f")
     return QueryLogContext(
         run_id=run_id,
         log_path=log_root.resolve() / f"kbsearch-{resolved_timestamp}-{run_id}.log",
@@ -43,26 +44,35 @@ def cleanup_old_query_log_files(
         return 0
 
     log_root.mkdir(parents=True, exist_ok=True)
-    cutoff = (now or datetime.now()) - timedelta(days=retention_days)
+    reference_time = now or datetime.now(timezone.utc)
+    if reference_time.tzinfo is None:
+        reference_time = reference_time.replace(tzinfo=timezone.utc)
+    cutoff = reference_time - timedelta(days=retention_days)
     removed = 0
     for path in log_root.glob(QUERY_RUN_LOG_PATTERN):
         if not path.is_file():
             continue
-        modified_at = datetime.fromtimestamp(path.stat().st_mtime)
+        modified_at = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
         if modified_at < cutoff:
             path.unlink()
             removed += 1
     return removed
 
 
-def configure_query_cli_logging(context: QueryLogContext) -> logging.Logger:
+def configure_query_cli_logging(
+    context: QueryLogContext,
+    level: str = "INFO",
+) -> logging.Logger:
     context.log_path.parent.mkdir(parents=True, exist_ok=True)
     logger = logging.getLogger(LOGGER_NAME)
-    logger.setLevel(logging.INFO)
+    resolved_level = getattr(logging, level.upper())
+    logger.setLevel(resolved_level)
     logger.propagate = False
     formatter = logging.Formatter(
-        f"%(asctime)s %(levelname)s %(name)s run_id={context.run_id} %(message)s"
+        f"%(asctime)s %(levelname)s %(name)s run_id={context.run_id} %(message)s",
+        datefmt="%Y-%m-%dT%H:%M:%SZ",
     )
+    formatter.converter = time.gmtime
 
     for existing_handler in list(logger.handlers):
         logger.removeHandler(existing_handler)
@@ -73,7 +83,7 @@ def configure_query_cli_logging(context: QueryLogContext) -> logging.Logger:
         encoding="utf-8",
         delay=True,
     )
-    handler.setLevel(logging.INFO)
+    handler.setLevel(resolved_level)
     handler.setFormatter(formatter)
     logger.addHandler(handler)
     return logger

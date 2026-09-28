@@ -5,28 +5,46 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from kbsearch_cli.config import QueryCliConfig
+from kbsearch_cli.errors import AuthenticationError, ExternalServiceError
 from kbsearch_cli.factories import (
-    _create_drive_service,
+    create_drive_service,
     create_query_orchestrator,
-    discard_oauth_token_cache,
     load_google_credentials,
+    login_google_drive,
 )
+
+
+class FakeCredentialStore:
+    def __init__(self, value: str | None = None) -> None:
+        self.value = value
+        self.deleted = False
+
+    def read(self) -> str | None:
+        return self.value
+
+    def write(self, value: str) -> None:
+        self.value = value
+
+    def delete(self) -> bool:
+        existed = self.value is not None
+        self.value = None
+        self.deleted = True
+        return existed
 
 
 def _sample_config(root: Path) -> QueryCliConfig:
     config_dir = root / "config"
     config_dir.mkdir(parents=True)
     oauth_client = config_dir / "oauth_client.json"
-    token_cache = config_dir / "token_cache.json"
     oauth_client.write_text("{}", encoding="utf-8")
     return QueryCliConfig(
         secure_backend_base_url="http://127.0.0.1:8000",
         google_oauth_client_config=oauth_client,
-        google_oauth_token_cache=token_cache,
         query_logs_root=root / "logs",
         tasks_root=root / "tasks",
         viewer_port=8501,
         query_log_retention_days=14,
+        log_level="INFO",
         cjk_font_path=root / "msjh.ttc",
     )
 
@@ -36,92 +54,100 @@ class GoogleCredentialsFactoryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             config = _sample_config(Path(temp_dir))
 
-            with patch("kbsearch_cli.factories._create_drive_service", return_value=object()):
+            with patch("kbsearch_cli.factories.create_drive_service", return_value=object()):
                 orchestrator = create_query_orchestrator(config)
 
         self.assertEqual(orchestrator._document_processor._cjk_font_path, config.cjk_font_path)
 
-    def test_discard_oauth_token_cache_removes_existing_file(self):
+    def test_load_google_credentials_deletes_explicitly_revoked_token(self):
+        store = FakeCredentialStore(json.dumps({"token": "old"}))
+        credentials = MagicMock()
+        credentials.expired = True
+        credentials.refresh_token = "refresh"
+        credentials.valid = False
+
+        with patch(
+            "google.oauth2.credentials.Credentials.from_authorized_user_info",
+            return_value=credentials,
+        ), patch("google.auth.transport.requests.Request"), patch.object(
+            credentials,
+            "refresh",
+            side_effect=RuntimeError("invalid_grant: token revoked"),
+        ):
+            result = load_google_credentials(store)
+
+        self.assertIsNone(result)
+        self.assertTrue(store.deleted)
+        self.assertIsNone(store.value)
+
+    def test_load_google_credentials_preserves_token_on_transient_refresh_failure(self):
+        original = json.dumps({"token": "old"})
+        store = FakeCredentialStore(original)
+        credentials = MagicMock()
+        credentials.expired = True
+        credentials.refresh_token = "refresh"
+        credentials.valid = False
+
+        with patch(
+            "google.oauth2.credentials.Credentials.from_authorized_user_info",
+            return_value=credentials,
+        ), patch("google.auth.transport.requests.Request"), patch.object(
+            credentials,
+            "refresh",
+            side_effect=RuntimeError("temporary DNS failure"),
+        ):
+            with self.assertRaisesRegex(ExternalServiceError, "refresh failed"):
+                load_google_credentials(store)
+
+        self.assertFalse(store.deleted)
+        self.assertEqual(store.value, original)
+
+    def test_load_google_credentials_deletes_token_on_explicit_401(self):
+        store = FakeCredentialStore(json.dumps({"token": "old"}))
+        credentials = MagicMock(expired=True, refresh_token="refresh", valid=False)
+        error = RuntimeError("unauthorized")
+        error.resp = type("Response", (), {"status": 401})()
+
+        with patch(
+            "google.oauth2.credentials.Credentials.from_authorized_user_info",
+            return_value=credentials,
+        ), patch("google.auth.transport.requests.Request"), patch.object(
+            credentials, "refresh", side_effect=error
+        ):
+            self.assertIsNone(load_google_credentials(store))
+
+        self.assertTrue(store.deleted)
+
+    def test_create_drive_service_requires_login_without_opening_browser(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             config = _sample_config(Path(temp_dir))
-            config.google_oauth_token_cache.write_text("{}", encoding="utf-8")
 
-            removed = discard_oauth_token_cache(config)
+            with self.assertRaisesRegex(AuthenticationError, "kbsearch login"), patch(
+                "google_auth_oauthlib.flow.InstalledAppFlow.from_client_secrets_file"
+            ) as oauth_flow:
+                create_drive_service(config, credential_store=FakeCredentialStore())
 
-            self.assertTrue(removed)
-            self.assertFalse(config.google_oauth_token_cache.exists())
+        oauth_flow.assert_not_called()
 
-    def test_load_google_credentials_discards_cache_when_refresh_fails(self):
+    def test_login_google_drive_runs_browser_flow_and_writes_credential_store(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             config = _sample_config(Path(temp_dir))
-            config.google_oauth_token_cache.write_text("{}", encoding="utf-8")
+            store = FakeCredentialStore()
             credentials = MagicMock()
-            credentials.expired = True
-            credentials.refresh_token = "refresh"
-            credentials.valid = False
+            credentials.valid = True
+            credentials.to_json.return_value = json.dumps({"token": "new"})
 
             with patch(
-                "google.oauth2.credentials.Credentials.from_authorized_user_file",
-                return_value=credentials,
-            ), patch(
-                "google.auth.transport.requests.Request",
-            ), patch.object(
-                credentials,
-                "refresh",
-                side_effect=RuntimeError("invalid_grant"),
-            ):
-                result = load_google_credentials(config)
-
-            self.assertIsNone(result)
-            self.assertFalse(config.google_oauth_token_cache.exists())
-
-    def test_load_google_credentials_discards_cache_when_token_invalid(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            config = _sample_config(Path(temp_dir))
-            config.google_oauth_token_cache.write_text("{}", encoding="utf-8")
-            credentials = MagicMock()
-            credentials.expired = False
-            credentials.refresh_token = None
-            credentials.valid = False
-
-            with patch(
-                "google.oauth2.credentials.Credentials.from_authorized_user_file",
-                return_value=credentials,
-            ):
-                result = load_google_credentials(config)
-
-            self.assertIsNone(result)
-            self.assertFalse(config.google_oauth_token_cache.exists())
-
-    def test_create_drive_service_reruns_oauth_when_discarded_cache(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            config = _sample_config(Path(temp_dir))
-            config.google_oauth_token_cache.write_text("{}", encoding="utf-8")
-            new_credentials = MagicMock()
-            new_credentials.valid = True
-            new_credentials.to_json.return_value = json.dumps({"token": "new"})
-
-            with patch(
-                "kbsearch_cli.factories.load_google_credentials",
-                side_effect=[None],
-            ), patch(
                 "google_auth_oauthlib.flow.InstalledAppFlow.from_client_secrets_file",
-            ) as from_client_secrets, patch(
-                "kbsearch_cli.factories.build_drive_service",
-                return_value=object(),
-            ) as build_drive_service:
+            ) as from_client_secrets:
                 flow = from_client_secrets.return_value
-                flow.run_local_server.return_value = new_credentials
+                flow.run_local_server.return_value = credentials
 
-                _create_drive_service(config)
+                result = login_google_drive(config, credential_store=store)
 
-            flow.run_local_server.assert_called_once_with(port=0)
-            build_drive_service.assert_called_once_with(new_credentials)
-            self.assertTrue(config.google_oauth_token_cache.exists())
-            self.assertEqual(
-                config.google_oauth_token_cache.read_text(encoding="utf-8"),
-                json.dumps({"token": "new"}),
-            )
+        self.assertIs(result, credentials)
+        flow.run_local_server.assert_called_once_with(port=0)
+        self.assertEqual(store.value, json.dumps({"token": "new"}))
 
 
 if __name__ == "__main__":
