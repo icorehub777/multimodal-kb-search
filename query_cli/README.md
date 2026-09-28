@@ -3,6 +3,7 @@
 `query_cli/` 提供 `kbsearch` 指令作為 Agent 使用的工具集合。
 
 它提供的指令包括：
+- Google Drive 登入：由目前使用者透過瀏覽器完成 OAuth 授權。
 - 相似度/關鍵字搜尋：可執行多模態向量庫相似度搜尋 (透過 secure_backend 的 API 服務) 與 Google Drive 關鍵字搜尋 (透過 Google Drive API)，並針對搜尋結果中的檔案進行下載、內容整理轉換。
 - PDF 檔單頁圖片轉出：指定 PDF 檔與頁碼後，可轉出此頁的 PNG 圖片檔。
 - 搜尋結果檢視網頁啟動：開啟搜尋結果檢視網頁。
@@ -58,19 +59,27 @@ Copy-Item query_cli\config\.env.example query_cli\config\.env
 ```env
 KBSEARCH_SECURE_BACKEND_BASE_URL=http://127.0.0.1:8000
 GOOGLE_OAUTH_CLIENT_CONFIG=config/oauth_client.json
-GOOGLE_OAUTH_TOKEN_CACHE=config/token_cache.json
 KBSEARCH_QUERY_LOGS_ROOT=logs
 KBSEARCH_TASKS_ROOT=tasks
 KBSEARCH_VIEWER_PORT=8501
 KBSEARCH_QUERY_LOG_RETENTION_DAYS=14
+KBSEARCH_LOG_LEVEL=INFO
 KBSEARCH_CJK_FONT_PATH=C:\Windows\Fonts\msjh.ttc
 ```
 
-LibreOffice 的 `soffice` 必須可從系統 `PATH` 找到，並須設定 `KBSEARCH_CJK_FONT_PATH`。
-
-`config/oauth_client.json` 為 Google OAuth **Desktop 用戶端憑證**，須向**內部 Google / GCP 管理者**申請並取得 JSON 後，手動放到 `config/oauth_client.json`（程式不會自動產生）。`config/token_cache.json` 則在首次執行 `kbsearch query`、完成 browser 授權後由程式寫入；若 token 無法 refresh 或驗證失敗，程式會刪除該檔並在下次 query 時重新開啟 browser 登入。兩者皆不納版控。
+`GOOGLE_OAUTH_CLIENT_CONFIG` 指向 Google OAuth **Desktop 用戶端憑證** `oauth_client.json`，此檔由**內部 Google / GCP 管理者**維護並隨 CLI 部署提供，使用者不需另外申請或手動放置。
 
 ## 手動測試
+
+### Google Drive 登入
+
+首次使用或 CLI 明確回報 `authentication` 錯誤時執行：
+
+```powershell
+kbsearch login
+```
+
+指令會開啟瀏覽器供目前使用者完成 Google OAuth 授權。成功後 stdout 輸出 JSON，並由 CLI 將 token 寫入 Windows Credential Manager。Token 只有在 Google 明確回報失效或撤銷時才會移除。若由 Agent 執行，必須以 sandbox 外部同意方式啟動，並請使用者在同一台機器的瀏覽器完成授權。
 
 ### 相似度 / 關鍵字搜尋
 
@@ -83,15 +92,13 @@ tasks/<task-name>/
 tasks/<task-name>/<image-file>
 ```
 
-並在執行查詢指令時，將搜尋結果資料夾路徑參數指向以下路徑，此指令會自行建立 `<query-name>` 資料夾：
+搜尋結果資料夾使用以下路徑：
 
 ```text
 tasks/<task-name>/query_results/<query-name>
 ```
 
 接下來請在 `query_cli/` 目錄下，執行以下指令：
-
-若是由 Agent 執行此指令，必須以 sandbox 外部同意方式執行查詢，讓 OAuth 能正確開啟瀏覽器登入頁。
 
 ```powershell
 kbsearch query `
@@ -105,21 +112,27 @@ kbsearch query `
 
 參數說明：
 
-- `--output-dir`：本次搜尋結果的輸出資料夾路徑，必須使用 `tasks/<task-name>/query_results/<query-name>/` 結構中的 `<query-name>` 目錄。指令執行時會自動建立 `<query-name>` 目錄，若執行前該目錄已存在，指令會執行失敗。
-- `--vector-query`：語意查詢文字；可與 `--image` 一起或單獨送給 `secure_backend` 做相似度搜尋。相似度搜尋僅涵蓋 importer 已同步的文件。與 `--image` 皆省略時不執行相似度搜尋。
+- `--output-dir`：本次搜尋結果的輸出資料夾路徑，必須使用 `tasks/<task-name>/query_results/<query-name>/` 結構中的 `<query-name>` 目錄，且執行前該目錄不得存在。
+- `--vector-query`：語意查詢文字；可與 `--image` 一起或單獨送給 `secure_backend` 做相似度搜尋。
 - `--drive-query`：Google Drive API `q` 語法，原樣送出，用於檔名、全文或 metadata 的關鍵字搜尋。搜尋範圍依目前使用者的 Drive 權限決定，不受 importer 同步來源資料夾限制。省略時不執行關鍵字搜尋。
-- `--image`：本機圖片路徑（PNG/JPEG 等），可重複指定；可與 `--vector-query` 一起或單獨送給 `secure_backend` 做相似度搜尋。相似度搜尋僅涵蓋 importer 已同步的文件。與 `--vector-query` 皆省略時不執行相似度搜尋。
+- `--image`：本機圖片路徑（PNG/JPEG 等），可重複指定；可與 `--vector-query` 一起或單獨送給 `secure_backend` 做相似度搜尋。
 - `--limit`：相似度與關鍵字搜尋各別的結果筆數上限，預設 `10`。
 - `--min-score`：相似度搜尋時的相似度分數下限；省略則不過濾低分結果。
 
-`--vector-query`、`--drive-query`、`--image` 至少要提供其中一個；三者皆未提供時指令會顯示失敗。
+相似度搜尋僅涵蓋 importer 已同步的文件；`--vector-query` 與 `--image` 皆省略時不執行相似度搜尋。`--vector-query`、`--drive-query`、`--image` 至少要提供其中一個，三者皆未提供時指令會顯示失敗。
 `--output-dir` 與 `--image` 均可使用絕對或相對路徑；相對路徑以執行指令時的目前工作目錄解析。
 
-指令啟動時會先載入設定並建立本次專屬 log，接著建立呼叫端指定的搜尋結果目錄，再執行 startup 檢查：OAuth client、`secure_backend /healthz` (只在有 `--vector-query` 或 `--image` 時才呼叫)、系統 `PATH` 中的 `soffice` 與 CJK 字型。若已有 token cache 也會驗證 Google Drive 授權。
+CLI 先驗證查詢參數與 `output_dir` 尚不存在；驗證通過後載入設定、建立本次專屬 log 並執行 startup 檢查。
+Startup 檢查包含 Windows Credential Manager 中的 Google Drive token、`secure_backend /healthz`（只在有 `--vector-query` 或 `--image` 時呼叫）、系統 `PATH` 中的 `soffice` 與 CJK 字型。全部檢查通過後，以不覆蓋既有目錄的方式建立 `output_dir` 並開始搜尋；
+若檢查期間該路徑被其他程序建立，指令會停止。Token 不存在或明確失效時，指令以 `authentication` 錯誤結束並提示執行 `kbsearch login`。查詢途中失敗時，已建立的目錄與部分產物會保留，不得重用相同路徑。
 
 下載與轉換搜尋結果檔案的詳細動作，請參考設計文件。
 
-執行中會在 **stderr** 輸出進度；下載階段會先輸出 union 層的 `phase=download status=started`，並包含 `union_count` 等摘要。單檔下載成功時會輸出 `phase=download status=started` 與 `phase=download status=finished`，完成訊息包含文字頁數與實際渲染頁數；單檔失敗時會輸出 `phase=download status=failed`。單檔進度可用 `file_id`、`index`、`total` 與 union 層進度區分。下載與文件處理可能較久。成功時 **stdout** 輸出 JSON 摘要：
+執行中會在 **stderr** 輸出進度；下載階段會先輸出 union 層的 `phase=download status=started`，並包含 `union_count` 等摘要。
+單檔下載成功時會輸出 `phase=download status=started` 與 `phase=download status=finished`，完成訊息包含文字頁數與實際渲染頁數；單檔失敗時會輸出 `phase=download status=failed`。
+單檔進度可用 `file_id`、`index`、`total` 與 union 層進度區分。
+
+指令層級失敗時 exit code 為 `1`，stderr 的最終事件會以 `error_kind` 區分 `input_or_config`、`authentication`、`external_service` 與 `internal`，並在可用時提供 `run_id` 與 `log_path`。
 
 設定與本次專屬 log 初始化完成後，stderr 會先輸出一行可解析的 query 啟動事件：
 
@@ -184,7 +197,7 @@ kbsearch query `
 }
 ```
 
-每次 `query` 會產生唯一 `run_id`。第一筆 query 進度會在 stderr 回報 `run_id` 與該次專屬 `log` 路徑；其後所有進度均帶同一個 `run_id`。結束時一定會輸出下列其中一種終態：
+其後所有進度均帶有啟動事件所回報的 `run_id`。結束時一定會輸出下列其中一種終態：
 
 ```text
 Query progress: phase=query status=finished run_id=a1b2c3d4 ...
@@ -200,9 +213,7 @@ Query progress: phase=query status=failed run_id=a1b2c3d4 ...
 
 `warnings` 記錄非失敗但會影響閱讀完整性的狀況，完整清單同時寫入 `warnings.json`。例如 `vector_pages_unrendered` 表示向量搜尋命中頁碼存在，但該檔案沒有產生對應的 `pages/*.png`；常見原因是 Drive 上同一個 `file_id` 的檔案在同步後變成不支援文件處理的 MIME type。此時檔案仍算下載成功，但 Agent 應改以原始下載檔或其他工具能力判讀，並在必要時向使用者說明該向量命中頁面無法直接閱讀。
 
-設定與本次專屬 log 初始化完成後，會以不可覆蓋既有目錄的方式建立 `output_dir`；若路徑已存在，指令會在 startup 檢查、實際搜尋與下載前失敗。查詢途中失敗時，已建立的目錄與部分產物會保留，不得重用相同路徑。詳細清單與下載檔案見該資料夾內的 JSON 與子目錄。
-
-設定成功載入後，每次查詢會在 `KBSEARCH_QUERY_LOGS_ROOT` 建立獨立 log，檔名格式為 `kbsearch-<日期時間>-<run_id>.log`。每行均包含 `run_id`，且最後記錄成功、部分成功或失敗終態。stderr 與成功 stdout 也會提供該次 log 絕對路徑。
+設定成功載入後，每次查詢會在 `KBSEARCH_QUERY_LOGS_ROOT` 建立獨立 log，檔名格式為 `kbsearch-<日期時間>-<run_id>.log`。時間使用 UTC，level 由 `KBSEARCH_LOG_LEVEL` 控制。
 
 `KBSEARCH_QUERY_LOG_RETENTION_DAYS` 控制 per-run log 保留天數，預設 `14`。每次 query 啟動時會刪除較舊的 `kbsearch-*.log`；設為 `0` 可停用自動清理。清理失敗時該次 query 會記錄錯誤並停止。
 

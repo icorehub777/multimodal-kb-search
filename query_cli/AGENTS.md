@@ -13,12 +13,13 @@
 - CLI layer 負責解析命令列、載入設定、組裝依賴、處理 exit code 與 terminal 輸出；library layer 不得呼叫 `sys.exit()`。
 - 各子指令的核心流程應以 protocol 或注入物件接收外部能力，核心邏輯不得依賴 argparse、terminal 格式或 Agent 文字格式。
 - 外部服務呼叫應包在 client / adapter 中；核心流程不得直接依賴 HTTP library 的 response 物件。
+- 外部服務的 response 必須先依明確 contract 驗證並轉成 typed model，核心流程不得直接接收未驗證的 `dict`。
 - 認證與外部 API 操作應集中在專用 client。
 - 環境設定應集中在設定層讀取；新增或變更設定時需同步更新 config model、README 與測試。
 
 ## 檔案與路徑
 
-- 使用 `pathlib.Path`；設定中的相對路徑相對於 CLI 執行時的目前工作目錄解析。
+- 使用 `pathlib.Path`；設定與 CLI 路徑參數的相對路徑以執行時的目前工作目錄解析。
 - 由指令參數、檔名、外部識別碼或其他外部輸入組合本機路徑時，必須避免路徑穿越與非法檔名。
 - 由呼叫端指定的產物目錄應視為該次指令的寫入邊界，不得寫出指定目錄之外。
 - 產物目錄是否必須新建、是否可使用既有目錄，以及同名檔案是否覆蓋，皆屬各子指令契約，須在 README 中明確定義並以測試保護。
@@ -46,6 +47,9 @@
 - 單元測試不得依賴真實外部服務、token 或 credential。
 - 需要真實外部服務的探查或驗收測試必須明確命名，並與離線單元測試分開。
 - 探查測試不得輸出 token、credential 或個人敏感資料。
+- CLI 輸入須在建立 log、產物目錄或呼叫外部服務前完成驗證，並以測試確認無副作用。
+- backend client 測試須覆蓋合法 response、非預期 response、非 JSON response 與 HTTP／連線錯誤的 domain error 轉換。
+- 正式部署使用 wheel，因此發布驗證至少須以實際建置的 wheel 驗證安裝、package import、CLI entry point 與各子指令 `--help`；不得只以 source tree 或 editable install 取代。
 
 ## 文件維護
 

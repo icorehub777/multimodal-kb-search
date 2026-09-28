@@ -42,6 +42,16 @@ repo_root/
 
 執行以下指令時，工作目錄必須為 `_internal/`。
 
+### Google Drive 登入
+
+```powershell
+.\.venv\Scripts\kbsearch.exe login
+```
+
+- 首次使用或 `query` 明確回報 `error_kind=authentication` 時，向使用者說明 "會協助啟動瀏覽器，並由使用者在瀏覽器上完成 Google 登入" 後，以 sandbox 外部同意方式執行此指令。
+- 指令啟動瀏覽器後由使用者完成登入。
+- 登入成功以 stdout JSON 為準。登入失敗時依 stderr 錯誤摘要排除設定、瀏覽器回呼或外部服務問題。
+
 ### 搜尋
 
 ```powershell
@@ -93,12 +103,12 @@ repo_root/
 
 ## 搜尋執行與監控
 
-- 在跟使用者確認了搜尋計畫後，使用`kbsearch.exe query` 指令進行搜尋。此指令執行必須以 sandbox 外部同意方式執行 ，讓 OAuth 能正確開啟瀏覽器登入頁。
+- 在跟使用者確認了搜尋計畫後，使用 `kbsearch.exe query` 指令進行搜尋。
 - 須以背景程序執行此指令，並將 stdout、stderr 重新導向至系統暫存檔；背景啟動與每次非阻塞狀態檢查或 log 讀取只設定短 timeout。
 - 背景程序啟動後，依 stderr 的 `query_started` 事件指引，以短間隔輪詢指定的 log，並依新增進度持續向使用者更新；待程序完成後再解析 stdout，啟動階段沒有 stdout JSON 不視為異常。若程序結束後仍未出現啟動事件，直接依暫存 stderr 排錯，不自行猜測或改追蹤其他 query log。
 - 看到 `phase=query` 終態（`finished`、`finished_with_errors`、`failed`）且背景程序已結束後，才判定 query 完成：成功或部分成功時讀取 stdout JSON，失敗時讀取 stderr 錯誤摘要。程序已結束但沒有終態時視為異常中止，讀取專屬 log 與暫存 stderr 排錯。
 - 完成判讀後刪除重新導向用的暫存檔；保留 `_internal/logs/` 的正式 log 與搜尋結果資料夾（含失敗搜尋的部分產物，供排錯）。
-- 搜尋失敗時先讀 stderr 與該 `run_id` 的專屬 log：路徑、搜尋參數或任務檔案問題自行修正後以新路徑重試；權限、外部服務或部署環境問題向使用者說明原因並協助使用者排除問題。禁止使用 `kbsearch.exe query` 以外的方式進行搜尋。
+- 搜尋失敗時先讀 stderr 的 `error_kind` 與該 `run_id` 的專屬 log：`input_or_config` 中可自行修正的路徑、搜尋參數或任務檔案問題，修正後以新輸出路徑重試；`authentication` 依本文件登入流程處理；`external_service` 或 `internal` 向使用者說明原因並協助排除。禁止使用 `kbsearch.exe query` 以外的方式進行搜尋。
 
 ---
 

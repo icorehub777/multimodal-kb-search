@@ -2,20 +2,18 @@
 
 本文件供 **IT 人員**在 repo 內了解 `agent_runtime/` 子專案結構與部署步驟，**不部署至使用者運作環境**。使用者端 Agent 的工作區根目錄為 `agent_runtime/`，運作規則見同目錄 [`AGENTS.md`](AGENTS.md)（此檔會隨工作區一併部署）。
 
-## 目錄結構
+## 建置與運作目錄結構
 
 ```text
 agent_runtime/
   requirements.txt                # Agent 使用 codex PDF skill 所需套件
   tasks/                          # 使用者任務工作區
-  memory.md                       # Agent 跨 session 工作記憶
   AGENTS.md                       # Agent 操作規則（部署至使用者端）
   _internal/
     .venv/                        # Python 虛擬環境（本機建立，不納版控、不複製自其他機器）
     config/
       .env                        # kbsearch 設定
       oauth_client.json           # Google OAuth Desktop 用戶端憑證（不納版控）
-      token_cache.json            # 首次授權後由程式寫入（不納版控）
     packages/                     # kbsearch_cli wheel
     logs/                         # 每次 query 的獨立 kbsearch-<日期時間>-<run_id>.log
 ```
@@ -70,11 +68,13 @@ unzip -v
 
 取得 `query_cli` 子專案中的 `kbsearch_cli-*.whl`，並放到 `agent_runtime\_internal\packages\` 中。
 
-### 3. 複製與調整設定檔
+### 3. 準備設定檔
 
-從 `query_cli\config\` 取得 `.env` 與 `oauth_client.json`，並複製到 `agent_runtime\_internal\config\`。
+將 `query_cli\config\.env.example` 複製為 `agent_runtime\_internal\config\.env`。
 
-若未調整建議的 `agent_runtime` 資料夾結構，複製後須調整 `.env` 中的：
+依 [`query_cli/README.md` 的「建立本機設定」](../query_cli/README.md#建立本機設定)準備 `oauth_client.json`，並將 `GOOGLE_OAUTH_CLIENT_CONFIG` 設為其路徑；建議放在 `agent_runtime\_internal\config\oauth_client.json`。
+
+完整設定項目與可用值見上述文件。使用本文件建議的 `agent_runtime` 資料夾結構時，須確認以下部署相關設定：
 
 - `KBSEARCH_CJK_FONT_PATH`：改為該機器上**已存在**的 CJK 字型檔絕對路徑（`.ttf` 或 `.ttc`）。`msjh.ttc` 僅為繁中 Windows 常見範例；若不存在，可改用同目錄其他 CJK 字型（例如 `msyh.ttc`、`mingliu.ttc`），或先安裝字型（例如 Noto Sans CJK）後再填入路徑：
 
@@ -83,7 +83,6 @@ Test-Path "C:\Windows\Fonts\msjh.ttc"
 Get-ChildItem "C:\Windows\Fonts" -Include *.ttf,*.ttc -Recurse | Select-Object -ExpandProperty FullName
 ```
 - `KBSEARCH_SECURE_BACKEND_BASE_URL`：改為運作端可連線的 backend URL
-- `KBSEARCH_QUERY_LOG_RETENTION_DAYS`：per-run query log 保留天數，預設 `14`；設為 `0` 停用自動清理。
 - `KBSEARCH_TASKS_ROOT`：因為是在 `_internal` 資料夾執行指令，所以須改為 `..\tasks`
 - `KBSEARCH_VIEWER_PORT`：搜尋結果檢視頁使用的 port，預設使用 Streamlit 標準 `8501`。
 
@@ -108,36 +107,11 @@ if ($wheels.Count -ne 1) { throw "Expected exactly one kbsearch_cli wheel, found
 
 請注意：`.venv` 綁定建立當下該機器的 Python 路徑，不可從其他電腦或開發環境整包複製後直接使用。
 
-### 5. 指令執行
-
-指令執行的工作目錄為 `agent_runtime\_internal`，首次執行若尚無 `token_cache.json`，程式會開啟瀏覽器完成 Google OAuth 授權，並寫入 `config\token_cache.json`。
-
-可執行的 `kbsearch` 指令如下；CLI 參數、終端輸出、搜尋結果格式與產物結構統一參考 [`query_cli/README.md` 的「手動測試」章節](../query_cli/README.md#手動測試)。
-
-#### 相似度 / 關鍵字搜尋
-
-```powershell
-cd agent_runtime\_internal
-.\.venv\Scripts\kbsearch.exe query
-```
-
-#### 開啟搜尋結果檢視頁
-
-```powershell
-.\.venv\Scripts\kbsearch.exe view-results
-```
-
-#### 產生單頁 PNG
-
-```powershell
-.\.venv\Scripts\kbsearch.exe render-pdf-pages
-```
-
 ---
 
-## 正式環境準備
+## 正式環境搬移與建置
 
-請依照以下資料夾結構複製子資料夾與相關檔案到正式機，且子資料夾內僅保留下方有列出的檔案。
+以下為搬移至正式機前的檔案清單；`.venv` 不隨檔案複製，須在正式機重新建立。子資料夾內僅保留下方列出的檔案。
 
 ```text
 agent_runtime/
@@ -153,6 +127,6 @@ agent_runtime/
     logs/
 ```
 
-搬移完成後參考以上 `測試環境準備` 中的步驟建置正式環境。
+搬移完成後參考以上「本機測試環境：準備 agent_runtime」中的步驟建置正式環境。
 建置完成後，可刪除 `requirements.txt` 與 `_internal/packages/` 資料夾。
 ---
