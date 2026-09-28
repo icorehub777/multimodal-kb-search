@@ -93,12 +93,16 @@ def _looks_like_network_or_dns_error(exc: Exception) -> bool:
 
 def build_drive_service(access_token: str):
     try:
+        import httplib2
+        from google_auth_httplib2 import AuthorizedHttp
         from google.oauth2.credentials import Credentials
         from googleapiclient.discovery import build
     except ImportError as exc:
         raise RuntimeError("google-api-python-client is required for Drive API access.") from exc
 
-    return build("drive", "v3", credentials=Credentials(token=access_token), cache_discovery=False)
+    credentials = Credentials(token=access_token)
+    authorized_http = AuthorizedHttp(credentials, http=httplib2.Http(timeout=60))
+    return build("drive", "v3", http=authorized_http, cache_discovery=False)
 
 
 class GoogleDriveServiceProvider:

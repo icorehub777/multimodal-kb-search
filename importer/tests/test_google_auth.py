@@ -3,10 +3,33 @@ from datetime import datetime, timezone
 from unittest.mock import patch
 
 from app.errors import ExternalServiceError
-from app.google_auth import get_dwd_access_token
+from app.google_auth import build_drive_service, get_dwd_access_token
 
 
 class GoogleAuthTests(unittest.TestCase):
+    def test_build_drive_service_uses_finite_http_timeout(self):
+        with patch("httplib2.Http") as http_cls, patch(
+            "google_auth_httplib2.AuthorizedHttp"
+        ) as authorized_http_cls, patch(
+            "google.oauth2.credentials.Credentials"
+        ) as credentials_cls, patch(
+            "googleapiclient.discovery.build"
+        ) as build:
+            service = build_drive_service("token")
+
+        http_cls.assert_called_once_with(timeout=60)
+        authorized_http_cls.assert_called_once_with(
+            credentials_cls.return_value,
+            http=http_cls.return_value,
+        )
+        build.assert_called_once_with(
+            "drive",
+            "v3",
+            http=authorized_http_cls.return_value,
+            cache_discovery=False,
+        )
+        self.assertIs(service, build.return_value)
+
     def test_dwd_refresh_failure_raises_domain_error(self):
         class FakeCredentials:
             service_account_email = "svc@example.com"

@@ -4,7 +4,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from app.config import ConfigError, ImporterConfig
+from app.config import ConfigError, GoogleDriveSource, ImporterConfig
 from app.errors import ExternalServiceError
 from app.startup_probe import probe_startup_environment
 
@@ -27,7 +27,9 @@ def _importer_config(temp_dir: Path) -> ImporterConfig:
     return ImporterConfig(
         app_root=temp_dir,
         google_drive_source_config=source_config,
-        google_drive_sources=(),
+        google_drive_sources=(
+            GoogleDriveSource(name="belltaih-shared-drive", type="shared_drive", drive_id="drive-1"),
+        ),
         google_dwd_subject_email="user@example.com",
         dashscope_api_key="dashscope-key",
         dashscope_embedding_model="qwen3-vl-embedding",
@@ -44,6 +46,7 @@ def _importer_config(temp_dir: Path) -> ImporterConfig:
         keep_success_work_files=True,
         keep_failed_work_files=True,
         log_retention_days=14,
+        log_level="INFO",
     )
 
 
@@ -60,20 +63,18 @@ class StartupProbeTests(unittest.TestCase):
             ) as create_scanner, patch(
                 "app.startup_probe.DashScopeImageEmbeddingClient.embed_image",
                 return_value=[0.1, 0.2, 0.3, 0.4],
-            ), patch("app.startup_probe.create_qdrant_index") as create_index, patch(
-                "qdrant_client.QdrantClient"
-            ) as qdrant_client_cls:
-                create_scanner.return_value.list_documents.return_value = [object(), object()]
-                create_index.return_value.list_documents.return_value = [object()]
+            ), patch("qdrant_client.QdrantClient") as qdrant_client_cls:
                 qdrant_client = qdrant_client_cls.return_value
                 qdrant_client.collection_exists.return_value = True
                 qdrant_client.get_collection.return_value = collection_info
 
                 result = probe_startup_environment(config)
 
-        self.assertEqual(result.google_documents, 2)
+        create_scanner.return_value.probe_access.assert_called_once_with()
+        create_scanner.return_value.list_documents.assert_not_called()
+        self.assertEqual(result.google_sources, 1)
         self.assertEqual(result.dashscope_dimension, 4)
-        self.assertEqual(result.qdrant_documents, 1)
+        self.assertEqual(result.qdrant_points, 12)
         self.assertEqual(result.qdrant_collection, "kbsearch")
         self.assertEqual(result.qdrant_host, "qdrant.example.com")
 
@@ -99,12 +100,9 @@ class StartupProbeTests(unittest.TestCase):
             ) as create_scanner, patch(
                 "app.startup_probe.DashScopeImageEmbeddingClient.embed_image",
                 return_value=[0.1, 0.2, 0.3, 0.4],
-            ), patch("app.startup_probe.create_qdrant_index") as create_index, patch(
-                "app.startup_probe.ensure_qdrant_collection",
+            ), patch("app.startup_probe.ensure_qdrant_collection",
                 return_value=True,
             ) as ensure_collection, patch("qdrant_client.QdrantClient") as qdrant_client_cls:
-                create_scanner.return_value.list_documents.return_value = []
-                create_index.return_value.list_documents.return_value = []
                 qdrant_client = qdrant_client_cls.return_value
                 qdrant_client.collection_exists.return_value = False
                 qdrant_client.get_collection.return_value = collection_info
@@ -127,7 +125,6 @@ class StartupProbeTests(unittest.TestCase):
                 "app.startup_probe.DashScopeImageEmbeddingClient.embed_image",
                 return_value=[0.1, 0.2, 0.3, 0.4],
             ), patch("qdrant_client.QdrantClient") as qdrant_client_cls:
-                create_scanner.return_value.list_documents.return_value = []
                 qdrant_client = qdrant_client_cls.return_value
                 qdrant_client.collection_exists.return_value = True
                 qdrant_client.get_collection.return_value = collection_info

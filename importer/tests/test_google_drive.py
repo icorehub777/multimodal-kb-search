@@ -3,9 +3,11 @@ from io import StringIO
 import logging
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import Mock
 
 from app.config import GoogleDriveSource
 from app.document_processing import UnsupportedDocumentTypeError
+from app.errors import ExternalServiceError
 from app.google_drive import GoogleDriveDownloader, GoogleDriveScanner
 
 
@@ -82,6 +84,70 @@ class GoogleDriveTests(unittest.TestCase):
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             service.files_resource.list_calls[0]["q"],
         )
+
+    def test_scanner_probe_access_uses_one_lightweight_request_per_source(self):
+        service = FakeDriveService()
+        service.files_resource.responses = [{"files": []}, {"files": []}]
+        scanner = GoogleDriveScanner(
+            drive_service=service,
+            sources=(
+                GoogleDriveSource(name="shared", type="shared_drive", drive_id="drive-1"),
+                GoogleDriveSource(name="folder", type="folder", folder_id="folder-1"),
+            ),
+        )
+
+        scanner.probe_access()
+
+        self.assertEqual(len(service.files_resource.list_calls), 2)
+        self.assertTrue(all(call["pageSize"] == 1 for call in service.files_resource.list_calls))
+        self.assertTrue(all(call["fields"] == "files(id)" for call in service.files_resource.list_calls))
+
+    def test_scanner_converts_drive_failure_to_external_service_error(self):
+        service = FakeDriveService()
+        service.files_resource.list = Mock(side_effect=RuntimeError("boom"))
+        scanner = GoogleDriveScanner(
+            drive_service=service,
+            sources=(GoogleDriveSource(name="shared", type="shared_drive", drive_id="drive-1"),),
+        )
+
+        with self.assertRaisesRegex(ExternalServiceError, "Google Drive list failed"):
+            scanner.list_documents()
+
+    def test_scanner_rejects_invalid_drive_response_contract(self):
+        service = FakeDriveService()
+        service.files_resource.responses = [{"files": "invalid"}]
+        scanner = GoogleDriveScanner(
+            drive_service=service,
+            sources=(GoogleDriveSource(name="shared", type="shared_drive", drive_id="drive-1"),),
+        )
+
+        with self.assertRaisesRegex(ExternalServiceError, "invalid response"):
+            scanner.list_documents()
+
+    def test_scanner_rejects_response_item_missing_common_fields(self):
+        service = FakeDriveService()
+        service.files_resource.responses = [{"files": [{"id": "file-1"}]}]
+        scanner = GoogleDriveScanner(
+            drive_service=service,
+            sources=(GoogleDriveSource(name="shared", type="shared_drive", drive_id="drive-1"),),
+        )
+
+        with self.assertRaisesRegex(ExternalServiceError, "missing required field"):
+            scanner.list_documents()
+
+    def test_scanner_rejects_document_missing_required_metadata(self):
+        service = FakeDriveService()
+        service.files_resource.responses = [
+            {"files": [{"id": "file-1", "name": "Spec.pdf", "mimeType": "application/pdf"}]},
+            {"files": []},
+        ]
+        scanner = GoogleDriveScanner(
+            drive_service=service,
+            sources=(GoogleDriveSource(name="shared", type="shared_drive", drive_id="drive-1"),),
+        )
+
+        with self.assertRaisesRegex(ExternalServiceError, "missing required field"):
+            scanner.list_documents()
 
     def test_scanner_skips_unsupported_mime_types_and_logs_reason(self):
         service = FakeDriveService()
@@ -316,6 +382,20 @@ class GoogleDriveTests(unittest.TestCase):
 
         self.assertEqual(service.files_resource.export_calls, [])
         self.assertEqual(service.files_resource.get_calls, [])
+
+    def test_downloader_converts_drive_failure_to_external_service_error(self):
+        service = FakeDriveService()
+        service.files_resource.get_media = Mock(side_effect=RuntimeError("boom"))
+        downloader = GoogleDriveDownloader(service)
+
+        with TemporaryDirectory() as temp_dir:
+            with self.assertRaisesRegex(ExternalServiceError, "Google Drive download failed"):
+                downloader.download(
+                    file_id="file-1",
+                    name="Spec.pdf",
+                    mime_type="application/pdf",
+                    output_dir=Path(temp_dir),
+                )
 
 
 if __name__ == "__main__":

@@ -85,6 +85,7 @@ class DashScopePageEmbedderTests(unittest.TestCase):
                 client.embed_image(image_path)
 
         self.assertEqual(call.call_args.kwargs["input"], [{"image": str(image_path.resolve())}])
+        self.assertEqual(call.call_args.kwargs["timeout"], 120)
 
     def test_dashscope_failure_raises_external_service_error(self):
         class FakeResponse:
@@ -109,6 +110,59 @@ class DashScopePageEmbedderTests(unittest.TestCase):
                     jpeg_quality=95,
                 )
                 with self.assertRaises(ExternalServiceError):
+                    client.embed_image(image_path)
+
+    def test_dashscope_sdk_exception_raises_external_service_error(self):
+        with TemporaryDirectory() as temp_dir:
+            image_path = Path(temp_dir) / "sample.png"
+            Image.new("RGB", (1, 1)).save(image_path, format="PNG")
+            with mock.patch("dashscope.MultiModalEmbedding.call", side_effect=RuntimeError("boom")):
+                client = DashScopeImageEmbeddingClient(
+                    api_key="key",
+                    model="model",
+                    dimension=3,
+                    image_max_bytes=1_000_000,
+                    jpeg_quality=95,
+                )
+                with self.assertRaisesRegex(ExternalServiceError, "DashScope embedding request failed"):
+                    client.embed_image(image_path)
+
+    def test_dashscope_invalid_response_raises_external_service_error(self):
+        class FakeResponse:
+            status_code = 200
+            output = {"embeddings": [{}]}
+
+        with TemporaryDirectory() as temp_dir:
+            image_path = Path(temp_dir) / "sample.png"
+            Image.new("RGB", (1, 1)).save(image_path, format="PNG")
+            with mock.patch("dashscope.MultiModalEmbedding.call", return_value=FakeResponse()):
+                client = DashScopeImageEmbeddingClient(
+                    api_key="key",
+                    model="model",
+                    dimension=3,
+                    image_max_bytes=1_000_000,
+                    jpeg_quality=95,
+                )
+                with self.assertRaisesRegex(ExternalServiceError, "does not contain a vector"):
+                    client.embed_image(image_path)
+
+    def test_dashscope_dimension_mismatch_is_external_service_error(self):
+        class FakeResponse:
+            status_code = 200
+            output = {"embeddings": [{"embedding": [0.1]}]}
+
+        with TemporaryDirectory() as temp_dir:
+            image_path = Path(temp_dir) / "sample.png"
+            Image.new("RGB", (1, 1)).save(image_path, format="PNG")
+            with mock.patch("dashscope.MultiModalEmbedding.call", return_value=FakeResponse()):
+                client = DashScopeImageEmbeddingClient(
+                    api_key="key",
+                    model="model",
+                    dimension=3,
+                    image_max_bytes=1_000_000,
+                    jpeg_quality=95,
+                )
+                with self.assertRaisesRegex(ExternalServiceError, "invalid vector"):
                     client.embed_image(image_path)
 
 

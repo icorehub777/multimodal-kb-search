@@ -43,6 +43,14 @@ class GoogleCredentialsTests(unittest.TestCase):
 
         self.assertEqual(email, "svc@example.com")
 
+    def test_load_service_account_email_rejects_non_mapping_json(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            adc_path = Path(temp_dir) / "gcp-adc.json"
+            adc_path.write_text("[]", encoding="utf-8")
+            with patch.dict(os.environ, {"GOOGLE_APPLICATION_CREDENTIALS": str(adc_path)}, clear=True):
+                with self.assertRaisesRegex(ConfigError, "JSON object"):
+                    load_service_account_email()
+
 
 if __name__ == "__main__":
     unittest.main()

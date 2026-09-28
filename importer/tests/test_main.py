@@ -28,6 +28,7 @@ class MainTests(unittest.TestCase):
                 "qdrant_collection": "kbsearch",
                 "google_drive_sources": (object(),),
                 "log_retention_days": 14,
+                "log_level": "DEBUG",
             },
         )()
         started_at = datetime(2026, 6, 9, 14, 30, 52, 123456)
@@ -53,7 +54,7 @@ class MainTests(unittest.TestCase):
 
         build_log_path.assert_called_once()
         cleanup_logs.assert_called_once()
-        configure_logging.assert_called_once_with(log_file)
+        configure_logging.assert_called_once_with(log_file, "DEBUG")
         create_orchestrator.assert_called_once_with(fake_config)
 
     def test_main_returns_nonzero_when_sync_has_failed_imports(self):
@@ -72,6 +73,7 @@ class MainTests(unittest.TestCase):
                 "qdrant_collection": "kbsearch",
                 "google_drive_sources": (object(),),
                 "log_retention_days": 14,
+                "log_level": "INFO",
             },
         )()
 
@@ -106,6 +108,7 @@ class MainTests(unittest.TestCase):
                 "qdrant_collection": "kbsearch",
                 "google_drive_sources": (object(),),
                 "log_retention_days": 14,
+                "log_level": "INFO",
             },
         )()
 
@@ -129,6 +132,7 @@ class MainTests(unittest.TestCase):
                 "qdrant_collection": "kbsearch",
                 "google_drive_sources": (object(),),
                 "log_retention_days": 14,
+                "log_level": "INFO",
             },
         )()
 
@@ -154,6 +158,7 @@ class MainTests(unittest.TestCase):
                 "qdrant_collection": "kbsearch",
                 "google_drive_sources": (object(),),
                 "log_retention_days": 14,
+                "log_level": "INFO",
             },
         )()
         logger = Mock(spec=logging.Logger)

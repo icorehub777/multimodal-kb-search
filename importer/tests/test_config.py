@@ -84,6 +84,38 @@ class ConfigTests(unittest.TestCase):
             with self.assertRaisesRegex(ConfigError, "requires drive_id"):
                 load_google_drive_sources(source_config)
 
+    def test_load_google_drive_sources_rejects_invalid_yaml(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source_config = Path(temp_dir) / "google_drive_sources.yaml"
+            source_config.write_text("sources: [", encoding="utf-8")
+
+            with self.assertRaisesRegex(ConfigError, "Unable to parse"):
+                load_google_drive_sources(source_config)
+
+    def test_load_google_drive_sources_rejects_duplicate_names_and_identifiers(self) -> None:
+        cases = (
+            ("name", "  - name: duplicate\n    type: folder\n    folder_id: folder-2"),
+            ("identifier", "  - name: second\n    type: folder\n    folder_id: drive-1"),
+        )
+        for expected, second_source in cases:
+            with self.subTest(expected=expected), tempfile.TemporaryDirectory() as temp_dir:
+                source_config = Path(temp_dir) / "google_drive_sources.yaml"
+                source_config.write_text(
+                    "\n".join(
+                        [
+                            "sources:",
+                            "  - name: duplicate",
+                            "    type: shared_drive",
+                            "    drive_id: drive-1",
+                            second_source,
+                        ]
+                    ),
+                    encoding="utf-8",
+                )
+
+                with self.assertRaisesRegex(ConfigError, expected):
+                    load_google_drive_sources(source_config)
+
     def test_load_importer_config_allows_empty_qdrant_api_key(self) -> None:
         with self._config_context("QDRANT_API_KEY=") as (env_file, source_config):
             config = load_importer_config(env_file)
@@ -94,6 +126,13 @@ class ConfigTests(unittest.TestCase):
         with self._config_context("QDRANT_VECTOR_SIZE=128") as (env_file, source_config):
             with self.assertRaisesRegex(ConfigError, "must match"):
                 load_importer_config(env_file)
+
+    def test_load_importer_config_rejects_non_positive_vector_sizes(self) -> None:
+        for setting in ("DASHSCOPE_VECTOR_SIZE=0", "QDRANT_VECTOR_SIZE=-1"):
+            with self.subTest(setting=setting):
+                with self._config_context(setting) as (env_file, source_config):
+                    with self.assertRaisesRegex(ConfigError, "positive integer"):
+                        load_importer_config(env_file)
 
     def test_load_importer_config_rejects_missing_required_config(self) -> None:
         with self._config_context("DASHSCOPE_API_KEY=") as (env_file, source_config):
@@ -152,6 +191,22 @@ class ConfigTests(unittest.TestCase):
 
         self.assertFalse(config.keep_success_work_files)
         self.assertTrue(config.keep_failed_work_files)
+
+    def test_load_importer_config_uses_safe_work_file_retention_defaults(self) -> None:
+        with self._config_context() as (env_file, source_config):
+            config = load_importer_config(env_file)
+
+        self.assertFalse(config.keep_success_work_files)
+        self.assertTrue(config.keep_failed_work_files)
+
+    def test_load_importer_config_reads_and_validates_log_level(self) -> None:
+        with self._config_context("IMPORTER_LOG_LEVEL=debug") as (env_file, source_config):
+            config = load_importer_config(env_file)
+        self.assertEqual(config.log_level, "DEBUG")
+
+        with self._config_context("IMPORTER_LOG_LEVEL=verbose") as (env_file, source_config):
+            with self.assertRaisesRegex(ConfigError, "IMPORTER_LOG_LEVEL"):
+                load_importer_config(env_file)
 
     def test_load_importer_config_reads_pdf_render_and_dashscope_image_settings(self) -> None:
         with self._config_context(

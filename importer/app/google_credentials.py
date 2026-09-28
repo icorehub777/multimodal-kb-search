@@ -30,6 +30,9 @@ def load_service_account_email() -> str:
     except (OSError, json.JSONDecodeError) as exc:
         raise ConfigError(f"Unable to read Google ADC file: {adc_path}") from exc
 
+    if not isinstance(payload, dict):
+        raise ConfigError(f"Google ADC file must contain a JSON object: {adc_path}")
+
     client_email = payload.get("client_email")
     if not isinstance(client_email, str) or client_email.strip() == "":
         raise ConfigError(f"Google ADC file is missing client_email: {adc_path}")

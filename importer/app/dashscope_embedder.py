@@ -50,25 +50,41 @@ class DashScopeImageEmbeddingClient:
                 output_dir=Path(temp_dir),
                 logger=self._logger,
             )
-            response = MultiModalEmbedding.call(
-                model=self._model,
-                input=[{"image": str(prepared_path.resolve())}],
-                api_key=self._api_key,
-            )
-        if response.status_code != HTTPStatus.OK:
+            try:
+                response = MultiModalEmbedding.call(
+                    model=self._model,
+                    input=[{"image": str(prepared_path.resolve())}],
+                    api_key=self._api_key,
+                    timeout=120,
+                )
+            except Exception as exc:
+                raise ExternalServiceError(
+                    f"DashScope embedding request failed (model={self._model})."
+                ) from exc
+        status_code = getattr(response, "status_code", None)
+        if not isinstance(status_code, int):
+            raise ExternalServiceError("DashScope embedding returned an invalid response status.")
+        if status_code != HTTPStatus.OK:
             code = getattr(response, "code", "") or ""
             message = getattr(response, "message", "") or str(response)
             raise ExternalServiceError(
-                f"DashScope embedding failed (HTTP {response.status_code}): {code} {message}".strip()
+                f"DashScope embedding failed (HTTP {status_code}): {code} {message}".strip()
             )
 
-        embeddings = (response.output or {}).get("embeddings") or []
-        if not embeddings:
+        output = getattr(response, "output", None)
+        embeddings = output.get("embeddings") if isinstance(output, dict) else None
+        if not isinstance(embeddings, list) or not embeddings:
             raise ExternalServiceError("DashScope embedding response does not contain embeddings.")
-        vector = embeddings[0].get("embedding")
-        if not vector:
+        first_embedding = embeddings[0]
+        vector = first_embedding.get("embedding") if isinstance(first_embedding, dict) else None
+        if not isinstance(vector, (list, tuple)) or not vector:
             raise ExternalServiceError("DashScope embedding response does not contain a vector.")
-        return list(validate_embedding_vector(list(vector), self._dimension))
+        try:
+            return list(validate_embedding_vector(list(vector), self._dimension))
+        except (TypeError, ValueError) as exc:
+            raise ExternalServiceError(
+                f"DashScope embedding response contains an invalid vector (model={self._model})."
+            ) from exc
 
 
 class DashScopePageEmbedder:

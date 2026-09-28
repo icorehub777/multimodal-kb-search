@@ -10,7 +10,7 @@ from urllib.parse import urlparse
 from app.config import ConfigError, ImporterConfig
 from app.dashscope_embedder import DashScopeImageEmbeddingClient
 from app.errors import ExternalServiceError
-from app.factories import create_drive_scanner, create_qdrant_index
+from app.factories import create_drive_scanner
 from app.qdrant_index import ensure_qdrant_collection
 
 TINY_PNG_BASE64 = (
@@ -20,12 +20,12 @@ TINY_PNG_BASE64 = (
 
 @dataclass(frozen=True)
 class StartupProbeResult:
-    google_documents: int
+    google_sources: int
     dashscope_model: str
     dashscope_dimension: int
     qdrant_collection: str
     qdrant_host: str
-    qdrant_documents: int
+    qdrant_points: int
     qdrant_vector_size: int
     qdrant_collection_created: bool
     cjk_font_path: Path
@@ -34,16 +34,16 @@ class StartupProbeResult:
 def probe_startup_environment(config: ImporterConfig) -> StartupProbeResult:
     """Verify local tools and external services before running sync."""
     _probe_local_tools(config)
-    google_documents = len(create_drive_scanner(config).list_documents())
+    create_drive_scanner(config).probe_access()
     dashscope_dimension = _probe_dashscope(config)
-    qdrant_documents, qdrant_vector_size, qdrant_collection_created = _probe_qdrant(config)
+    qdrant_points, qdrant_vector_size, qdrant_collection_created = _probe_qdrant(config)
     return StartupProbeResult(
-        google_documents=google_documents,
+        google_sources=len(config.google_drive_sources),
         dashscope_model=config.dashscope_embedding_model,
         dashscope_dimension=dashscope_dimension,
         qdrant_collection=config.qdrant_collection,
         qdrant_host=_qdrant_host(config.qdrant_url),
-        qdrant_documents=qdrant_documents,
+        qdrant_points=qdrant_points,
         qdrant_vector_size=qdrant_vector_size,
         qdrant_collection_created=qdrant_collection_created,
         cjk_font_path=config.cjk_font_path,
@@ -109,8 +109,12 @@ def _probe_qdrant(config: ImporterConfig) -> tuple[int, int, bool]:
             f"actual={vector_size})."
         )
 
-    qdrant_documents = len(create_qdrant_index(config).list_documents())
-    return qdrant_documents, vector_size, collection_created
+    points_count = getattr(info, "points_count", None)
+    if not isinstance(points_count, int) or points_count < 0:
+        raise ExternalServiceError(
+            f"Unable to read Qdrant point count (host={host}, collection={collection})."
+        )
+    return points_count, vector_size, collection_created
 
 
 def _collection_vector_size(info: object, collection: str, host: str) -> int:

@@ -12,6 +12,7 @@ from app.document_processing import (
     UnsupportedDocumentTypeError,
     is_supported_document_mime_type,
 )
+from app.errors import ExternalServiceError
 from app.logging_config import LOGGER_NAME
 from app.models import WorkspaceDocument
 
@@ -55,6 +56,21 @@ class GoogleDriveScanner:
             documents.extend(self._list_source_documents(source))
         return documents
 
+    def probe_access(self) -> None:
+        """Verify each configured source with a minimal list request."""
+        for source in self._sources:
+            query = DRIVE_FILE_QUERY
+            if source.type == "folder":
+                query = f"'{_escape_query_term(source.folder_id or '')}' in parents and {DRIVE_FILE_QUERY}"
+            self._execute_list(
+                source,
+                page_token=None,
+                query=query,
+                page_size=1,
+                fields="files(id)",
+                required_item_fields=("id",),
+            )
+
     def _list_source_documents(self, source: GoogleDriveSource) -> list[WorkspaceDocument]:
         if source.type == "folder":
             return self._list_folder_source_documents(source)
@@ -63,10 +79,8 @@ class GoogleDriveScanner:
         items: list[dict[str, Any]] = []
 
         while True:
-            response = self._drive_service.files().list(
-                **self._list_kwargs(source, page_token),
-            ).execute()
-            for item in response.get("files", []):
+            response = self._execute_list(source, page_token)
+            for item in response["files"]:
                 if item.get("trashed"):
                     continue
                 items.append(item)
@@ -156,13 +170,58 @@ class GoogleDriveScanner:
         page_token: str | None = None
         items: list[dict[str, Any]] = []
         while True:
-            response = self._drive_service.files().list(
-                **self._list_kwargs(source, page_token, query=query),
-            ).execute()
-            items.extend(item for item in response.get("files", []) if not item.get("trashed"))
+            response = self._execute_list(source, page_token, query=query)
+            items.extend(item for item in response["files"] if not item.get("trashed"))
             page_token = response.get("nextPageToken")
             if not page_token:
                 return items
+
+    def _execute_list(
+        self,
+        source: GoogleDriveSource,
+        page_token: str | None,
+        *,
+        query: str | None = None,
+        page_size: int = 1000,
+        fields: str = DRIVE_FILE_FIELDS,
+        required_item_fields: tuple[str, ...] = ("id", "name", "mimeType"),
+    ) -> dict[str, Any]:
+        try:
+            response = self._drive_service.files().list(
+                **self._list_kwargs(
+                    source,
+                    page_token,
+                    query=query,
+                    page_size=page_size,
+                    fields=fields,
+                ),
+            ).execute()
+        except Exception as exc:
+            raise ExternalServiceError(
+                f"Google Drive list failed (source={source.name}, type={source.type})."
+            ) from exc
+
+        if not isinstance(response, dict) or not isinstance(response.get("files"), list):
+            raise ExternalServiceError(
+                f"Google Drive returned an invalid response (source={source.name}, operation=list)."
+            )
+        if not all(isinstance(item, dict) for item in response["files"]):
+            raise ExternalServiceError(
+                f"Google Drive returned an invalid response item (source={source.name}, operation=list)."
+            )
+        for item in response["files"]:
+            for field in required_item_fields:
+                if not isinstance(item.get(field), str) or not item[field].strip():
+                    raise ExternalServiceError(
+                        "Google Drive response item is missing required field "
+                        f"(source={source.name}, field={field})."
+                    )
+        next_page_token = response.get("nextPageToken")
+        if next_page_token is not None and not isinstance(next_page_token, str):
+            raise ExternalServiceError(
+                f"Google Drive returned an invalid page token (source={source.name}, operation=list)."
+            )
+        return response
 
     def _list_kwargs(
         self,
@@ -170,11 +229,13 @@ class GoogleDriveScanner:
         page_token: str | None,
         *,
         query: str | None = None,
+        page_size: int = 1000,
+        fields: str = DRIVE_FILE_FIELDS,
     ) -> dict[str, Any]:
         kwargs: dict[str, Any] = {
             "q": query or DRIVE_FILE_QUERY,
-            "fields": DRIVE_FILE_FIELDS,
-            "pageSize": 1000,
+            "fields": fields,
+            "pageSize": page_size,
             "supportsAllDrives": True,
             "includeItemsFromAllDrives": True,
         }
@@ -201,17 +262,24 @@ class GoogleDriveDownloader:
                 "Excel files are not directly vectorized. Convert the file to A4 PDF first."
             )
 
-        if mime_type in GOOGLE_NATIVE_EXPORT_MIME_TYPES:
-            output_path = output_dir / f"{_safe_filename(name)}.pdf"
-            request = self._drive_service.files().export_media(
-                fileId=file_id,
-                mimeType="application/pdf",
-            )
-        else:
-            output_path = output_dir / _safe_filename(name)
-            request = self._drive_service.files().get_media(fileId=file_id)
+        try:
+            if mime_type in GOOGLE_NATIVE_EXPORT_MIME_TYPES:
+                output_path = output_dir / f"{_safe_filename(name)}.pdf"
+                request = self._drive_service.files().export_media(
+                    fileId=file_id,
+                    mimeType="application/pdf",
+                )
+            else:
+                output_path = output_dir / _safe_filename(name)
+                request = self._drive_service.files().get_media(fileId=file_id)
 
-        _write_request_bytes(request, output_path)
+            _write_request_bytes(request, output_path)
+        except ExternalServiceError:
+            raise
+        except Exception as exc:
+            raise ExternalServiceError(
+                f"Google Drive download failed (file_id={file_id}, name={name})."
+            ) from exc
         return output_path
 
 
@@ -233,6 +301,12 @@ def _write_request_bytes(request: Any, output_path: Path) -> None:
 
 
 def _workspace_document_from_item(item: dict[str, Any], location: str) -> WorkspaceDocument:
+    required = ("id", "name", "mimeType", "modifiedTime")
+    for field in required:
+        if not isinstance(item.get(field), str) or not item[field].strip():
+            raise ExternalServiceError(
+                f"Google Drive document is missing required field (field={field})."
+            )
     return WorkspaceDocument(
         file_id=item["id"],
         name=item["name"],

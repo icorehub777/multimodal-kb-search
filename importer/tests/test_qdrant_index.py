@@ -44,6 +44,52 @@ class QdrantIndexTests(unittest.TestCase):
             [QdrantDocument(file_id="file-1", modified_time="2026-05-24T00:00:00Z")],
         )
 
+    def test_list_documents_rejects_missing_required_payload(self):
+        client = FakeQdrantClient()
+        client.scroll = Mock(return_value=([type("Record", (), {"payload": {"google_file_id": "file-1"}})()], None))
+
+        with self.assertRaisesRegex(ExternalServiceError, "missing required payload"):
+            QdrantIndexAdapter(client=client, collection="kbsearch").list_documents()
+
+    def test_list_documents_rejects_conflicting_modified_times(self):
+        records = [
+            type("Record", (), {"payload": {"google_file_id": "file-1", "google_drive_modified_time": value}})()
+            for value in ("2026-05-24T00:00:00Z", "2026-05-25T00:00:00Z")
+        ]
+        client = FakeQdrantClient()
+        client.scroll = Mock(return_value=(records, None))
+
+        with self.assertRaisesRegex(ExternalServiceError, "conflicting modified times"):
+            QdrantIndexAdapter(client=client, collection="kbsearch").list_documents()
+
+    def test_list_documents_rejects_invalid_scroll_contract(self):
+        client = FakeQdrantClient()
+        client.scroll = Mock(return_value=(None, None))
+
+        with self.assertRaisesRegex(ExternalServiceError, "invalid response"):
+            QdrantIndexAdapter(client=client, collection="kbsearch").list_documents()
+
+    def test_list_documents_rejects_non_mapping_payload(self):
+        record = type("Record", (), {"payload": ["invalid"]})()
+        client = FakeQdrantClient()
+        client.scroll = Mock(return_value=([record], None))
+
+        with self.assertRaisesRegex(ExternalServiceError, "invalid payload"):
+            QdrantIndexAdapter(client=client, collection="kbsearch").list_documents()
+
+    def test_adapter_converts_client_failures_to_external_service_errors(self):
+        operations = (
+            ("list", lambda index: index.list_documents(), "scroll"),
+            ("delete", lambda index: index.delete_document("file-1"), "delete"),
+            ("upsert", lambda index: index.upsert_page_vectors([]), "upsert"),
+        )
+        for operation, invoke, method in operations:
+            with self.subTest(operation=operation):
+                client = Mock()
+                getattr(client, method).side_effect = RuntimeError("boom")
+                with self.assertRaisesRegex(ExternalServiceError, operation):
+                    invoke(QdrantIndexAdapter(client=client, collection="kbsearch"))
+
     def test_delete_document_deletes_by_google_file_id(self):
         client = FakeQdrantClient()
         index = QdrantIndexAdapter(client=client, collection="kbsearch")

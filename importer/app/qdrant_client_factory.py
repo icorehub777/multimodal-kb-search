@@ -10,5 +10,5 @@ def build_qdrant_client(url: str, api_key: str | None) -> Any:
         raise RuntimeError("qdrant-client is required for Qdrant operations.") from exc
 
     if api_key:
-        return QdrantClient(url=url, api_key=api_key)
-    return QdrantClient(url=url)
+        return QdrantClient(url=url, api_key=api_key, timeout=60)
+    return QdrantClient(url=url, timeout=60)

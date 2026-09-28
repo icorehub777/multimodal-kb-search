@@ -2,7 +2,7 @@ import logging
 import sys
 import tempfile
 import unittest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from app.logging_config import (
@@ -49,6 +49,24 @@ class LoggingConfigTests(unittest.TestCase):
 
         self.assertEqual(len(handlers), 1)
         self.assertEqual(logger.level, logging.INFO)
+
+    def test_configure_importer_logging_uses_requested_level_and_utc_timestamps(self) -> None:
+        temp_dir = self._create_temp_dir_with_log_cleanup()
+        log_path = temp_dir / "logs" / "importer.log"
+
+        logger = configure_importer_logging(log_path, "DEBUG")
+
+        self.assertEqual(logger.level, logging.DEBUG)
+        self.assertTrue(all(handler.level == logging.DEBUG for handler in logger.handlers))
+        self.assertTrue(all(handler.formatter.converter is __import__("time").gmtime for handler in logger.handlers))
+
+    def test_build_run_log_file_path_uses_utc_by_default(self) -> None:
+        with unittest.mock.patch("app.logging_config.datetime") as datetime_module:
+            datetime_module.now.return_value = datetime(2026, 6, 9, 6, 30, tzinfo=timezone.utc)
+            path = build_run_log_file_path(Path("logs"), process_id=1)
+
+        datetime_module.now.assert_called_once_with(timezone.utc)
+        self.assertIn("20260609-063000", path.name)
 
     def test_configure_importer_logging_writes_stdout_without_propagating_to_root(self) -> None:
         temp_dir = self._create_temp_dir_with_log_cleanup()

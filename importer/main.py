@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.config import DEFAULT_LOG_DIR, ConfigError, ImporterConfig, load_importer_config
 from app.errors import ImporterError
@@ -22,9 +22,9 @@ def main() -> int:
     logger: logging.Logger | None = None
     try:
         config = load_importer_config()
-        started_at = datetime.now()
+        started_at = datetime.now(timezone.utc)
         log_file = build_run_log_file_path(DEFAULT_LOG_DIR, started_at)
-        logger = configure_importer_logging(log_file)
+        logger = configure_importer_logging(log_file, config.log_level)
         try:
             removed_logs = cleanup_old_log_files(
                 DEFAULT_LOG_DIR,
@@ -94,15 +94,15 @@ def _run_startup_probe(config: ImporterConfig, logger: logging.Logger) -> None:
         )
         raise
     logger.info(
-        "startup_probe succeeded google_documents=%s dashscope_model=%s dashscope_dimension=%s "
-        "qdrant_host=%s qdrant_collection=%s qdrant_documents=%s qdrant_vector_size=%s "
+        "startup_probe succeeded google_sources=%s dashscope_model=%s dashscope_dimension=%s "
+        "qdrant_host=%s qdrant_collection=%s qdrant_points=%s qdrant_vector_size=%s "
         "qdrant_collection_created=%s cjk_font_path=%s",
-        result.google_documents,
+        result.google_sources,
         result.dashscope_model,
         result.dashscope_dimension,
         result.qdrant_host,
         result.qdrant_collection,
-        result.qdrant_documents,
+        result.qdrant_points,
         result.qdrant_vector_size,
         result.qdrant_collection_created,
         result.cjk_font_path,

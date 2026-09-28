@@ -42,6 +42,7 @@ class ImporterConfig:
     keep_success_work_files: bool
     keep_failed_work_files: bool
     log_retention_days: int
+    log_level: str
 
 
 APP_ROOT = Path(__file__).resolve().parents[1]
@@ -81,7 +82,7 @@ def load_importer_config(env_file: str | Path | None = DEFAULT_ENV_FILE) -> Impo
         google_dwd_subject_email=_required_str("GOOGLE_DWD_SUBJECT_EMAIL"),
         dashscope_api_key=_required_str("DASHSCOPE_API_KEY"),
         dashscope_embedding_model=_required_str("DASHSCOPE_EMBEDDING_MODEL"),
-        dashscope_vector_size=_required_int("DASHSCOPE_VECTOR_SIZE"),
+        dashscope_vector_size=_required_positive_int("DASHSCOPE_VECTOR_SIZE"),
         dashscope_image_max_bytes=_optional_int_in_range(
             "DASHSCOPE_IMAGE_MAX_BYTES",
             9_728_000,
@@ -97,7 +98,7 @@ def load_importer_config(env_file: str | Path | None = DEFAULT_ENV_FILE) -> Impo
         qdrant_url=_required_str("QDRANT_URL"),
         qdrant_api_key=_optional_str("QDRANT_API_KEY"),
         qdrant_collection=_required_str("QDRANT_COLLECTION"),
-        qdrant_vector_size=_required_int("QDRANT_VECTOR_SIZE"),
+        qdrant_vector_size=_required_positive_int("QDRANT_VECTOR_SIZE"),
         cjk_font_path=_required_absolute_path("KBSEARCH_CJK_FONT_PATH"),
         pdf_render_target_dpi=_optional_int_in_range(
             "IMPORTER_PDF_RENDER_TARGET_DPI",
@@ -111,9 +112,10 @@ def load_importer_config(env_file: str | Path | None = DEFAULT_ENV_FILE) -> Impo
             minimum=1,
             maximum=89_000_000,
         ),
-        keep_success_work_files=_optional_bool("IMPORTER_KEEP_SUCCESS_WORK_FILES", True),
+        keep_success_work_files=_optional_bool("IMPORTER_KEEP_SUCCESS_WORK_FILES", False),
         keep_failed_work_files=_optional_bool("IMPORTER_KEEP_FAILED_WORK_FILES", True),
         log_retention_days=_optional_int("IMPORTER_LOG_RETENTION_DAYS", 14),
+        log_level=_optional_log_level("IMPORTER_LOG_LEVEL", "INFO"),
     )
 
     if config.dashscope_vector_size != config.qdrant_vector_size:
@@ -130,8 +132,11 @@ def load_google_drive_sources(config_path: str | Path) -> tuple[GoogleDriveSourc
     if not path.exists():
         raise ConfigError(f"Google Drive source config not found: {path}")
 
-    with path.open("r", encoding="utf-8") as file:
-        raw_config = yaml.safe_load(file)
+    try:
+        with path.open("r", encoding="utf-8") as file:
+            raw_config = yaml.safe_load(file)
+    except (OSError, yaml.YAMLError) as exc:
+        raise ConfigError(f"Unable to parse Google Drive source config: {path}") from exc
 
     if not isinstance(raw_config, dict):
         raise ConfigError("Google Drive source config must be a YAML mapping.")
@@ -140,7 +145,23 @@ def load_google_drive_sources(config_path: str | Path) -> tuple[GoogleDriveSourc
     if not isinstance(raw_sources, list) or not raw_sources:
         raise ConfigError("Google Drive source config must define a non-empty sources list.")
 
-    return tuple(_parse_google_drive_source(item, index) for index, item in enumerate(raw_sources))
+    sources = tuple(_parse_google_drive_source(item, index) for index, item in enumerate(raw_sources))
+    _validate_unique_sources(sources)
+    return sources
+
+
+def _validate_unique_sources(sources: tuple[GoogleDriveSource, ...]) -> None:
+    names: set[str] = set()
+    identifiers: set[str] = set()
+    for source in sources:
+        if source.name in names:
+            raise ConfigError(f"Duplicate Google Drive source name: {source.name}")
+        names.add(source.name)
+
+        identifier = source.drive_id or source.folder_id
+        if identifier in identifiers:
+            raise ConfigError(f"Duplicate Google Drive source identifier: {identifier}")
+        identifiers.add(identifier)
 
 
 def _parse_google_drive_source(raw_source: Any, index: int) -> GoogleDriveSource:
@@ -233,6 +254,13 @@ def _required_int(name: str) -> int:
         raise ConfigError(f"Config {name} must be an integer.") from exc
 
 
+def _required_positive_int(name: str) -> int:
+    parsed = _required_int(name)
+    if parsed <= 0:
+        raise ConfigError(f"Config {name} must be a positive integer.")
+    return parsed
+
+
 def _optional_int(name: str, default: int) -> int:
     value = os.getenv(name)
     if value is None or value.strip() == "":
@@ -257,3 +285,13 @@ def _optional_int_in_range(
     if parsed < minimum or parsed > maximum:
         raise ConfigError(f"Config {name} must be between {minimum} and {maximum}.")
     return parsed
+
+
+def _optional_log_level(name: str, default: str) -> str:
+    value = _optional_str(name)
+    normalized = (value or default).upper()
+    if normalized not in {"DEBUG", "INFO", "WARNING", "ERROR"}:
+        raise ConfigError(
+            f"Config {name} must be one of DEBUG, INFO, WARNING, ERROR."
+        )
+    return normalized
