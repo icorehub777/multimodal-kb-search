@@ -39,7 +39,3 @@
 ## 測試
 
 - Adapter / client 測試須覆蓋合法 response、違反 contract 的 response，以及第三方錯誤的 domain error 轉換。
-
-## 文件維護
-
-- 修改設定、執行方式、支援範圍或外部服務契約時，必須同步更新相關 README、設計文件與測試；特定功能細節不得寫入本文件。

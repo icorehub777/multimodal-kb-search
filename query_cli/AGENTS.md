@@ -15,7 +15,7 @@
 - 外部服務呼叫應包在 client / adapter 中；核心流程不得直接依賴 HTTP library 的 response 物件。
 - 外部服務的 response 必須先依明確 contract 驗證並轉成 typed model，核心流程不得直接接收未驗證的 `dict`。
 - 認證與外部 API 操作應集中在專用 client。
-- 環境設定應集中在設定層讀取；新增或變更設定時需同步更新 config model、README 與測試。
+- 環境設定應集中在設定層讀取；新增或變更設定時需同步更新 config model、設定範例與測試。
 
 ## 檔案與路徑
 
@@ -50,7 +50,3 @@
 - CLI 輸入須在建立 log、產物目錄或呼叫外部服務前完成驗證，並以測試確認無副作用。
 - backend client 測試須覆蓋合法 response、非預期 response、非 JSON response 與 HTTP／連線錯誤的 domain error 轉換。
 - 正式部署使用 wheel，因此發布驗證至少須以實際建置的 wheel 驗證安裝、package import、CLI entry point 與各子指令 `--help`；不得只以 source tree 或 editable install 取代。
-
-## 文件維護
-
-- 新增或修改子指令、CLI 參數、設定、client contract、輸出目錄或 terminal 契約時，須同步更新 README、設計文件與測試；**子指令專屬細節不寫入本 AGENTS.md**。

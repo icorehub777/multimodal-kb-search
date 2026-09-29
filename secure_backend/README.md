@@ -1,6 +1,6 @@
 # KBSearch Secure Backend
 
-`secure_backend/` 是 KBSearch 的 FastAPI 後端服務。它封裝 DashScope embedding model 與 Qdrant vector store 操作，提供查詢端 HTTP API。
+`secure_backend/` 是 KBSearch 的內部 FastAPI 服務。它封裝 DashScope embedding model 與 Qdrant vector store 操作，並以 API key 保護服務 API。
 
 ## 目錄結構
 
@@ -46,7 +46,26 @@ cd secure_backend
 Copy-Item config\.env.example config\.env
 ```
 
-`config/.env` 放本機開發設定與 secret，主要欄位為 DashScope 與 Qdrant(http://127.0.0.1:6333)。應用程式 log 固定寫入 `logs/secure_backend.log`（Docker 部署時由 `docker/logs/` 掛載取得）。
+`config/.env` 的設定如下：
+
+| 設定 | 用途 |
+|------|------|
+| `SECURE_BACKEND_API_KEY` | 呼叫 API 時使用的共用 API key |
+| `DASHSCOPE_API_KEY` | DashScope API key |
+| `DASHSCOPE_EMBEDDING_MODEL` | embedding model 名稱 |
+| `DASHSCOPE_VECTOR_SIZE` | 正整數向量維度，須與 `QDRANT_VECTOR_SIZE` 相同 |
+| `DASHSCOPE_IMAGE_MAX_BYTES` | 傳送至 DashScope 的單張圖片大小上限 |
+| `DASHSCOPE_JPEG_QUALITY` | 圖片壓縮時的起始 JPEG 品質 |
+| `QDRANT_URL` | Qdrant URL；本機預設為 `http://127.0.0.1:6333` |
+| `QDRANT_API_KEY` | Qdrant API key；未啟用時可留空 |
+| `QDRANT_COLLECTION` | 查詢使用的 collection |
+| `QDRANT_VECTOR_SIZE` | Collection 正整數向量維度 |
+| `SECURE_BACKEND_MAX_QUERY_LENGTH` | 查詢文字字數上限，預設 `4000` |
+| `SECURE_BACKEND_MAX_IMAGES` | 每次查詢的圖片數量上限，預設 `5` |
+| `SECURE_BACKEND_MAX_SEARCH_LIMIT` | 每次查詢的結果筆數上限，預設 `100` |
+| `SECURE_BACKEND_LOG_LEVEL` | Log level，可設為 `DEBUG`、`INFO`、`WARNING` 或 `ERROR`，預設 `INFO` |
+
+應用程式 log 寫入 `logs/secure_backend.log` 並同時輸出 stdout；時間與每日輪替均使用 UTC，保留 14 份輪替檔案。Docker 部署時可由 `docker/logs/` 取得 log。
 
 啟動本機 API（在 `secure_backend/` 目錄下執行）。服務啟動時會自動檢查設定、DashScope embedding 與 Qdrant collection；檢查失敗時程序會退出，並在 log 中留下錯誤摘要：
 
@@ -103,7 +122,7 @@ secure_backend/
 | `config/.env` | 從專案資料夾中的 `config/` 中複製，包含各種 secret 設定 |
 | `logs/` | 服務 log 輸出目錄 |
 
-依照正式環境的狀況調整 `.env` 中的設定後( `QDRANT_URL` 要改成 `http://qdrant:6333` )，於此服務根目錄執行以下指令啟動 container：
+依照正式環境的狀況調整 `.env` 中的設定後（`QDRANT_URL` 要改成 `http://qdrant:6333`），於此服務根目錄執行以下指令啟動 container：
 
 ```powershell
 docker compose up -d
@@ -120,6 +139,12 @@ docker compose down
 
 ## API Contract
 
+所有 endpoint 都必須使用下列 header：
+
+```http
+X-API-Key: <SECURE_BACKEND_API_KEY>
+```
+
 健康檢查：
 
 ```http
@@ -130,6 +155,7 @@ GET /healthz
 
 ```http
 POST /search/vector
+Content-Type: application/json
 ```
 
 Request：
@@ -149,4 +175,28 @@ Request：
 }
 ```
 
+`query` 與 `images` 至少須提供一項；查詢文字長度、圖片數量及結果筆數不得超過服務端設定的上限。`limit` 必須為正整數，`min_score` 若有提供，必須是 `-1` 至 `1` 之間的有限數值。
+
 Response 會依 Google file ID 彙總搜尋結果，檔案依最高相似度排序，同一檔案內頁面依相似度排序。
+
+錯誤回應使用固定結構：
+
+```json
+{
+  "error": "invalid_request",
+  "field": "limit",
+  "message": "limit must be between 1 and 100."
+}
+```
+
+`field` 只在錯誤可定位至特定 request 欄位時提供；`message` 會包含呼叫端修正輸入所需的限制資訊。
+
+| HTTP status | `error` | 情況 |
+|-------------|---------|------|
+| `401` | `authentication` | API key 缺少或不正確 |
+| `400` | `invalid_request` | Request 不符合查詢條件 |
+| `413` | `payload_too_large` | 圖片超過處理限制 |
+| `502` | `external_service` | DashScope 或 Qdrant 呼叫失敗 |
+| `500` | `internal` | 其他服務錯誤 |
+
+`5xx` response 不包含 DashScope、Qdrant 或內部連線的原始錯誤內容；完整資訊記錄於 server log。

@@ -58,6 +58,7 @@ Copy-Item query_cli\config\.env.example query_cli\config\.env
 
 ```env
 KBSEARCH_SECURE_BACKEND_BASE_URL=http://127.0.0.1:8000
+KBSEARCH_SECURE_BACKEND_API_KEY=
 GOOGLE_OAUTH_CLIENT_CONFIG=config/oauth_client.json
 KBSEARCH_QUERY_LOGS_ROOT=logs
 KBSEARCH_TASKS_ROOT=tasks
@@ -66,6 +67,8 @@ KBSEARCH_QUERY_LOG_RETENTION_DAYS=14
 KBSEARCH_LOG_LEVEL=INFO
 KBSEARCH_CJK_FONT_PATH=C:\Windows\Fonts\msjh.ttc
 ```
+
+`KBSEARCH_SECURE_BACKEND_API_KEY` 須與 `secure_backend` 的 `SECURE_BACKEND_API_KEY` 使用相同值。
 
 `GOOGLE_OAUTH_CLIENT_CONFIG` 指向 Google OAuth **Desktop 用戶端憑證** `oauth_client.json`，此檔由**內部 Google / GCP 管理者**維護並隨 CLI 部署提供，使用者不需另外申請或手動放置。
 
@@ -83,7 +86,7 @@ kbsearch login
 
 ### 相似度 / 關鍵字搜尋
 
-若要做相似度搜尋，執行前請確認 `secure_backend` 已在本機啟動（`KBSEARCH_SECURE_BACKEND_BASE_URL` 可連線）。
+若要做相似度搜尋，執行前請確認 `secure_backend` 已在本機啟動並可連線。
 
 手動測試時需保持與 `agent_runtime` 中一樣的資料夾結構 (如此搜尋結果網頁才能正確解析)。也就是在根目錄的 tasks 資料夾下先建立任務資料夾，且若有搜尋用圖片，亦須將其放在任務資料夾中：
 
@@ -132,7 +135,7 @@ Startup 檢查包含 Windows Credential Manager 中的 Google Drive token、`sec
 單檔下載成功時會輸出 `phase=download status=started` 與 `phase=download status=finished`，完成訊息包含文字頁數與實際渲染頁數；單檔失敗時會輸出 `phase=download status=failed`。
 單檔進度可用 `file_id`、`index`、`total` 與 union 層進度區分。
 
-指令層級失敗時 exit code 為 `1`，stderr 的最終事件會以 `error_kind` 區分 `input_or_config`、`authentication`、`external_service` 與 `internal`，並在可用時提供 `run_id` 與 `log_path`。
+指令層級失敗時 exit code 為 `1`，stderr 的最終事件會以 `error_kind` 區分 `input_or_config`、`authentication`、`external_service` 與 `internal`，並在可用時提供 `run_id` 與 `log_path`。`secure_backend` 回傳的 `invalid_request` 或 `payload_too_large` 會歸類為 `input_or_config`，並保留需修正的欄位與限制資訊。
 
 設定與本次專屬 log 初始化完成後，stderr 會先輸出一行可解析的 query 啟動事件：
 
