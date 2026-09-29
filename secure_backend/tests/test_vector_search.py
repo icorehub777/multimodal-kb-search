@@ -1,5 +1,6 @@
 ﻿import unittest
 
+from app.errors import ExternalServiceError
 from app.models import PageSearchResult
 from app.qdrant_search import QdrantSearchAdapter, group_page_results_by_file
 
@@ -114,6 +115,51 @@ class VectorSearchTests(unittest.TestCase):
         self.assertEqual(client.calls[0]["limit"], 5)
         self.assertEqual(client.calls[0]["score_threshold"], 0.5)
         self.assertEqual([file.google_file_id for file in results], ["file-1", "file-2"])
+
+    def test_qdrant_search_adapter_rejects_missing_required_payload(self):
+        client = FakeQdrantClient()
+        client.query_points = lambda **_: type(
+            "Response",
+            (),
+            {"points": [type("Record", (), {"score": 0.9, "payload": {"page_number": 1}})()]},
+        )()
+
+        with self.assertRaisesRegex(ExternalServiceError, "invalid response"):
+            QdrantSearchAdapter(client=client, collection="kbsearch").search_pages(
+                vector=[0.1, 0.2], limit=5
+            )
+
+    def test_qdrant_search_adapter_rejects_inconsistent_file_metadata(self):
+        pages = [
+            PageSearchResult(
+                google_file_id="file-1",
+                source_name="Alpha.pdf",
+                source_location="Drive/Alpha.pdf",
+                source_url="https://drive/file-1",
+                google_drive_version="8",
+                google_drive_modified_time=modified_time,
+                page_number=page_number,
+                score=score,
+            )
+            for page_number, score, modified_time in (
+                (1, 0.9, "2026-05-24T00:00:00Z"),
+                (2, 0.8, "2026-05-25T00:00:00Z"),
+            )
+        ]
+
+        with self.assertRaisesRegex(ExternalServiceError, "inconsistent metadata"):
+            group_page_results_by_file(pages)
+
+    def test_qdrant_search_adapter_wraps_client_errors(self):
+        client = FakeQdrantClient()
+        client.query_points = lambda **_: (_ for _ in ()).throw(RuntimeError("connection detail"))
+
+        with self.assertRaisesRegex(ExternalServiceError, "Qdrant vector search failed") as ctx:
+            QdrantSearchAdapter(client=client, collection="kbsearch").search_pages(
+                vector=[0.1, 0.2], limit=5
+            )
+
+        self.assertIsInstance(ctx.exception.__cause__, RuntimeError)
 
 
 if __name__ == "__main__":

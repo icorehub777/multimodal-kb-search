@@ -33,6 +33,7 @@ def _sample_config(root: Path, *, cjk_font_exists: bool = True) -> QueryCliConfi
         cjk_font.write_bytes(b"")
     return QueryCliConfig(
         secure_backend_base_url="http://127.0.0.1:8000",
+        secure_backend_api_key="backend-secret",
         google_oauth_client_config=oauth_client,
         query_logs_root=root / "logs",
         tasks_root=root / "tasks",
@@ -69,6 +70,7 @@ class StartupProbeTests(unittest.TestCase):
                 )
         self.assertTrue(result.google_drive_authenticated)
         self.assertEqual(get.call_args.kwargs["timeout"], (10, 30))
+        self.assertEqual(get.call_args.kwargs["headers"], {"X-API-Key": "backend-secret"})
 
     def test_probe_requires_authentication_without_stored_credentials(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -106,6 +108,15 @@ class StartupProbeTests(unittest.TestCase):
             with patch("shutil.which", return_value="soffice"), patch(
                 "requests.get", side_effect=requests.RequestException("connection refused")
             ), self.assertRaisesRegex(ExternalServiceError, "Secure backend unreachable"):
+                probe_startup_environment(config)
+
+    def test_probe_reports_rejected_backend_api_key_as_config_error(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = _sample_config(Path(temp_dir))
+            response = type("Response", (), {"status_code": 401})()
+            with patch("shutil.which", return_value="soffice"), patch(
+                "requests.get", return_value=response
+            ), self.assertRaisesRegex(ConfigError, "API key"):
                 probe_startup_environment(config)
 
     def test_probe_preserves_credential_on_transient_drive_failure(self):

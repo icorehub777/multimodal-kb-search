@@ -5,7 +5,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from kbsearch_cli.backend_client import SecureBackendClient
-from kbsearch_cli.errors import ExternalServiceError, QueryCliError
+from kbsearch_cli.errors import ConfigError, ExternalServiceError, QueryCliError, QueryInputError
 
 
 class BackendClientTests(unittest.TestCase):
@@ -33,7 +33,9 @@ class BackendClientTests(unittest.TestCase):
         )()
 
         with patch("requests.post", return_value=response):
-            results = SecureBackendClient("http://backend").search("alpha", [], 5, None)
+            results = SecureBackendClient("http://backend", "backend-secret").search(
+                "alpha", [], 5, None
+            )
 
         self.assertEqual(results[0].google_file_id, "file-1")
         self.assertEqual(results[0].pages[0].page_number, 3)
@@ -48,9 +50,10 @@ class BackendClientTests(unittest.TestCase):
             def json():
                 return {"results": []}
 
-        def fake_post(url, json, timeout):
+        def fake_post(url, json, headers, timeout):
             captured["url"] = url
             captured["json"] = json
+            captured["headers"] = headers
             captured["timeout"] = timeout
             return FakeResponse()
 
@@ -59,7 +62,7 @@ class BackendClientTests(unittest.TestCase):
             image_path.write_bytes(b"png-bytes")
 
             with patch("requests.post", side_effect=fake_post):
-                SecureBackendClient("http://backend").search(
+                SecureBackendClient("http://backend", "backend-secret").search(
                     query="alpha",
                     image_paths=[image_path],
                     limit=5,
@@ -67,6 +70,7 @@ class BackendClientTests(unittest.TestCase):
                 )
 
         self.assertEqual(captured["url"], "http://backend/search/vector")
+        self.assertEqual(captured["headers"], {"X-API-Key": "backend-secret"})
         self.assertEqual(captured["timeout"], (10.0, None))
         self.assertNotIn("image_paths", captured["json"])
         self.assertEqual(captured["json"]["images"][0]["filename"], "sample.png")
@@ -82,7 +86,9 @@ class BackendClientTests(unittest.TestCase):
                 return {"results": []}
 
         with patch("requests.post", return_value=FakeResponse()) as post:
-            SecureBackendClient("http://backend", timeout_seconds=90).search(
+            SecureBackendClient(
+                "http://backend", "backend-secret", timeout_seconds=90
+            ).search(
                 query="alpha",
                 image_paths=[],
                 limit=5,
@@ -102,7 +108,7 @@ class BackendClientTests(unittest.TestCase):
                 ExternalServiceError,
                 "Secure backend unreachable \\(http://backend/search/vector\\)",
             ):
-                SecureBackendClient("http://backend").search(
+                SecureBackendClient("http://backend", "backend-secret").search(
                     query="alpha",
                     image_paths=[],
                     limit=5,
@@ -111,7 +117,7 @@ class BackendClientTests(unittest.TestCase):
 
     def test_search_rejects_missing_image_paths(self):
         with self.assertRaisesRegex(QueryCliError, "Query image not found"):
-            SecureBackendClient("http://backend").search(
+            SecureBackendClient("http://backend", "backend-secret").search(
                 query="alpha",
                 image_paths=[Path("C:/missing/sample.png")],
                 limit=5,
@@ -127,7 +133,9 @@ class BackendClientTests(unittest.TestCase):
         with patch("requests.post", return_value=response), self.assertRaisesRegex(
             ExternalServiceError, "non-JSON"
         ):
-            SecureBackendClient("http://backend").search("alpha", [], 5, None)
+            SecureBackendClient("http://backend", "backend-secret").search(
+                "alpha", [], 5, None
+            )
 
     def test_search_rejects_invalid_response_contract(self):
         response = type(
@@ -138,7 +146,50 @@ class BackendClientTests(unittest.TestCase):
         with patch("requests.post", return_value=response), self.assertRaisesRegex(
             ExternalServiceError, "invalid response"
         ):
-            SecureBackendClient("http://backend").search("alpha", [], 5, None)
+            SecureBackendClient("http://backend", "backend-secret").search(
+                "alpha", [], 5, None
+            )
+
+    def test_search_maps_request_errors_to_query_input_error(self):
+        response = type(
+            "Response",
+            (),
+            {
+                "status_code": 400,
+                "json": lambda self: {
+                    "error": "invalid_request",
+                    "field": "limit",
+                    "message": "limit must be between 1 and 100.",
+                },
+            },
+        )()
+
+        with patch("requests.post", return_value=response), self.assertRaisesRegex(
+            QueryInputError, "limit must be between 1 and 100"
+        ):
+            SecureBackendClient("http://backend", "backend-secret").search(
+                "alpha", [], 101, None
+            )
+
+    def test_search_maps_authentication_error_to_config_error(self):
+        response = type(
+            "Response",
+            (),
+            {
+                "status_code": 401,
+                "json": lambda self: {
+                    "error": "authentication",
+                    "message": "API key is missing or invalid.",
+                },
+            },
+        )()
+
+        with patch("requests.post", return_value=response), self.assertRaisesRegex(
+            ConfigError, "API key"
+        ):
+            SecureBackendClient("http://backend", "backend-secret").search(
+                "alpha", [], 5, None
+            )
 
 
 if __name__ == "__main__":

@@ -14,6 +14,7 @@ class BackendConfigTests(unittest.TestCase):
             env_file.write_text(
                 "\n".join(
                     [
+                        "SECURE_BACKEND_API_KEY=backend-secret",
                         "DASHSCOPE_API_KEY=secret",
                         "DASHSCOPE_EMBEDDING_MODEL=qwen-vl",
                         "DASHSCOPE_VECTOR_SIZE=4",
@@ -30,11 +31,16 @@ class BackendConfigTests(unittest.TestCase):
                 config = load_backend_config(env_file)
 
         self.assertEqual(config.dashscope_embedding_model, "qwen-vl")
+        self.assertEqual(config.secure_backend_api_key, "backend-secret")
         self.assertEqual(config.qdrant_collection, "kbsearch")
         self.assertEqual(config.qdrant_vector_size, 4)
         self.assertEqual(config.dashscope_image_max_bytes, 9_728_000)
         self.assertEqual(config.dashscope_jpeg_quality, 95)
         self.assertEqual(config.log_file_path, DEFAULT_LOG_FILE)
+        self.assertEqual(config.max_query_length, 4_000)
+        self.assertEqual(config.max_images, 5)
+        self.assertEqual(config.max_search_limit, 100)
+        self.assertEqual(config.log_level, "INFO")
 
     def test_load_backend_config_reads_dashscope_image_settings(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -42,6 +48,7 @@ class BackendConfigTests(unittest.TestCase):
             env_file.write_text(
                 "\n".join(
                     [
+                        "SECURE_BACKEND_API_KEY=backend-secret",
                         "DASHSCOPE_API_KEY=secret",
                         "DASHSCOPE_EMBEDDING_MODEL=qwen-vl",
                         "DASHSCOPE_VECTOR_SIZE=4",
@@ -68,6 +75,7 @@ class BackendConfigTests(unittest.TestCase):
             env_file.write_text(
                 "\n".join(
                     [
+                        "SECURE_BACKEND_API_KEY=backend-secret",
                         "DASHSCOPE_API_KEY=secret",
                         "DASHSCOPE_EMBEDDING_MODEL=qwen-vl",
                         "DASHSCOPE_VECTOR_SIZE=4",
@@ -92,6 +100,7 @@ class BackendConfigTests(unittest.TestCase):
             env_file.write_text(
                 "\n".join(
                     [
+                        "SECURE_BACKEND_API_KEY=backend-secret",
                         "DASHSCOPE_API_KEY=secret",
                         "DASHSCOPE_EMBEDDING_MODEL=qwen-vl",
                         "DASHSCOPE_VECTOR_SIZE=4",
@@ -115,6 +124,7 @@ class BackendConfigTests(unittest.TestCase):
             env_file.write_text(
                 "\n".join(
                     [
+                        "SECURE_BACKEND_API_KEY=backend-secret",
                         "DASHSCOPE_API_KEY=secret",
                         "DASHSCOPE_EMBEDDING_MODEL=qwen-vl",
                         "DASHSCOPE_VECTOR_SIZE=4",
@@ -138,6 +148,7 @@ class BackendConfigTests(unittest.TestCase):
             env_file.write_text(
                 "\n".join(
                     [
+                        "SECURE_BACKEND_API_KEY=backend-secret",
                         "DASHSCOPE_API_KEY=secret",
                         "DASHSCOPE_EMBEDDING_MODEL=qwen-vl",
                         "DASHSCOPE_VECTOR_SIZE=4",
@@ -161,6 +172,7 @@ class BackendConfigTests(unittest.TestCase):
             env_file.write_text(
                 "\n".join(
                     [
+                        "SECURE_BACKEND_API_KEY=backend-secret",
                         "DASHSCOPE_EMBEDDING_MODEL=qwen-vl",
                         "DASHSCOPE_VECTOR_SIZE=4",
                         "QDRANT_URL=http://127.0.0.1:6333",
@@ -176,12 +188,35 @@ class BackendConfigTests(unittest.TestCase):
                 with self.assertRaisesRegex(ConfigError, "DASHSCOPE_API_KEY"):
                     load_backend_config(env_file)
 
+    def test_load_backend_config_requires_secure_backend_api_key(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            env_file = Path(temp_dir) / ".env"
+            env_file.write_text(
+                "\n".join(
+                    [
+                        "DASHSCOPE_API_KEY=secret",
+                        "DASHSCOPE_EMBEDDING_MODEL=qwen-vl",
+                        "DASHSCOPE_VECTOR_SIZE=4",
+                        "QDRANT_URL=http://127.0.0.1:6333",
+                        "QDRANT_API_KEY=",
+                        "QDRANT_COLLECTION=kbsearch",
+                        "QDRANT_VECTOR_SIZE=4",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            with patch.dict(os.environ, {}, clear=True):
+                with self.assertRaisesRegex(ConfigError, "SECURE_BACKEND_API_KEY"):
+                    load_backend_config(env_file)
+
     def test_load_backend_config_rejects_vector_size_mismatch(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             env_file = Path(temp_dir) / ".env"
             env_file.write_text(
                 "\n".join(
                     [
+                        "SECURE_BACKEND_API_KEY=backend-secret",
                         "DASHSCOPE_API_KEY=secret",
                         "DASHSCOPE_EMBEDDING_MODEL=qwen-vl",
                         "DASHSCOPE_VECTOR_SIZE=4",
@@ -197,6 +232,90 @@ class BackendConfigTests(unittest.TestCase):
             with patch.dict(os.environ, {}, clear=True):
                 with self.assertRaisesRegex(ConfigError, "must match"):
                     load_backend_config(env_file)
+
+    def test_load_backend_config_rejects_non_positive_vector_sizes(self):
+        for name, value in (("DASHSCOPE_VECTOR_SIZE", "0"), ("QDRANT_VECTOR_SIZE", "-1")):
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as temp_dir:
+                values = {
+                    "SECURE_BACKEND_API_KEY": "backend-secret",
+                    "DASHSCOPE_API_KEY": "secret",
+                    "DASHSCOPE_EMBEDDING_MODEL": "qwen-vl",
+                    "DASHSCOPE_VECTOR_SIZE": "4",
+                    "QDRANT_URL": "http://127.0.0.1:6333",
+                    "QDRANT_API_KEY": "",
+                    "QDRANT_COLLECTION": "kbsearch",
+                    "QDRANT_VECTOR_SIZE": "4",
+                }
+                values[name] = value
+                env_file = Path(temp_dir) / ".env"
+                env_file.write_text(
+                    "\n".join(f"{key}={item}" for key, item in values.items()),
+                    encoding="utf-8",
+                )
+
+                with patch.dict(os.environ, {}, clear=True):
+                    with self.assertRaisesRegex(ConfigError, name):
+                        load_backend_config(env_file)
+
+    def test_load_backend_config_reads_request_limits_and_log_level(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            env_file = Path(temp_dir) / ".env"
+            env_file.write_text(
+                "\n".join(
+                    [
+                        "SECURE_BACKEND_API_KEY=backend-secret",
+                        "DASHSCOPE_API_KEY=secret",
+                        "DASHSCOPE_EMBEDDING_MODEL=qwen-vl",
+                        "DASHSCOPE_VECTOR_SIZE=4",
+                        "QDRANT_URL=http://127.0.0.1:6333",
+                        "QDRANT_API_KEY=",
+                        "QDRANT_COLLECTION=kbsearch",
+                        "QDRANT_VECTOR_SIZE=4",
+                        "SECURE_BACKEND_MAX_QUERY_LENGTH=20",
+                        "SECURE_BACKEND_MAX_IMAGES=2",
+                        "SECURE_BACKEND_MAX_SEARCH_LIMIT=7",
+                        "SECURE_BACKEND_LOG_LEVEL=debug",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            with patch.dict(os.environ, {}, clear=True):
+                config = load_backend_config(env_file)
+
+        self.assertEqual(config.max_query_length, 20)
+        self.assertEqual(config.max_images, 2)
+        self.assertEqual(config.max_search_limit, 7)
+        self.assertEqual(config.log_level, "DEBUG")
+
+    def test_load_backend_config_rejects_invalid_request_limit_and_log_level(self):
+        for name, value in (
+            ("SECURE_BACKEND_MAX_QUERY_LENGTH", "0"),
+            ("SECURE_BACKEND_MAX_IMAGES", "0"),
+            ("SECURE_BACKEND_MAX_SEARCH_LIMIT", "-1"),
+            ("SECURE_BACKEND_LOG_LEVEL", "TRACE"),
+        ):
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as temp_dir:
+                values = {
+                    "SECURE_BACKEND_API_KEY": "backend-secret",
+                    "DASHSCOPE_API_KEY": "secret",
+                    "DASHSCOPE_EMBEDDING_MODEL": "qwen-vl",
+                    "DASHSCOPE_VECTOR_SIZE": "4",
+                    "QDRANT_URL": "http://127.0.0.1:6333",
+                    "QDRANT_API_KEY": "",
+                    "QDRANT_COLLECTION": "kbsearch",
+                    "QDRANT_VECTOR_SIZE": "4",
+                    name: value,
+                }
+                env_file = Path(temp_dir) / ".env"
+                env_file.write_text(
+                    "\n".join(f"{key}={item}" for key, item in values.items()),
+                    encoding="utf-8",
+                )
+
+                with patch.dict(os.environ, {}, clear=True):
+                    with self.assertRaisesRegex(ConfigError, name):
+                        load_backend_config(env_file)
 
 
 if __name__ == "__main__":

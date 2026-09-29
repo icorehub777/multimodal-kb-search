@@ -65,9 +65,15 @@ def _probe_secure_backend(config: QueryCliConfig) -> None:
 
     health_url = f"{config.secure_backend_base_url.rstrip('/')}/healthz"
     try:
-        response = requests.get(health_url, timeout=(10, 30))
+        response = requests.get(
+            health_url,
+            headers={"X-API-Key": config.secure_backend_api_key},
+            timeout=(10, 30),
+        )
     except requests.RequestException as exc:
         raise ExternalServiceError(f"Secure backend unreachable ({health_url}): {exc}") from exc
+    if response.status_code == 401:
+        raise ConfigError("Secure backend API key was rejected.")
     if response.status_code >= 400:
         raise ExternalServiceError(
             f"Secure backend health check failed ({health_url}): HTTP {response.status_code}"

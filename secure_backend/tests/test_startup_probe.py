@@ -9,6 +9,7 @@ from app.startup_probe import probe_startup_environment
 
 def _backend_config() -> BackendConfig:
     return BackendConfig(
+        secure_backend_api_key="backend-key",
         dashscope_api_key="dashscope-key",
         dashscope_embedding_model="qwen3-vl-embedding",
         dashscope_vector_size=4,

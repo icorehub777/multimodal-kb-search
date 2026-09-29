@@ -11,6 +11,7 @@ from app.errors import ConfigError
 
 @dataclass(frozen=True)
 class BackendConfig:
+    secure_backend_api_key: str
     dashscope_api_key: str
     dashscope_embedding_model: str
     dashscope_vector_size: int
@@ -21,6 +22,10 @@ class BackendConfig:
     qdrant_collection: str
     qdrant_vector_size: int
     log_file_path: Path
+    max_query_length: int = 4_000
+    max_images: int = 5
+    max_search_limit: int = 100
+    log_level: str = "INFO"
 
 
 APP_ROOT = Path(__file__).resolve().parents[1]
@@ -34,9 +39,10 @@ def load_backend_config(env_file: str | Path | None = DEFAULT_ENV_FILE) -> Backe
         load_dotenv(dotenv_path=env_path, override=False)
 
     config = BackendConfig(
+        secure_backend_api_key=_required_str("SECURE_BACKEND_API_KEY"),
         dashscope_api_key=_required_str("DASHSCOPE_API_KEY"),
         dashscope_embedding_model=_required_str("DASHSCOPE_EMBEDDING_MODEL"),
-        dashscope_vector_size=_required_int("DASHSCOPE_VECTOR_SIZE"),
+        dashscope_vector_size=_required_positive_int("DASHSCOPE_VECTOR_SIZE"),
         dashscope_image_max_bytes=_optional_int_in_range(
             "DASHSCOPE_IMAGE_MAX_BYTES",
             9_728_000,
@@ -52,8 +58,12 @@ def load_backend_config(env_file: str | Path | None = DEFAULT_ENV_FILE) -> Backe
         qdrant_url=_required_str("QDRANT_URL"),
         qdrant_api_key=_optional_str("QDRANT_API_KEY"),
         qdrant_collection=_required_str("QDRANT_COLLECTION"),
-        qdrant_vector_size=_required_int("QDRANT_VECTOR_SIZE"),
+        qdrant_vector_size=_required_positive_int("QDRANT_VECTOR_SIZE"),
         log_file_path=DEFAULT_LOG_FILE,
+        max_query_length=_optional_positive_int("SECURE_BACKEND_MAX_QUERY_LENGTH", 4_000),
+        max_images=_optional_positive_int("SECURE_BACKEND_MAX_IMAGES", 5),
+        max_search_limit=_optional_positive_int("SECURE_BACKEND_MAX_SEARCH_LIMIT", 100),
+        log_level=_optional_log_level("SECURE_BACKEND_LOG_LEVEL", "INFO"),
     )
     if config.dashscope_vector_size != config.qdrant_vector_size:
         raise ConfigError(
@@ -83,6 +93,33 @@ def _required_int(name: str) -> int:
         return int(value)
     except ValueError as exc:
         raise ConfigError(f"Config {name} must be an integer.") from exc
+
+
+def _required_positive_int(name: str) -> int:
+    value = _required_int(name)
+    if value < 1:
+        raise ConfigError(f"Config {name} must be a positive integer.")
+    return value
+
+
+def _optional_positive_int(name: str, default: int) -> int:
+    value = os.getenv(name)
+    if value is None or value.strip() == "":
+        return default
+    try:
+        parsed = int(value.strip())
+    except ValueError as exc:
+        raise ConfigError(f"Config {name} must be an integer.") from exc
+    if parsed < 1:
+        raise ConfigError(f"Config {name} must be a positive integer.")
+    return parsed
+
+
+def _optional_log_level(name: str, default: str) -> str:
+    value = os.getenv(name, default).strip().upper()
+    if value not in {"DEBUG", "INFO", "WARNING", "ERROR"}:
+        raise ConfigError(f"Config {name} must be one of DEBUG, INFO, WARNING or ERROR.")
+    return value
 
 
 def _optional_int_in_range(

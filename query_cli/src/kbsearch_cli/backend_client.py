@@ -5,13 +5,19 @@ import mimetypes
 from pathlib import Path
 from typing import Any
 
-from kbsearch_cli.errors import ExternalServiceError, QueryCliError
+from kbsearch_cli.errors import ConfigError, ExternalServiceError, QueryCliError, QueryInputError
 from kbsearch_cli.models import PageSearchResult, VectorFileSearchResult
 
 
 class SecureBackendClient:
-    def __init__(self, base_url: str, timeout_seconds: float | None = None) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        api_key: str,
+        timeout_seconds: float | None = None,
+    ) -> None:
         self._base_url = base_url.rstrip("/")
+        self._api_key = api_key
         self._timeout = timeout_seconds if timeout_seconds is not None else (10.0, None)
 
     def search(
@@ -36,6 +42,7 @@ class SecureBackendClient:
                     "limit": limit,
                     "min_score": min_score,
                 },
+                headers={"X-API-Key": self._api_key},
                 timeout=self._timeout,
             )
         except requests.RequestException as exc:
@@ -43,14 +50,7 @@ class SecureBackendClient:
                 f"Secure backend unreachable ({search_url}): {exc}"
             ) from exc
         if response.status_code >= 400:
-            detail = response.text.strip().replace("\n", " ")[:200]
-            if detail:
-                raise ExternalServiceError(
-                    f"Secure backend search failed ({search_url}): HTTP {response.status_code} {detail}"
-                )
-            raise ExternalServiceError(
-                f"Secure backend search failed ({search_url}): HTTP {response.status_code}"
-            )
+            _raise_for_error_response(response, search_url)
         try:
             payload = response.json()
         except (ValueError, TypeError) as exc:
@@ -63,6 +63,33 @@ class SecureBackendClient:
             raise ExternalServiceError(
                 f"Secure backend returned an invalid response ({search_url}): {exc}"
             ) from exc
+
+
+def _raise_for_error_response(response: Any, search_url: str) -> None:
+    try:
+        payload = response.json()
+    except (ValueError, TypeError):
+        payload = None
+    if isinstance(payload, dict):
+        error = payload.get("error")
+        message = payload.get("message")
+        field = payload.get("field")
+        if isinstance(error, str) and isinstance(message, str):
+            field_prefix = f"{field}: " if isinstance(field, str) and field else ""
+            if response.status_code in {400, 413} and error in {
+                "invalid_request",
+                "payload_too_large",
+            }:
+                raise QueryInputError(f"{field_prefix}{message}")
+            if response.status_code == 401 and error == "authentication":
+                raise ConfigError(f"Secure backend API key rejected: {message}")
+            raise ExternalServiceError(
+                f"Secure backend search failed ({search_url}): "
+                f"HTTP {response.status_code} {error}: {message}"
+            )
+    raise ExternalServiceError(
+        f"Secure backend search failed ({search_url}): HTTP {response.status_code}"
+    )
 
 
 def _parse_search_response(payload: Any) -> list[VectorFileSearchResult]:

@@ -71,6 +71,30 @@ class CliTests(unittest.TestCase):
         load_config.assert_not_called()
         configure_logging.assert_not_called()
 
+    def test_query_rejects_non_finite_min_score_without_side_effects(self):
+        for value in ("nan", "inf", "-inf"):
+            with self.subTest(value=value), patch(
+                "kbsearch_cli.__main__.load_query_cli_config"
+            ) as load_config, patch(
+                "kbsearch_cli.__main__.configure_query_cli_logging"
+            ) as configure_logging, redirect_stderr(StringIO()) as stderr:
+                exit_code = main(
+                    [
+                        "query",
+                        "--output-dir",
+                        "new-output",
+                        "--drive-query",
+                        "x",
+                        f"--min-score={value}",
+                    ]
+                )
+
+            self.assertEqual(exit_code, 1)
+            self.assertIn("error_kind=input_or_config", stderr.getvalue())
+            self.assertIn("--min-score must be a finite number", stderr.getvalue())
+            load_config.assert_not_called()
+            configure_logging.assert_not_called()
+
     def test_view_results_uses_configured_tasks_root_without_arguments(self):
         config = type(
             "Config",

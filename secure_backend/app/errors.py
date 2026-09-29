@@ -12,6 +12,10 @@ class ConfigError(BackendError):
 class InvalidRequestError(BackendError):
     """Raised when a request payload is well-formed JSON but semantically invalid."""
 
+    def __init__(self, message: str, *, field: str | None = None) -> None:
+        super().__init__(message)
+        self.field = field
+
 
 class PayloadTooLargeError(InvalidRequestError):
     """Raised when a request payload exceeds service processing limits."""
@@ -19,6 +23,10 @@ class PayloadTooLargeError(InvalidRequestError):
 
 class ExternalServiceError(BackendError):
     """Raised when an external service call fails."""
+
+
+class AuthenticationError(BackendError):
+    """Raised when the caller does not provide the configured API key."""
 
 
 class VectorSearchError(BackendError):

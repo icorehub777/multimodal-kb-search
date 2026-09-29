@@ -26,16 +26,16 @@ class VectorFileSearchResult(BaseModel):
 
 
 class QueryImage(BaseModel):
-    filename: str
-    mime_type: str
-    base64_data: str
+    filename: str = Field(min_length=1)
+    mime_type: str = Field(min_length=1)
+    base64_data: str = Field(min_length=1)
 
 
 class VectorSearchRequest(BaseModel):
     query: str = ""
     images: list[QueryImage] = Field(default_factory=list)
-    limit: int = 10
-    min_score: float | None = None
+    limit: int = Field(default=10, ge=1)
+    min_score: float | None = Field(default=None, ge=-1, le=1, allow_inf_nan=False)
 
 
 class VectorSearchResponse(BaseModel):
@@ -44,4 +44,5 @@ class VectorSearchResponse(BaseModel):
 
 class ErrorResponse(BaseModel):
     error: str
+    field: str | None = None
     message: str

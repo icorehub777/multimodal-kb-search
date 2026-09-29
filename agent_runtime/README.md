@@ -83,6 +83,7 @@ Test-Path "C:\Windows\Fonts\msjh.ttc"
 Get-ChildItem "C:\Windows\Fonts" -Include *.ttf,*.ttc -Recurse | Select-Object -ExpandProperty FullName
 ```
 - `KBSEARCH_SECURE_BACKEND_BASE_URL`：改為運作端可連線的 backend URL
+- `KBSEARCH_SECURE_BACKEND_API_KEY`：設定為 `secure_backend` 使用的 `SECURE_BACKEND_API_KEY`
 - `KBSEARCH_TASKS_ROOT`：因為是在 `_internal` 資料夾執行指令，所以須改為 `..\tasks`
 - `KBSEARCH_VIEWER_PORT`：搜尋結果檢視頁使用的 port，預設使用 Streamlit 標準 `8501`。
 

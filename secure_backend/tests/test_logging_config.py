@@ -1,6 +1,7 @@
 ﻿import logging
 import sys
 import tempfile
+import time
 import unittest
 from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
@@ -13,7 +14,7 @@ class LoggingConfigTests(unittest.TestCase):
         temp_dir = self._create_temp_dir_with_log_cleanup()
         log_path = temp_dir / "logs" / "secure_backend.log"
 
-        logger = configure_backend_logging(log_path)
+        logger = configure_backend_logging(log_path, "DEBUG")
 
         handlers = [
             handler
@@ -25,7 +26,9 @@ class LoggingConfigTests(unittest.TestCase):
         self.assertEqual(len(handlers), 1)
         self.assertEqual(handlers[0].when, "MIDNIGHT")
         self.assertEqual(handlers[0].backupCount, 14)
-        self.assertEqual(logger.level, logging.INFO)
+        self.assertTrue(handlers[0].utc)
+        self.assertEqual(logger.level, logging.DEBUG)
+        self.assertIs(handlers[0].formatter.converter, time.gmtime)
 
     def test_configure_backend_logging_writes_stdout_without_propagating_to_root(self):
         temp_dir = self._create_temp_dir_with_log_cleanup()

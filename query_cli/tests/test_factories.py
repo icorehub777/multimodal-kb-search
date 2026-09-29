@@ -39,6 +39,7 @@ def _sample_config(root: Path) -> QueryCliConfig:
     oauth_client.write_text("{}", encoding="utf-8")
     return QueryCliConfig(
         secure_backend_base_url="http://127.0.0.1:8000",
+        secure_backend_api_key="backend-secret",
         google_oauth_client_config=oauth_client,
         query_logs_root=root / "logs",
         tasks_root=root / "tasks",
@@ -58,6 +59,7 @@ class GoogleCredentialsFactoryTests(unittest.TestCase):
                 orchestrator = create_query_orchestrator(config)
 
         self.assertEqual(orchestrator._document_processor._cjk_font_path, config.cjk_font_path)
+        self.assertEqual(orchestrator._backend._api_key, "backend-secret")
 
     def test_load_google_credentials_deletes_explicitly_revoked_token(self):
         store = FakeCredentialStore(json.dumps({"token": "old"}))

@@ -2,12 +2,16 @@
 
 import base64
 import binascii
+import math
 from http import HTTPStatus
 from io import BytesIO
 from typing import Protocol
 
 from app.errors import ExternalServiceError, InvalidRequestError, PayloadTooLargeError
 from app.models import QueryImage
+
+
+DASHSCOPE_REQUEST_TIMEOUT_SECONDS = 120
 
 
 class QueryEmbeddingClient(Protocol):
@@ -54,25 +58,39 @@ class DashScopeQueryEmbeddingClient:
         if not inputs:
             raise ExternalServiceError("Vector search requires query text or at least one image.")
 
-        response = MultiModalEmbedding.call(
-            model=self._model,
-            input=inputs,
-            api_key=self._api_key,
-        )
+        try:
+            response = MultiModalEmbedding.call(
+                model=self._model,
+                input=inputs,
+                api_key=self._api_key,
+                timeout=DASHSCOPE_REQUEST_TIMEOUT_SECONDS,
+            )
+        except Exception as exc:
+            raise ExternalServiceError("DashScope embedding request failed.") from exc
         if response.status_code != HTTPStatus.OK:
             code = getattr(response, "code", "") or ""
             message = getattr(response, "message", "") or str(response)
-            raise ExternalServiceError(
+            detail = RuntimeError(
                 f"DashScope embedding failed (HTTP {response.status_code}): {code} {message}".strip()
             )
+            raise ExternalServiceError("DashScope embedding request failed.") from detail
 
-        embeddings = (response.output or {}).get("embeddings") or []
-        if not embeddings:
-            raise ExternalServiceError("DashScope embedding response does not contain embeddings.")
-        vector = embeddings[0].get("embedding")
-        if not vector:
-            raise ExternalServiceError("DashScope embedding response does not contain a vector.")
-        return validate_embedding_vector(list(vector), self._dimension)
+        try:
+            output = response.output
+            if not isinstance(output, dict):
+                raise TypeError("output must be an object")
+            embeddings = output.get("embeddings")
+            if not isinstance(embeddings, list) or not embeddings:
+                raise TypeError("embeddings must be a non-empty array")
+            first_embedding = embeddings[0]
+            if not isinstance(first_embedding, dict):
+                raise TypeError("embedding item must be an object")
+            vector = first_embedding.get("embedding")
+            if not isinstance(vector, list):
+                raise TypeError("embedding must be an array")
+            return validate_embedding_vector(vector, self._dimension)
+        except (TypeError, ValueError) as exc:
+            raise ExternalServiceError("DashScope returned an invalid response.") from exc
 
 
 def validate_embedding_vector(vector: list[float], expected_dimension: int) -> list[float]:
@@ -80,7 +98,15 @@ def validate_embedding_vector(vector: list[float], expected_dimension: int) -> l
         raise ExternalServiceError(
             f"Embedding vector dimension mismatch: expected {expected_dimension}, got {len(vector)}."
         )
-    return vector
+    normalized: list[float] = []
+    for value in vector:
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise TypeError("Embedding vector values must be numbers.")
+        parsed = float(value)
+        if not math.isfinite(parsed):
+            raise ValueError("Embedding vector values must be finite.")
+        normalized.append(parsed)
+    return normalized
 
 
 def _image_data_uri_from_payload(
@@ -93,12 +119,14 @@ def _image_data_uri_from_payload(
     try:
         image_bytes = base64.b64decode(base64_data, validate=True)
     except binascii.Error as exc:
-        raise InvalidRequestError(f"Invalid base64 image payload: {image.filename}") from exc
+        raise InvalidRequestError(
+            f"Invalid base64 image payload: {image.filename}", field="images"
+        ) from exc
 
     try:
         normalized = _normalize_image_bytes_for_dashscope(image_bytes)
     except OSError as exc:
-        raise InvalidRequestError(f"Invalid image payload: {image.filename}") from exc
+        raise InvalidRequestError(f"Invalid image payload: {image.filename}", field="images") from exc
     if len(normalized) <= max_bytes:
         encoded = base64.b64encode(normalized).decode("ascii")
         return f"data:image/png;base64,{encoded}"
@@ -112,10 +140,11 @@ def _image_data_uri_from_payload(
     except PayloadTooLargeError as exc:
         raise PayloadTooLargeError(
             f"Image payload exceeds DashScope image size limit: {image.filename} "
-            f"(max_bytes={max_bytes})."
+            f"(max_bytes={max_bytes}).",
+            field="images",
         ) from exc
     except OSError as exc:
-        raise InvalidRequestError(f"Invalid image payload: {image.filename}") from exc
+        raise InvalidRequestError(f"Invalid image payload: {image.filename}", field="images") from exc
     encoded = base64.b64encode(compressed).decode("ascii")
     return f"data:image/jpeg;base64,{encoded}"
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import math
 import sys
 from collections.abc import Callable
 from datetime import datetime, timezone
@@ -266,6 +267,12 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         if args.limit < 1:
             input_error = QueryInputError("--limit must be a positive integer")
+            _print_query_failure(input_error, None, None)
+            return 1
+        if args.min_score is not None and not math.isfinite(args.min_score):
+            input_error = QueryInputError(
+                "--min-score must be a finite number between -1 and 1"
+            )
             _print_query_failure(input_error, None, None)
             return 1
         for image_path in image_paths:

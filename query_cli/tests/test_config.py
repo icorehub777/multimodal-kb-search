@@ -18,6 +18,7 @@ class QueryCliConfigTests(unittest.TestCase):
                 "\n".join(
                     [
                         "KBSEARCH_SECURE_BACKEND_BASE_URL=http://127.0.0.1:8000",
+                        "KBSEARCH_SECURE_BACKEND_API_KEY=backend-secret",
                         "GOOGLE_OAUTH_CLIENT_CONFIG=config/oauth_client.json",
                         "KBSEARCH_QUERY_LOGS_ROOT=logs",
                         "KBSEARCH_TASKS_ROOT=tasks",
@@ -36,6 +37,7 @@ class QueryCliConfigTests(unittest.TestCase):
                 config = load_query_cli_config(env_file)
 
         self.assertEqual(config.secure_backend_base_url, "http://127.0.0.1:8000")
+        self.assertEqual(config.secure_backend_api_key, "backend-secret")
         self.assertEqual(
             config.google_oauth_client_config,
             internal_root / "config" / "oauth_client.json",
@@ -54,6 +56,7 @@ class QueryCliConfigTests(unittest.TestCase):
                 "\n".join(
                     [
                         "KBSEARCH_SECURE_BACKEND_BASE_URL=http://127.0.0.1:8000",
+                        "KBSEARCH_SECURE_BACKEND_API_KEY=backend-secret",
                         "GOOGLE_OAUTH_CLIENT_CONFIG=client.json",
                         "KBSEARCH_CJK_FONT_PATH=C:/Windows/Fonts/msjh.ttc",
                     ]
@@ -79,6 +82,7 @@ class QueryCliConfigTests(unittest.TestCase):
                 "\n".join(
                     [
                         "KBSEARCH_SECURE_BACKEND_BASE_URL=http://127.0.0.1:8000",
+                        "KBSEARCH_SECURE_BACKEND_API_KEY=backend-secret",
                         "GOOGLE_OAUTH_CLIENT_CONFIG=client.json",
                         "KBSEARCH_VIEWER_PORT=70000",
                         "KBSEARCH_CJK_FONT_PATH=C:/Windows/Fonts/msjh.ttc",
@@ -98,6 +102,7 @@ class QueryCliConfigTests(unittest.TestCase):
                 "\n".join(
                     [
                         "KBSEARCH_SECURE_BACKEND_BASE_URL=http://127.0.0.1:8000",
+                        "KBSEARCH_SECURE_BACKEND_API_KEY=backend-secret",
                         "GOOGLE_OAUTH_CLIENT_CONFIG=client.json",
                         "KBSEARCH_QUERY_LOG_RETENTION_DAYS=0",
                         "KBSEARCH_CJK_FONT_PATH=C:/Windows/Fonts/msjh.ttc",
@@ -118,6 +123,7 @@ class QueryCliConfigTests(unittest.TestCase):
                 "\n".join(
                     [
                         "KBSEARCH_SECURE_BACKEND_BASE_URL=http://127.0.0.1:8000",
+                        "KBSEARCH_SECURE_BACKEND_API_KEY=backend-secret",
                         "GOOGLE_OAUTH_CLIENT_CONFIG=client.json",
                         "KBSEARCH_QUERY_LOG_RETENTION_DAYS=-1",
                         "KBSEARCH_CJK_FONT_PATH=C:/Windows/Fonts/msjh.ttc",
@@ -149,6 +155,7 @@ class QueryCliConfigTests(unittest.TestCase):
             env_file.write_text(
                 "\n".join(
                     [
+                        "KBSEARCH_SECURE_BACKEND_API_KEY=backend-secret",
                         "GOOGLE_OAUTH_CLIENT_CONFIG=client.json",
                         "KBSEARCH_CJK_FONT_PATH=C:/Windows/Fonts/msjh.ttc",
                     ]
@@ -160,6 +167,24 @@ class QueryCliConfigTests(unittest.TestCase):
                 with self.assertRaisesRegex(ConfigError, "KBSEARCH_SECURE_BACKEND_BASE_URL"):
                     load_query_cli_config(env_file)
 
+    def test_load_query_cli_config_rejects_missing_backend_api_key(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            env_file = Path(temp_dir) / ".env"
+            env_file.write_text(
+                "\n".join(
+                    [
+                        "KBSEARCH_SECURE_BACKEND_BASE_URL=http://127.0.0.1:8000",
+                        "GOOGLE_OAUTH_CLIENT_CONFIG=client.json",
+                        "KBSEARCH_CJK_FONT_PATH=C:/Windows/Fonts/msjh.ttc",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            with patch.dict(os.environ, {}, clear=True):
+                with self.assertRaisesRegex(ConfigError, "KBSEARCH_SECURE_BACKEND_API_KEY"):
+                    load_query_cli_config(env_file)
+
     def test_load_query_cli_config_rejects_missing_cjk_font_path(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             env_file = Path(temp_dir) / ".env"
@@ -167,6 +192,7 @@ class QueryCliConfigTests(unittest.TestCase):
                 "\n".join(
                     [
                         "KBSEARCH_SECURE_BACKEND_BASE_URL=http://127.0.0.1:8000",
+                        "KBSEARCH_SECURE_BACKEND_API_KEY=backend-secret",
                         "GOOGLE_OAUTH_CLIENT_CONFIG=client.json",
                     ]
                 ),
@@ -184,6 +210,7 @@ class QueryCliConfigTests(unittest.TestCase):
                 "\n".join(
                     [
                         "KBSEARCH_SECURE_BACKEND_BASE_URL=http://127.0.0.1:8000",
+                        "KBSEARCH_SECURE_BACKEND_API_KEY=backend-secret",
                         "GOOGLE_OAUTH_CLIENT_CONFIG=client.json",
                         "KBSEARCH_CJK_FONT_PATH=msjh.ttc",
                     ]
@@ -202,6 +229,7 @@ class QueryCliConfigTests(unittest.TestCase):
                 "\n".join(
                     [
                         "KBSEARCH_SECURE_BACKEND_BASE_URL=http://127.0.0.1:8000",
+                        "KBSEARCH_SECURE_BACKEND_API_KEY=backend-secret",
                         "GOOGLE_OAUTH_CLIENT_CONFIG=client.json",
                         "KBSEARCH_LOG_LEVEL=TRACE",
                         "KBSEARCH_CJK_FONT_PATH=C:/Windows/Fonts/msjh.ttc",

@@ -3,7 +3,7 @@ from io import BytesIO
 import unittest
 from unittest.mock import ANY, MagicMock, patch
 
-from app.errors import InvalidRequestError, PayloadTooLargeError
+from app.errors import ExternalServiceError, InvalidRequestError, PayloadTooLargeError
 from app.embedding import (
     DashScopeQueryEmbeddingClient,
     _image_data_uri_from_payload,
@@ -133,7 +133,7 @@ class EmbeddingTests(unittest.TestCase):
             jpeg_quality=90,
         )
 
-        with patch("dashscope.MultiModalEmbedding.call", return_value=response), patch(
+        with patch("dashscope.MultiModalEmbedding.call", return_value=response) as dashscope_call, patch(
             "app.embedding._image_data_uri_from_payload",
             return_value="data:image/png;base64,cG5n",
         ) as prepare:
@@ -144,6 +144,42 @@ class EmbeddingTests(unittest.TestCase):
             max_bytes=9_000_000,
             jpeg_quality=90,
         )
+        self.assertEqual(
+            dashscope_call.call_args.kwargs["timeout"],
+            120,
+        )
+
+    def test_client_wraps_dashscope_sdk_errors(self):
+        client = DashScopeQueryEmbeddingClient(
+            api_key="key",
+            model="model",
+            dimension=2,
+            image_max_bytes=9_000_000,
+            jpeg_quality=90,
+        )
+
+        with patch(
+            "dashscope.MultiModalEmbedding.call",
+            side_effect=RuntimeError("connection detail"),
+        ), self.assertRaisesRegex(ExternalServiceError, "DashScope embedding request failed") as ctx:
+            client.embed_query("alpha", [])
+
+        self.assertIsInstance(ctx.exception.__cause__, RuntimeError)
+
+    def test_client_rejects_invalid_embedding_response_contract(self):
+        response = MagicMock(status_code=200, output={"embeddings": [{"embedding": [0.1, "bad"]}]})
+        client = DashScopeQueryEmbeddingClient(
+            api_key="key",
+            model="model",
+            dimension=2,
+            image_max_bytes=9_000_000,
+            jpeg_quality=90,
+        )
+
+        with patch("dashscope.MultiModalEmbedding.call", return_value=response), self.assertRaisesRegex(
+            ExternalServiceError, "invalid response"
+        ):
+            client.embed_query("alpha", [])
 
 
 def _png_bytes(size: tuple[int, int]) -> bytes:

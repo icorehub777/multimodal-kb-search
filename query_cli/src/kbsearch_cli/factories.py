@@ -21,7 +21,10 @@ logger = logging.getLogger(LOGGER_NAME)
 def create_query_orchestrator(config: QueryCliConfig) -> QueryOrchestrator:
     return QueryOrchestrator(
         google_drive=GoogleDriveQueryClient(create_drive_service(config)),
-        backend=SecureBackendClient(config.secure_backend_base_url),
+        backend=SecureBackendClient(
+            config.secure_backend_base_url,
+            config.secure_backend_api_key,
+        ),
         result_writer=QueryResultWriter(),
         document_processor=DocumentPageRenderer(cjk_font_path=config.cjk_font_path),
     )

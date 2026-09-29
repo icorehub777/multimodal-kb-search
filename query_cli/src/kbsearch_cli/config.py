@@ -12,6 +12,7 @@ from kbsearch_cli.errors import ConfigError
 @dataclass(frozen=True)
 class QueryCliConfig:
     secure_backend_base_url: str
+    secure_backend_api_key: str
     google_oauth_client_config: Path
     query_logs_root: Path
     tasks_root: Path
@@ -34,6 +35,7 @@ def load_query_cli_config(env_file: str | Path | None = None) -> QueryCliConfig:
     root = _resolve_query_cli_root(env_path)
     return QueryCliConfig(
         secure_backend_base_url=_required_str("KBSEARCH_SECURE_BACKEND_BASE_URL"),
+        secure_backend_api_key=_required_str("KBSEARCH_SECURE_BACKEND_API_KEY"),
         google_oauth_client_config=_resolve_path(_required_str("GOOGLE_OAUTH_CLIENT_CONFIG"), root),
         query_logs_root=_resolve_cwd_path(
             _optional_str("KBSEARCH_QUERY_LOGS_ROOT", str(DEFAULT_LOGS_ROOT)),
