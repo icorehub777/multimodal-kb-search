@@ -1,5 +1,7 @@
 # KBSearch Secure Backend
 
+繁體中文 | [English](README.en.md)
+
 `secure_backend/` 是 KBSearch 的內部 FastAPI 服務。它封裝 DashScope embedding model 與 Qdrant vector store 操作，並以 API key 保護服務 API。
 
 ## 目錄結構

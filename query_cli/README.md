@@ -1,5 +1,7 @@
 # KBSearch Query CLI
 
+繁體中文 | [English](README.en.md)
+
 `query_cli/` 提供 `kbsearch` 指令作為 Agent 使用的工具集合。
 
 它提供的指令包括：
@@ -70,7 +72,7 @@ KBSEARCH_CJK_FONT_PATH=C:\Windows\Fonts\msjh.ttc
 
 `KBSEARCH_SECURE_BACKEND_API_KEY` 須與 `secure_backend` 的 `SECURE_BACKEND_API_KEY` 使用相同值。
 
-`GOOGLE_OAUTH_CLIENT_CONFIG` 指向 Google OAuth **Desktop 用戶端憑證** `oauth_client.json`，此檔由**內部 Google / GCP 管理者**維護並隨 CLI 部署提供，使用者不需另外申請或手動放置。
+`GOOGLE_OAUTH_CLIENT_CONFIG` 指向 Google OAuth **Desktop 用戶端憑證** `oauth_client.json`，此檔由**內部 Google / GCP 管理者**依 [Google 設定指引](../docs/google-setup.md)維護並隨 CLI 部署提供，使用者不需另外申請或手動放置。
 
 ## 手動測試
 
@@ -83,6 +85,8 @@ kbsearch login
 ```
 
 指令會開啟瀏覽器供目前使用者完成 Google OAuth 授權。成功後 stdout 輸出 JSON，並由 CLI 將 token 寫入 Windows Credential Manager。Token 只有在 Google 明確回報失效或撤銷時才會移除。若由 Agent 執行，必須以 sandbox 外部同意方式啟動，並請使用者在同一台機器的瀏覽器完成授權。
+
+Windows Credential Manager 並非 CLI 專屬的存取隔離；同一 Windows 使用者下的其他程序（包含 Agent）仍具備讀取憑證的能力。
 
 ### 相似度 / 關鍵字搜尋
 
@@ -264,7 +268,7 @@ Query progress: phase=query status=failed run_id=a1b2c3d4 ...
     "name": "Alpha.pdf",
     "mime_type": "application/pdf",
     "web_url": "https://drive.google.com/file/d/file-1/view",
-    "source_location": "KBSearch_Test/Products/Alpha.pdf",
+    "source_location": "ExampleDrive/Products/Alpha.pdf",
     "pages": [
       {
         "page_number": 1,
@@ -288,7 +292,7 @@ Query progress: phase=query status=failed run_id=a1b2c3d4 ...
   {
     "google_file_id": "file-1",
     "source_name": "Alpha.pdf",
-    "source_location": "KBSearch_Test/Products/Alpha.pdf",
+    "source_location": "ExampleDrive/Products/Alpha.pdf",
     "source_url": "https://drive.google.com/file/d/file-1/view",
     "google_drive_version": "7",
     "google_drive_modified_time": "2026-05-24T00:00:00Z",

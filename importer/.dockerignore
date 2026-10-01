@@ -1,0 +1,8 @@
+# Only files required by docker/Dockerfile enter the build context.
+**
+!main.py
+!requirements.txt
+!LICENSE
+!app/
+!app/**/
+!app/**/*.py

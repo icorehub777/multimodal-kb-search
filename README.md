@@ -1,5 +1,7 @@
 # KBSearch
 
+繁體中文 | [English](README.en.md)
+
 KBSearch 專案主要目的：
 1. 讓 Google Workspace 文件與圖文混合向量庫同步。
 2. 讓 Codex Agent 可以透過工具執行 GCP 關鍵字搜尋與向量相似度搜尋，以回答使用者問題。
@@ -26,7 +28,9 @@ KBSearch/
 ## 文件入口
 
 - Repo 共通開發規範：`AGENTS.md`
-- 設計文件：`docs/`
+- 系統需求與設計：先閱讀 [`docs/design_spec/00-專案目標.md`](docs/design_spec/00-專案目標.md) 與 [`docs/design_spec/01-高階設計規劃.md`](docs/design_spec/01-高階設計規劃.md)
+- Google 管理端設定：[`docs/google-setup.md`](docs/google-setup.md)
+- 參與開發：[`CONTRIBUTING.md`](CONTRIBUTING.md)
 - 子專案使用方式：各子專案的 `README.md`
 - 子專案開發規範：各子專案的 `AGENTS.md`
 - Agent 運作區規則：`agent_runtime/AGENTS.md`
@@ -73,3 +77,9 @@ python -m pip install -r requirements-dev.txt
 
 - 根目錄 README 只提供專案總覽；子專案細節請看各子專案文件。
 - 根目錄 `tests/` 是本機驗證用資料夾，不納入 Git 版控。
+
+## 授權
+
+Copyright (C) 2026 iCoreHub contributors
+
+本專案依 [GNU Affero General Public License v3.0](LICENSE) 授權。本專案使用由 Artifex Software, Inc. 以 GNU AGPL v3 或商業授權提供的 [PyMuPDF](https://github.com/pymupdf/PyMuPDF)，並依 GNU AGPL v3 條款使用。其他第三方元件適用其各自的授權條款。

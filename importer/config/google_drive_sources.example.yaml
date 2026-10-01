@@ -1,9 +1,9 @@
 # Copy this file to google_drive_sources.yaml and update source IDs for the
 # deployment environment.
 sources:
-  - name: KBSearch_Test
+  - name: example-shared-drive
     type: shared_drive
-    drive_id: "0AI7s7_qqXFQEUk9PVA"
+    drive_id: "replace-with-shared-drive-id"
   # - name: project-folder
   #   type: folder
-  #   folder_id: "1xxxxxxxxxxxxxxxx"
+  #   folder_id: "replace-with-folder-id"

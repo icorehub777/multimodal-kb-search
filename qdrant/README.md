@@ -1,5 +1,7 @@
 # KBSearch Qdrant
 
+繁體中文 | [English](README.en.md)
+
 地端 Qdrant 向量庫（Docker）。與 `importer/`、`secure_backend/` 同機、同層部署，共用網路 `kbsearch`。
 
 ## Repo 目錄

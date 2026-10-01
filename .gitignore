@@ -4,6 +4,10 @@
 !.env.example
 importer/config/google_drive_sources.yaml
 importer/config/gcp-adc.json
+importer/config/*.json
+query_cli/config/*.json
+agent_runtime/_internal/config/*.json
+!**/*.example.json
 *.pem
 *.key
 *.p12
@@ -32,6 +36,7 @@ env/
 
 # Personal / local notes
 docs/TODO.md
+docs/Agent檔案讀取方式與Skill依賴.md
 agent_runtime/memory.md
 .claude/
 

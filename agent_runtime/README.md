@@ -1,5 +1,7 @@
 # Agent Runtime
 
+繁體中文 | [English](README.en.md)
+
 本文件供 **IT 人員**在 repo 內了解 `agent_runtime/` 子專案結構與部署步驟，**不部署至使用者運作環境**。使用者端 Agent 的工作區根目錄為 `agent_runtime/`，運作規則見同目錄 [`AGENTS.md`](AGENTS.md)（此檔會隨工作區一併部署）。
 
 ## 建置與運作目錄結構

@@ -1,5 +1,7 @@
 # KBSearch Importer
 
+繁體中文 | [English](README.en.md)
+
 掃描 Google Workspace 指定來源，下載或 export 文件，轉頁後產生多模態 embedding，寫入 Qdrant。
 
 同步以 Google file ID 與 Drive `modifiedTime` 比對：新增完整匯入、刪除清向量、異動先刪後匯、未變更略過。Drive `version` 僅保留於向量 metadata 供排錯，不參與異動判斷。
@@ -75,7 +77,7 @@ importer/
 | `IMPORTER_LOG_LEVEL` | Log level，可設為 `DEBUG`、`INFO`、`WARNING` 或 `ERROR`，預設 `INFO` |
 
 
-Google 存取的認證方式為 Service Account JSON + Domain-Wide Delegation（`signJwt`）。
+Google 存取使用 Service Account JSON + Domain-Wide Delegation，管理端設定見 [Google 設定指引](../docs/google-setup.md)。
 
 ### Qwen 圖片前處理
 
@@ -138,7 +140,7 @@ Copy-Item config\google_drive_sources.example.yaml config\google_drive_sources.y
 - 確認 `google_drive_sources.yaml` 中設定的 Google Drive 同步來源正確。
 - 確認 `.env` 中的字型存在，若不存在請設定其他本機存在的字型檔，如 `mingliu.ttc`（細明體) 或 `kaiu.ttf`（標楷體）。
 - 確認已跟 GCP 管理員拿到 Service Account JSON 認證檔，放到 `config/` 後，確定與 `.env` 中設定一致。
-- 確定 `GOOGLE_DWD_SUBJECT_EMAIL` 中設定的 GMAIL 帳號有所有要同步的 Google Drive 來源的存取權限。
+- 確定 `GOOGLE_DWD_SUBJECT_EMAIL` 中設定的 Google Workspace 使用者有所有要同步的 Google Drive 來源的存取權限。
 - 須先啟動 Qdrant，並確認 `.env` 中的 `QDRANT_URL` 設定為 `http://127.0.0.1:6333`。
 - 確認 `.env` 中的 `dashscope` 設定正確。
 
