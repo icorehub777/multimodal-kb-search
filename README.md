@@ -82,4 +82,4 @@ python -m pip install -r requirements-dev.txt
 
 Copyright (C) 2026 iCoreHub contributors
 
-本專案依 [GNU Affero General Public License v3.0](LICENSE) 授權。本專案使用由 Artifex Software, Inc. 以 GNU AGPL v3 或商業授權提供的 [PyMuPDF](https://github.com/pymupdf/PyMuPDF)，並依 GNU AGPL v3 條款使用。其他第三方元件適用其各自的授權條款。
+本專案依 [GNU Affero General Public License v3.0](LICENSE) 授權，主要考量是所使用的 [PyMuPDF](https://github.com/pymupdf/PyMuPDF) 由 Artifex Software, Inc. 提供 GNU AGPL v3 或商業授權兩種選擇，本專案選擇依 GNU AGPL v3 條款使用。其他第三方元件適用其各自的授權條款。

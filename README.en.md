@@ -83,4 +83,4 @@ Each subproject's README describes its development setup and production deployme
 
 Copyright (C) 2026 iCoreHub contributors
 
-This project is licensed under the [GNU Affero General Public License v3.0](LICENSE). It uses [PyMuPDF](https://github.com/pymupdf/PyMuPDF), offered by Artifex Software, Inc. under the GNU AGPL v3 or a commercial license, under the terms of the GNU AGPL v3. Other third-party components remain subject to their respective licenses.
+This project is licensed under the [GNU Affero General Public License v3.0](LICENSE), primarily because its dependency [PyMuPDF](https://github.com/pymupdf/PyMuPDF) is offered by Artifex Software, Inc. under either the GNU AGPL v3 or a commercial license. This project uses PyMuPDF under the GNU AGPL v3. Other third-party components remain subject to their respective licenses.
