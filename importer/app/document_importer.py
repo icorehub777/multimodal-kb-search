@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import logging
 from pathlib import Path
+from time import monotonic
 import shutil
 from typing import Protocol
 
@@ -17,6 +18,7 @@ SKIPPABLE_DOCUMENT_FAILURES: tuple[type[Exception], ...] = (
     UnsupportedDocumentTypeError,
     OSError,
 )
+EMBEDDING_PROGRESS_INTERVAL_SECONDS = 30
 
 
 @dataclass(frozen=True)
@@ -105,7 +107,7 @@ class PipelineDocumentImporter:
                     exc=exc,
                     message=f"download failed for file_id={document.file_id}",
                 )
-            self._logger.info(
+            self._logger.debug(
                 "file_id=%s name=%s stage=download status=success path=%s",
                 document.file_id,
                 document.name,
@@ -122,7 +124,7 @@ class PipelineDocumentImporter:
                     exc=exc,
                     message=f"conversion failed for file_id={document.file_id}",
                 )
-            self._logger.info(
+            self._logger.debug(
                 "file_id=%s name=%s stage=convert status=success path=%s",
                 document.file_id,
                 document.name,
@@ -139,7 +141,7 @@ class PipelineDocumentImporter:
                     exc=exc,
                     message=f"page rendering failed for file_id={document.file_id}",
                 )
-            self._logger.info(
+            self._logger.debug(
                 "file_id=%s name=%s stage=render status=success page_count=%s",
                 document.file_id,
                 document.name,
@@ -147,6 +149,7 @@ class PipelineDocumentImporter:
             )
 
             pages: list[tuple[list[float], PageVectorMetadata]] = []
+            last_progress_at = monotonic()
             for page_image in page_images:
                 try:
                     vector = self._embedder.embed_page_image(page_image.path)
@@ -168,14 +171,24 @@ class PipelineDocumentImporter:
                     page_number=page_image.page_number,
                 )
                 pages.append((vector, metadata))
-                self._logger.info(
+                self._logger.debug(
                     "file_id=%s name=%s stage=embed status=progress page=%s total=%s",
                     document.file_id,
                     document.name,
                     page_image.page_number,
                     len(page_images),
                 )
-            self._logger.info(
+                now = monotonic()
+                if now - last_progress_at >= EMBEDDING_PROGRESS_INTERVAL_SECONDS:
+                    self._logger.info(
+                        "file_id=%s name=%s stage=embed status=progress page=%s total=%s",
+                        document.file_id,
+                        document.name,
+                        page_image.page_number,
+                        len(page_images),
+                    )
+                    last_progress_at = now
+            self._logger.debug(
                 "file_id=%s name=%s stage=embed status=success page_count=%s",
                 document.file_id,
                 document.name,
@@ -192,7 +205,7 @@ class PipelineDocumentImporter:
                     exc=exc,
                     message=f"qdrant upsert failed for file_id={document.file_id}",
                 )
-            self._logger.info(
+            self._logger.debug(
                 "file_id=%s name=%s stage=upsert status=success vector_count=%s",
                 document.file_id,
                 document.name,

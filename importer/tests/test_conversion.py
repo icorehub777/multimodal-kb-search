@@ -298,7 +298,7 @@ class ConversionTests(unittest.TestCase):
         stream = StringIO()
         logger = logging.getLogger("app.tests.conversion.encoding")
         logger.handlers = [logging.StreamHandler(stream)]
-        logger.setLevel(logging.INFO)
+        logger.setLevel(logging.DEBUG)
         logger.propagate = False
         converter = DocumentConverter(cjk_font_path=cjk_font_path, logger=logger)
         with TemporaryDirectory() as temp_dir:

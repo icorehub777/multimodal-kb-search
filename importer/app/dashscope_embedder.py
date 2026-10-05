@@ -129,7 +129,7 @@ def _prepare_image_for_dashscope(
             payload = buffer.getvalue()
             if len(payload) <= max_bytes:
                 output_path.write_bytes(payload)
-                active_logger.info(
+                active_logger.debug(
                     "embedding_image_prepared source=%s original_width=%s original_height=%s "
                     "original_bytes=%s final_width=%s final_height=%s final_bytes=%s "
                     "format=jpeg quality=%s max_bytes=%s",

@@ -97,7 +97,7 @@ class DocumentConverter:
 
         output_path = output_dir / f"{source_path.stem}.pdf"
         text, encoding = _read_text(source_path)
-        self._logger.info("text_decode path=%s encoding=%s", source_path, encoding)
+        self._logger.debug("text_decode path=%s encoding=%s", source_path, encoding)
         text = text.expandtabs(4)
         font_name = _text_pdf_font_name(text, self._cjk_font_path)
         pdf = canvas.Canvas(str(output_path), pagesize=A4)
@@ -191,7 +191,7 @@ class PdfPageRenderer:
                         self._target_dpi,
                         self._max_pixels,
                     )
-                    self._logger.info(
+                    self._logger.debug(
                         "pdf_render page=%s target_dpi=%s render_dpi=%s "
                         "page_width_points=%s page_height_points=%s max_pixels=%s",
                         index,

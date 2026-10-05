@@ -3,6 +3,7 @@ from io import StringIO
 import logging
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import Mock, patch
 
 from app.document_importer import PageImage, PipelineDocumentImporter
 from app.errors import DocumentConversionError, DocumentImportError
@@ -54,20 +55,22 @@ class FakeDocumentImporter:
     def __init__(self) -> None:
         self.imported: list[str] = []
 
-    def import_document(self, document: WorkspaceDocument) -> None:
+    def import_document(self, document: WorkspaceDocument) -> int:
         self.imported.append(document.file_id)
+        return 1
 
 
 class FailingDocumentImporter:
     def __init__(self, fail_on: set[str] | None = None) -> None:
         self.fail_on = fail_on or set()
 
-    def import_document(self, document: WorkspaceDocument) -> None:
+    def import_document(self, document: WorkspaceDocument) -> int:
         if document.file_id in self.fail_on or not self.fail_on:
             raise DocumentImportError(
                 "import failed",
                 stage="download",
             )
+        return 1
 
 
 class BuggyDocumentImporter:
@@ -122,6 +125,21 @@ class PipelineQdrantIndex:
 
 
 class OrchestratorTests(unittest.TestCase):
+    def test_completed_document_info_includes_page_count_and_elapsed_time(self):
+        logger = Mock(spec=logging.Logger)
+        importer = Mock()
+        importer.import_document.return_value = 3
+        orchestrator = SyncOrchestrator(
+            AddedOnlyWorkspaceScanner(), EmptyQdrantIndex(), importer, logger,
+        )
+        with patch("app.orchestrator.monotonic", side_effect=[10, 14.5]):
+            summary = orchestrator.run()
+        completed = [call for call in logger.info.call_args_list if "action=%s status=success" in call.args[0]]
+        self.assertEqual(len(completed), 1)
+        self.assertIn("page_count=%s elapsed_seconds=%.2f", completed[0].args[0])
+        self.assertEqual(completed[0].args[-2:], (3, 4.5))
+        self.assertEqual(summary.imported, 1)
+
     def test_run_executes_import_delete_reimport_and_skip_actions(self) -> None:
         qdrant_index = FakeQdrantIndex()
         document_importer = FakeDocumentImporter()

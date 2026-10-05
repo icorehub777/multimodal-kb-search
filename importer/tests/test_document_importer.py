@@ -1,5 +1,7 @@
 ﻿import unittest
 from pathlib import Path
+import logging
+from unittest.mock import Mock, patch
 from tempfile import TemporaryDirectory
 
 from app.document_importer import PageImage, PipelineDocumentImporter
@@ -70,6 +72,37 @@ class FakeQdrantIndex:
 
 
 class DocumentImporterTests(unittest.TestCase):
+    def _capture_pipeline_logs(self, clock_values):
+        logger = Mock(spec=logging.Logger)
+        document = WorkspaceDocument(
+            file_id="file-1", name="Spec.pdf", location="/Spec.pdf",
+            web_url="https://drive/file-1", version="7",
+            modified_time="2026-05-24T00:00:00Z", mime_type="application/pdf",
+        )
+        with TemporaryDirectory() as temp_dir:
+            importer = PipelineDocumentImporter(
+                downloader=FakeDownloader(), converter=FakeConverter(),
+                renderer=FakeRenderer(), embedder=FakeEmbedder(),
+                qdrant_index=FakeQdrantIndex(), work_dir=Path(temp_dir), logger=logger,
+            )
+            with patch("app.document_importer.monotonic", side_effect=clock_values, create=True):
+                importer.import_document(document)
+        return logger
+
+    def test_info_excludes_stage_details_and_short_document_page_progress(self):
+        logger = self._capture_pipeline_logs([0, 10, 20])
+        self.assertEqual(logger.info.call_count, 1)
+        self.assertIn("stage=import status=started", logger.info.call_args_list[0].args[0])
+        details = [call.args[0] for call in logger.debug.call_args_list]
+        for stage in ("download", "convert", "render", "embed", "upsert"):
+            self.assertTrue(any(f"stage={stage}" in message for message in details))
+
+    def test_info_reports_embedding_progress_only_after_interval(self):
+        logger = self._capture_pipeline_logs([0, 10, 31])
+        progress = [call for call in logger.info.call_args_list if "status=progress" in call.args[0]]
+        self.assertEqual(len(progress), 1)
+        self.assertEqual(progress[0].args[-2:], (2, 2))
+
     def test_import_document_upserts_each_page_with_metadata(self):
         document = WorkspaceDocument(
             file_id="file-1",

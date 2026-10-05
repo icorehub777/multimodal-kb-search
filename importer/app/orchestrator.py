@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import logging
+from time import monotonic
 from typing import Protocol
 
 from app.errors import DocumentImportError, DocumentImportFailure, ImporterError
@@ -24,7 +25,7 @@ class QdrantIndex(Protocol):
 
 
 class DocumentImporter(Protocol):
-    def import_document(self, document: WorkspaceDocument) -> None:
+    def import_document(self, document: WorkspaceDocument) -> int:
         raise NotImplementedError
 
 
@@ -130,8 +131,9 @@ class SyncOrchestrator:
         action: str,
         failed_imports: list[DocumentImportFailure],
     ) -> bool:
+        started_at = monotonic()
         try:
-            self._document_importer.import_document(document)
+            page_count = self._document_importer.import_document(document)
         except DocumentImportError as exc:
             failure = _document_import_failure(document, action, exc)
             failed_imports.append(failure)
@@ -148,10 +150,12 @@ class SyncOrchestrator:
             )
             return False
         self._logger.info(
-            "file_id=%s name=%s action=%s status=success",
+            "file_id=%s name=%s action=%s status=success page_count=%s elapsed_seconds=%.2f",
             document.file_id,
             document.name,
             action,
+            page_count,
+            monotonic() - started_at,
         )
         return True
 

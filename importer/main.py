@@ -51,7 +51,7 @@ def main() -> int:
         )
         _run_startup_probe(config, logger)
         summary = create_sync_orchestrator(config).run()
-        logger.info(
+        logger.debug(
             "importer finished imported=%s deleted=%s reimported=%s skipped=%s failed=%s",
             summary.imported,
             summary.deleted,
@@ -73,7 +73,7 @@ def main() -> int:
 
 
 def _run_startup_probe(config: ImporterConfig, logger: logging.Logger) -> None:
-    logger.info(
+    logger.debug(
         "startup_probe started dashscope_model=%s dashscope_vector_size=%s "
         "qdrant_collection=%s qdrant_vector_size=%s sources=%s",
         config.dashscope_embedding_model,
