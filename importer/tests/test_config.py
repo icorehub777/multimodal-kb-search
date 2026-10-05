@@ -30,7 +30,7 @@ _BASE_ENV = "\n".join(
         "QDRANT_API_KEY=",
         "QDRANT_COLLECTION=kbsearch",
         "QDRANT_VECTOR_SIZE=2560",
-        "KBSEARCH_CJK_FONT_PATH=C:\\Windows\\Fonts\\msjh.ttc",
+        f"KBSEARCH_CJK_FONT_PATH={Path('test-font.ttc').resolve()}",
         "IMPORTER_PDF_RENDER_TARGET_DPI=200",
         "IMPORTER_PDF_RENDER_MAX_PIXELS=80000000",
     ]
@@ -170,7 +170,7 @@ class ConfigTests(unittest.TestCase):
         with self._config_context() as (env_file, source_config):
             config = load_importer_config(env_file)
 
-        self.assertEqual(config.cjk_font_path, Path("C:\\Windows\\Fonts\\msjh.ttc"))
+        self.assertEqual(config.cjk_font_path, Path("test-font.ttc").resolve())
 
     def test_load_importer_config_rejects_missing_cjk_font_path(self) -> None:
         with self._config_context("KBSEARCH_CJK_FONT_PATH=") as (env_file, source_config):

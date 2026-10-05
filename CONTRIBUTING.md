@@ -10,4 +10,6 @@ Pull Request 說明修改目的與驗證結果。工程規範見根目錄及所�
 
 ## 開發與驗證
 
-依 [根 README](README.md#本機開發測試環境準備)準備環境，再依所屬子專案 README 安裝依賴與執行離線測試。CLI 發佈驗證另包含實際 wheel 建置與安裝；需要真實服務的驗證使用獨立測試環境與資料。
+依 [根 README](README.md#本機開發測試環境準備)準備環境，再依所屬子專案 README 安裝依賴與執行離線測試。需要真實服務的驗證使用獨立測試環境與資料。
+
+[基本 CI](.github/workflows/ci.yml) 在 push 至 `main`、提出或更新以 `main` 為目標的 PR，以及手動觸發時執行：使用 Python 3.12，在 Linux 執行 importer／secure_backend 離線測試，在 Windows 執行 query_cli 離線測試與 wheel 建置、獨立環境安裝及指令 help 檢查，不使用真實服務憑證。

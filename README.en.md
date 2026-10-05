@@ -51,7 +51,7 @@ Development Agents implement the code from these documents using test-driven dev
 
 ## Local Development Environment
 
-All Python subprojects use the shared `kbsearch` conda environment except `agent_runtime/`, which uses `agent_runtime/_internal/.venv`.
+The supported and validated Python version is 3.12. All Python subprojects use the shared `kbsearch` conda environment except `agent_runtime/`, which uses `agent_runtime/_internal/.venv`.
 
 Check whether the environment exists:
 

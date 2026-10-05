@@ -50,6 +50,8 @@ KBSearch/
 
 ## 本機開發測試環境準備
 
+本專案支援與驗證的 Python 版本為 3.12。
+
 除 `agent_runtime/` 子專案使用 `agent_runtime/_internal/.venv` 環境外，其他 Python 子專案一律使用 repo 共用 conda 環境 `kbsearch`。
 
 先檢查環境是否存在：

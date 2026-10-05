@@ -1,4 +1,5 @@
 ﻿import sys
+import os
 import unittest
 from io import StringIO
 import logging
@@ -13,6 +14,11 @@ from app.errors import DocumentConversionError
 
 
 class ConversionTests(unittest.TestCase):
+    def test_cjk_test_font_uses_explicit_environment_path(self):
+        font_path = Path("test-font.ttf").resolve()
+        with patch.dict(os.environ, {"KBSEARCH_CJK_FONT_PATH": str(font_path)}):
+            self.assertEqual(_available_cjk_font_path(), font_path)
+
     def test_pdf_input_returns_source_path_without_conversion(self):
         converter = DocumentConverter()
         source = Path("Spec.pdf")
@@ -392,6 +398,9 @@ class ConversionTests(unittest.TestCase):
 
 
 def _available_cjk_font_path() -> Path | None:
+    configured_path = os.environ.get("KBSEARCH_CJK_FONT_PATH")
+    if configured_path:
+        return Path(configured_path)
     for font_path in (
         Path("C:/Windows/Fonts/msjh.ttc"),
         Path("C:/Windows/Fonts/NotoSansTC-VF.ttf"),

@@ -1,4 +1,5 @@
 import importlib.util
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -11,6 +12,11 @@ from kbsearch_cli.rendering import DocumentPageRenderer, parse_page_numbers
 
 
 class RenderingTests(unittest.TestCase):
+    def test_cjk_test_font_uses_explicit_environment_path(self):
+        font_path = Path("test-font.ttf").resolve()
+        with patch.dict(os.environ, {"KBSEARCH_CJK_FONT_PATH": str(font_path)}):
+            self.assertEqual(_available_cjk_font_path(), font_path)
+
     def test_document_mime_support_stays_aligned_with_importer(self):
         importer_document_processing = _load_importer_document_processing()
 
@@ -338,6 +344,9 @@ class RenderingTests(unittest.TestCase):
 
 
 def _available_cjk_font_path() -> Path | None:
+    configured_path = os.environ.get("KBSEARCH_CJK_FONT_PATH")
+    if configured_path:
+        return Path(configured_path)
     for font_path in (
         Path("C:/Windows/Fonts/msjh.ttc"),
         Path("C:/Windows/Fonts/NotoSansTC-VF.ttf"),
