@@ -12,19 +12,22 @@ KBSearch is designed to:
 ```text
 KBSearch/
   docs/
-  qdrant/
-  importer/
-  query_cli/
-  secure_backend/
+  docker/
+  src/
+    importer/
+    query_cli/
+    secure_backend/
   agent_runtime/
+  deploy/
 ```
 
 - `docs/`: Design documents.
-- `qdrant/`: On-premises Qdrant vector database.
-- `importer/`: Subproject that synchronizes Google Workspace documents with the vector database.
-- `query_cli/`: Command-line tools that let Agent search Google Workspace by keyword and query the vector database. It accesses the embedding model and vector store through `secure_backend`.
-- `secure_backend/`: FastAPI subproject that encapsulates access to the Alibaba Cloud embedding model and Qdrant vector store. These services are isolated behind this API because their API keys must not be exposed to regular users.
+- `docker/`: Dockerfiles and image build launchers.
+- `src/importer/`: Subproject that synchronizes Google Workspace documents with the vector database.
+- `src/query_cli/`: Command-line tools that let Agent search Google Workspace by keyword and query the vector database. It accesses the embedding model and vector store through `secure_backend`.
+- `src/secure_backend/`: FastAPI subproject that encapsulates access to the Alibaba Cloud embedding model and Qdrant vector store. These services are isolated behind this API because their API keys must not be exposed to regular users.
 - `agent_runtime/`: Production workspace for Agent, including the packaged `query_cli` command-line tools.
+- `deploy/`: Local execution and deployment directories for Qdrant, importer, and secure_backend, containing Compose files, launchers, and configuration templates. Actual settings, credentials, and runtime artifacts are not tracked.
 
 ## Documentation
 
@@ -32,6 +35,7 @@ KBSearch/
 - System requirements and design: start with [Project Goals](docs/design_spec/en/00-project-goals.md) and [High-Level Design](docs/design_spec/en/01-high-level-design.md)
 - Google administrator setup: [`docs/google-setup.en.md`](docs/google-setup.en.md)
 - Contributing: [`CONTRIBUTING.en.md`](CONTRIBUTING.en.md)
+- Service deployment: [`deploy/README.en.md`](deploy/README.en.md)
 - Subproject usage: each subproject's `README.en.md`
 - Subproject engineering rules: each subproject's `AGENTS.md`
 - Agent workspace rules: `agent_runtime/AGENTS.md`
@@ -44,16 +48,22 @@ Development Agents implement the code from these documents using test-driven dev
 
 ## Runtime Responsibilities
 
-- `importer/`: Runs as a container in production and is started by an external scheduler for synchronization jobs.
-- `secure_backend/`: Runs as a container in production and provides a persistent FastAPI service.
-- `query_cli/`: Is packaged as a Python package and installed in the Python environment used by `agent_runtime`, providing the `kbsearch` command.
+- `src/importer/`: Runs in a container during development and deployment; an external scheduler starts production synchronization jobs.
+- `src/secure_backend/`: Runs in a container during development and deployment and provides a persistent FastAPI service.
+- `src/query_cli/`: Is packaged as a Python package and installed in the Python environment used by `agent_runtime`, providing the `kbsearch` command.
 - `agent_runtime/`: Is the production working directory where Agent performs KB searches. At runtime it only requires this directory and the installed `kbsearch` command.
 
 ## Local Development Environment
 
-The supported and validated Python version is 3.12. All Python subprojects use the shared `kbsearch` conda environment except `agent_runtime/`, which uses `agent_runtime/_internal/.venv`.
+The supported and validated Python version is 3.12.
 
-Check whether the environment exists:
+`agent_runtime/` uses `agent_runtime/_internal/.venv`.
+
+Offline unit tests and development tools for the other Python subprojects use the shared `kbsearch` conda environment.
+
+Importer and secure_backend service execution and real-flow verification use Docker.
+
+Check whether the `kbsearch` environment exists:
 
 ```powershell
 conda env list | Select-String kbsearch
@@ -65,14 +75,7 @@ Create it when necessary:
 conda create -n kbsearch python=3.12 pip setuptools wheel
 ```
 
-Activate the environment and install repository-wide development and test dependencies from the repository root:
-
-```powershell
-conda activate kbsearch
-python -m pip install -r requirements-dev.txt
-```
-
-Each subproject's README describes its development setup and production deployment.
+Each subproject's README describes its development setup. See the [deployment guide](deploy/README.en.md) for production deployment of backend services.
 
 ## Additional Notes
 
