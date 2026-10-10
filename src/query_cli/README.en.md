@@ -13,13 +13,15 @@ Available commands include:
 
 ## Development and Test Setup
 
-Prepare the shared conda environment using the [root README](../../README.en.md#local-development-environment). From the repository root, activate it and install the `query_cli` package and development tools:
+Offline unit tests and development tools use the shared conda environment specified in the [root README](../../README.en.md#local-development-environment). From the repository root, activate it and install the CLI package and wheel build tools:
 
 ```powershell
 conda activate kbsearch
 cd src/query_cli
-python -m pip install -e ".[dev]"  # Source changes take effect immediately
+python -m pip install -e ".[dev]"
 ```
+
+Manual testing uses `agent_runtime/_internal/.venv` with an editable install of this subproject. See [Agent Runtime](../../agent_runtime/README.en.md#4-create-venv-and-install-the-cli) for setup.
 
 ### Install Document Processing Tools
 
@@ -39,10 +41,10 @@ Test-Path "C:\Windows\Fonts\msjh.ttc"
 
 ### Create Local Configuration
 
-Create the local configuration file from the repository root:
+Manual tests use the `agent_runtime/` workspace. Create the local configuration file from this workspace root:
 
 ```powershell
-Copy-Item src\query_cli\config\.env.example src\query_cli\config\.env
+Copy-Item _internal\config\.env.example _internal\config\.env
 ```
 
 Example `config/.env`:
@@ -51,13 +53,13 @@ Example `config/.env`:
 KBSEARCH_SECURE_BACKEND_BASE_URL=http://127.0.0.1:8000
 KBSEARCH_SECURE_BACKEND_API_KEY=
 GOOGLE_OAUTH_CLIENT_CONFIG=config/oauth_client.json
-KBSEARCH_QUERY_LOGS_ROOT=logs
-KBSEARCH_TASKS_ROOT=tasks
 KBSEARCH_VIEWER_PORT=8501
 KBSEARCH_QUERY_LOG_RETENTION_DAYS=14
 KBSEARCH_LOG_LEVEL=INFO
 KBSEARCH_CJK_FONT_PATH=C:\Windows\Fonts\msjh.ttc
 ```
+
+Settings reside in the workspace's `_internal/config/.env`. All task data is stored under `tasks/` in the workspace root.
 
 `KBSEARCH_SECURE_BACKEND_API_KEY` must match `SECURE_BACKEND_API_KEY` in `secure_backend`.
 
@@ -65,12 +67,18 @@ KBSEARCH_CJK_FONT_PATH=C:\Windows\Fonts\msjh.ttc
 
 ## Manual Testing
 
+Using the prepared `agent_runtime/_internal/.venv`, switch from the repository root to the execution directory:
+
+```powershell
+cd agent_runtime/_internal
+```
+
 ### Google Drive Login
 
 Run this before first use or when the CLI explicitly reports an `authentication` error:
 
 ```powershell
-kbsearch login
+.\.venv\Scripts\kbsearch.exe login
 ```
 
 The command opens a browser for the current user to authorize Google OAuth. On success, it writes JSON to stdout and stores the token in Windows Credential Manager. The token is removed only when Google explicitly reports that it is invalid or revoked. When Agent runs this command, it must use approval to execute outside the sandbox and ask the user to complete authorization in a browser on the same machine.
@@ -81,45 +89,46 @@ Windows Credential Manager does not isolate credentials exclusively to the CLI. 
 
 Before similarity search, verify that `secure_backend` is running locally and reachable.
 
-For manual tests, first create a task directory under the root tasks directory and place any query images in that task directory:
+Create a task directory with a name of your choice under the workspace root's `tasks/`. Place any query images directly in that task directory:
 
 ```text
-tasks/<task-name>/
-tasks/<task-name>/<image-file>
+agent_runtime/tasks/<task-name>/<image-file>
 ```
 
-Search results use this path:
-
-```text
-tasks/<task-name>/query_results/<query-name>
-```
-
-Run the following command from `src/query_cli/`:
+Run the following command:
 
 ```powershell
-kbsearch query `
-  --output-dir "C:\path\to\tasks\20260613-130000-manual-test\query_results\20260613-131500-initial-query" `
+.\.venv\Scripts\kbsearch.exe query `
+  --task-name "20260613-130000-manual-test" `
+  --query-name "20260613-131500-initial-query" `
   --vector-query "附圖為產品外觀，請找出操作手冊中與此零件安裝相關的說明" `
   --drive-query "(fullText contains '推車' or name contains '推車') and trashed = false" `
-  --image "C:\path\to\tasks\20260613-130000-manual-test\photo.png" `
+  --image "photo.png" `
   --limit 10 `
   --min-score 0.5
 ```
 
 Options:
 
-- `--output-dir`: Directory for this search's results. It must be the `<query-name>` directory in `tasks/<task-name>/query_results/<query-name>/` and must not exist before execution.
+- `--task-name`: Required task directory name. Reuse it for searches within the same task.
+- `--query-name`: Required directory name for this search. Both names must be valid single directory names; the search directory must not exist before execution.
 - `--vector-query`: Semantic query text. Send it to `secure_backend` alone or together with `--image` for similarity search.
 - `--drive-query`: Google Drive API `q` syntax, sent unchanged for keyword search on file names, full text, or metadata. Search scope follows the current user's Drive permissions and is not limited to importer source directories. Omitting it disables keyword search.
-- `--image`: Local image path, such as PNG or JPEG; may be specified repeatedly. Send images to `secure_backend` alone or with `--vector-query` for similarity search.
+- `--image`: Image filename directly within the task directory, such as PNG or JPEG; may be specified repeatedly. Only single filenames are accepted. Send images to `secure_backend` alone or with `--vector-query` for similarity search.
 - `--limit`: Result count limit for each of similarity search and keyword search; defaults to `10`.
 - `--min-score`: Minimum similarity score; omitting it disables filtering of low-score results.
 
 Similarity search covers only documents synchronized by importer. It is skipped when both `--vector-query` and `--image` are omitted. At least one of `--vector-query`, `--drive-query`, and `--image` is required; the command fails if all are omitted.
 
-`--output-dir` and `--image` accept absolute or relative paths. Relative paths are resolved against the current working directory when the command runs.
+Before searching, the CLI checks the Google Drive token in Windows Credential Manager, `secure_backend /healthz` when `--vector-query` or `--image` is supplied, `soffice` in the system `PATH`, and the CJK font. A missing or explicitly invalid token ends the command with an `authentication` error and prompts `kbsearch login`.
 
-The CLI first validates query arguments and verifies that `output_dir` does not exist. It then loads configuration, creates a dedicated log, and performs startup checks. These checks cover the Google Drive token in Windows Credential Manager, `secure_backend /healthz` when `--vector-query` or `--image` is supplied, `soffice` in the system `PATH`, and the CJK font. Once all checks pass, the CLI creates `output_dir` without overwriting an existing directory and begins the search. If another process creates that path during the checks, the command stops. A missing or explicitly invalid token ends the command with an `authentication` error and prompts `kbsearch login`. If a query fails after creating its directory, the directory and partial artifacts are retained; the same path must not be reused.
+Search results are stored at:
+
+```text
+agent_runtime/tasks/<task-name>/query_results/<query-name>
+```
+
+After the checks pass, the CLI creates missing parent directories and the directory for this search. If the query fails, existing directories and partial artifacts are retained; retries require a new query name.
 
 See the [design specification](../../docs/design_spec/en/01-high-level-design.md) for details of search-result downloads and conversion.
 
@@ -130,7 +139,7 @@ Command-level failures return exit code `1`. The final stderr event identifies `
 After configuration and the dedicated log have been initialized, stderr emits a parseable query-start event:
 
 ```json
-{"event":"query_started","status":"started","run_id":"a1b2c3d4","output_dir":"C:/path/to/tasks/20260613-130000-manual-test/query_results/20260613-131500-initial-query","log_path":"C:/path/to/logs/kbsearch-20260622-083245-123456-a1b2c3d4.log","monitor":"log","stdout":"final_json_on_success"}
+{"event":"query_started","status":"started","run_id":"a1b2c3d4","output_dir":"C:/path/to/tasks/20260613-130000-manual-test/query_results/20260613-131500-initial-query","log_path":"C:/path/to/_internal/logs/kbsearch-20260622-083245-123456-a1b2c3d4.log","monitor":"log","stdout":"final_json_on_success"}
 ```
 
 `monitor=log` means that progress during long-running operations should be monitored through `log_path`. `stdout=final_json_on_success` means stdout provides no startup summary while the process runs; it emits the following final JSON only on successful or partially successful completion:
@@ -139,7 +148,7 @@ After configuration and the dedicated log have been initialized, stderr emits a 
 {
   "status": "finished_with_errors",
   "run_id": "a1b2c3d4",
-  "log_path": "C:/path/to/logs/kbsearch-20260622-083245-123456-a1b2c3d4.log",
+  "log_path": "C:/path/to/_internal/logs/kbsearch-20260622-083245-123456-a1b2c3d4.log",
   "output_dir": "C:/path/to/tasks/20260613-130000-manual-test/query_results/20260613-131500-initial-query",
   "full_text_count": 1,
   "vector_count": 4,
@@ -206,7 +215,7 @@ Each failure includes `google_file_id`, file name, stage, error type, message, a
 
 `warnings` records conditions that do not count as failures but affect reading completeness; the full list is also written to `warnings.json`. For example, `vector_pages_unrendered` indicates matched vector page numbers without corresponding `pages/*.png`. A common cause is a Drive file with the same `file_id` changing to a MIME type unsupported for document processing after synchronization. The download still counts as successful, but Agent should read the original file or use other tools and, when necessary, explain that the matched vector pages cannot be read directly.
 
-After configuration loads successfully, each query creates a separate log under `KBSEARCH_QUERY_LOGS_ROOT` named `kbsearch-<datetime>-<run_id>.log`. Timestamps use UTC and the level is controlled by `KBSEARCH_LOG_LEVEL`.
+After configuration loads successfully, each query creates a separate log under `_internal/logs/` named `kbsearch-<datetime>-<run_id>.log`. Timestamps use UTC and the level is controlled by `KBSEARCH_LOG_LEVEL`.
 
 `KBSEARCH_QUERY_LOG_RETENTION_DAYS` controls per-run log retention, defaulting to `14` days. Older `kbsearch-*.log` files are deleted at query startup; `0` disables automatic cleanup. Cleanup failures are logged and stop the query.
 
@@ -295,10 +304,10 @@ If the query has no `fullText contains`, no per-page text matches, or the file c
 
 ### Open the Search-Results Viewer
 
-After a query completes, start the results viewer. It reads task directories from `KBSEARCH_TASKS_ROOT` and uses the port specified by `KBSEARCH_VIEWER_PORT`:
+After a query completes, start the results viewer using the port specified by `KBSEARCH_VIEWER_PORT`:
 
 ```powershell
-kbsearch view-results
+.\.venv\Scripts\kbsearch.exe view-results
 ```
 
 The command reports `viewer_url` and an example URL that preselects a task and query. If a KBSearch viewer already occupies the port, it is stopped and restarted. If another service occupies it, the command stops and prompts a change to `KBSEARCH_VIEWER_PORT`.
@@ -315,20 +324,23 @@ The command reports `viewer_url` and an example URL that preselects a task and q
 
 ### Render Specified PDF Pages
 
-Specify the PDF path and page numbers to render additional pages to PNG:
+Specify a document from the search results and page numbers to render additional pages to PNG:
 
 ```powershell
-kbsearch render-pdf-pages `
-  --pdf "C:\path\to\<safe_file_name_prefix>-<google_file_id_prefix>\pdf\document.pdf" `
-  --pages "3,5,8-10" `
-  --output-dir "C:\path\to\<safe_file_name_prefix>-<google_file_id_prefix>\pages"
+.\.venv\Scripts\kbsearch.exe render-pdf-pages `
+  --task-name "<task-name>" `
+  --query-name "<query-name>" `
+  --document-name "<safe_file_name_prefix>-<google_file_id_prefix>" `
+  --pages "3,5,8-10"
 ```
 
-- `--pdf`: Path to the document's `pdf/document.pdf`.
-- `--output-dir`: Full output directory path. Under the current design, use `pages/` within the same document directory. It is created when missing and reused when present.
+- `--task-name` and `--query-name`: Names of the task and query directories containing the document.
+- `--document-name`: Document directory name. For example, if `directory` in `downloaded_files.json` is `…/query_results/search-01/Alpha.pdf-abcde`, use `Alpha.pdf-abcde`.
 - `--pages`: One-based page numbers, supporting comma-separated lists and ranges.
 
-`--pdf` and `--output-dir` accept absolute or relative paths, resolved against the current working directory.
+The directory arguments above accept names, not paths.
+
+The command reads `tasks/<task-name>/query_results/<query-name>/<document-name>/pdf/document.pdf` and writes to the same document's `pages/`, creating that directory when needed.
 
 Existing PNGs for the specified pages are overwritten; other pages remain unaffected. Success writes JSON with page numbers and PNG paths to stdout.
 

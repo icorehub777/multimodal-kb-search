@@ -12,13 +12,15 @@
 
 ## 開發測試環境準備
 
-依[根 README](../../README.md#本機開發測試環境準備)準備共用 conda 環境，再於 repo 根目錄啟用環境並安裝 `query_cli` package 與開發工具：
+離線單元測試與開發工具使用[根 README](../../README.md#本機開發測試環境準備)指定的共用 conda 環境。在 repo 根目錄啟用環境並安裝 CLI package 與 wheel 建置工具：
 
 ```powershell
 conda activate kbsearch
 cd src/query_cli
-python -m pip install -e ".[dev]"  # 調整程式後會即時更新
+python -m pip install -e ".[dev]"
 ```
+
+手動測試使用 `agent_runtime/_internal/.venv`，以 editable install 載入本子專案；環境準備見 [Agent Runtime](../../agent_runtime/README.md#4-建立-venv-並安裝-cli)。
 
 ### 安裝文件處理工具
 
@@ -38,10 +40,10 @@ Test-Path "C:\Windows\Fonts\msjh.ttc"
 
 ### 建立本機設定
 
-在 repo 根目錄建立本機設定檔：
+手動測試使用 `agent_runtime/` 工作區。在此工作區根目錄建立本機設定檔：
 
 ```powershell
-Copy-Item src\query_cli\config\.env.example src\query_cli\config\.env
+Copy-Item _internal\config\.env.example _internal\config\.env
 ```
 
 `config/.env` 範例：
@@ -50,13 +52,13 @@ Copy-Item src\query_cli\config\.env.example src\query_cli\config\.env
 KBSEARCH_SECURE_BACKEND_BASE_URL=http://127.0.0.1:8000
 KBSEARCH_SECURE_BACKEND_API_KEY=
 GOOGLE_OAUTH_CLIENT_CONFIG=config/oauth_client.json
-KBSEARCH_QUERY_LOGS_ROOT=logs
-KBSEARCH_TASKS_ROOT=tasks
 KBSEARCH_VIEWER_PORT=8501
 KBSEARCH_QUERY_LOG_RETENTION_DAYS=14
 KBSEARCH_LOG_LEVEL=INFO
 KBSEARCH_CJK_FONT_PATH=C:\Windows\Fonts\msjh.ttc
 ```
+
+設定檔位於工作區的 `_internal/config/.env`；任務資料統一放在工作區根目錄下的 `tasks/`。
 
 `KBSEARCH_SECURE_BACKEND_API_KEY` 須與 `secure_backend` 的 `SECURE_BACKEND_API_KEY` 使用相同值。
 
@@ -64,12 +66,18 @@ KBSEARCH_CJK_FONT_PATH=C:\Windows\Fonts\msjh.ttc
 
 ## 手動測試
 
+使用已準備好的 `agent_runtime/_internal/.venv`，先從 repo 根目錄切換至執行目錄：
+
+```powershell
+cd agent_runtime/_internal
+```
+
 ### Google Drive 登入
 
 首次使用或 CLI 明確回報 `authentication` 錯誤時執行：
 
 ```powershell
-kbsearch login
+.\.venv\Scripts\kbsearch.exe login
 ```
 
 指令會開啟瀏覽器供目前使用者完成 Google OAuth 授權。成功後 stdout 輸出 JSON，並由 CLI 將 token 寫入 Windows Credential Manager。Token 只有在 Google 明確回報失效或撤銷時才會移除。若由 Agent 執行，必須以 sandbox 外部同意方式啟動，並請使用者在同一台機器的瀏覽器完成授權。
@@ -80,46 +88,50 @@ Windows Credential Manager 並非 CLI 專屬的存取隔離；同一 Windows 使
 
 若要做相似度搜尋，執行前請確認 `secure_backend` 已在本機啟動並可連線。
 
-手動測試時，需在根目錄的 tasks 資料夾下先建立任務資料夾，且若有搜尋用圖片，亦須將其放在任務資料夾中：
+在根目錄的 tasks 資料夾下先建立任意名稱的任務資料夾，且若有搜尋用圖片，亦須將其放在此任務資料夾根目錄中：
 
 ```text
-tasks/<task-name>/
-tasks/<task-name>/<image-file>
+agent_runtime/tasks/<task-name>/<image-file>
 ```
 
-搜尋結果資料夾使用以下路徑：
 
-```text
-tasks/<task-name>/query_results/<query-name>
-```
 
-接下來請在 `src/query_cli/` 目錄下，執行以下指令：
+執行以下指令：
 
 ```powershell
-kbsearch query `
-  --output-dir "C:\path\to\tasks\20260613-130000-manual-test\query_results\20260613-131500-initial-query" `
+.\.venv\Scripts\kbsearch.exe query `
+  --task-name "20260613-130000-manual-test" `
+  --query-name "20260613-131500-initial-query" `
   --vector-query "附圖為產品外觀，請找出操作手冊中與此零件安裝相關的說明" `
   --drive-query "(fullText contains '推車' or name contains '推車') and trashed = false" `
-  --image "C:\path\to\tasks\20260613-130000-manual-test\photo.png" `
+  --image "photo.png" `
   --limit 10 `
   --min-score 0.5
 ```
 
 參數說明：
 
-- `--output-dir`：本次搜尋結果的輸出資料夾路徑，必須使用 `tasks/<task-name>/query_results/<query-name>/` 結構中的 `<query-name>` 目錄，且執行前該目錄不得存在。
+- `--task-name`：任務資料夾名稱，必填；同一任務的多次搜尋使用相同名稱。
+- `--query-name`：本次搜尋資料夾名稱，必填。兩個名稱均須為合法的單一資料夾名稱；搜尋資料夾執行前不得存在。
 - `--vector-query`：語意查詢文字；可與 `--image` 一起或單獨送給 `secure_backend` 做相似度搜尋。
 - `--drive-query`：Google Drive API `q` 語法，原樣送出，用於檔名、全文或 metadata 的關鍵字搜尋。搜尋範圍依目前使用者的 Drive 權限決定，不受 importer 同步來源資料夾限制。省略時不執行關鍵字搜尋。
-- `--image`：本機圖片路徑（PNG/JPEG 等），可重複指定；可與 `--vector-query` 一起或單獨送給 `secure_backend` 做相似度搜尋。
+- `--image`：任務資料夾根目錄內的圖片檔名（PNG/JPEG 等），可重複指定；僅接受單一檔名。可與 `--vector-query` 一起或單獨送給 `secure_backend` 做相似度搜尋。
 - `--limit`：相似度與關鍵字搜尋各別的結果筆數上限，預設 `10`。
 - `--min-score`：相似度搜尋時的相似度分數下限；省略則不過濾低分結果。
 
 相似度搜尋僅涵蓋 importer 已同步的文件；`--vector-query` 與 `--image` 皆省略時不執行相似度搜尋。`--vector-query`、`--drive-query`、`--image` 至少要提供其中一個，三者皆未提供時指令會顯示失敗。
-`--output-dir` 與 `--image` 均可使用絕對或相對路徑；相對路徑以執行指令時的目前工作目錄解析。
 
-CLI 先驗證查詢參數與 `output_dir` 尚不存在；驗證通過後載入設定、建立本次專屬 log 並執行 startup 檢查。
-Startup 檢查包含 Windows Credential Manager 中的 Google Drive token、`secure_backend /healthz`（只在有 `--vector-query` 或 `--image` 時呼叫）、系統 `PATH` 中的 `soffice` 與 CJK 字型。全部檢查通過後，以不覆蓋既有目錄的方式建立 `output_dir` 並開始搜尋；
-若檢查期間該路徑被其他程序建立，指令會停止。Token 不存在或明確失效時，指令以 `authentication` 錯誤結束並提示執行 `kbsearch login`。查詢途中失敗時，已建立的目錄與部分產物會保留，不得重用相同路徑。
+搜尋前會檢查 Windows Credential Manager 中的 Google Drive token、`secure_backend /healthz`（只在有 `--vector-query` 或 `--image` 時呼叫）、系統 `PATH` 中的 `soffice` 與 CJK 字型，與搜尋結果資料夾路徑唯一性。
+
+其中，若 Google Drive token 不存在或明確失效時，指令會以 `authentication` 錯誤結束並提示執行 `kbsearch login`。
+
+搜尋結果會放在以下路徑：
+
+```text
+agent_runtime/tasks/<task-name>/query_results/<query-name>
+```
+
+檢查通過後，CLI 會自動建立缺少的上層目錄與本次搜尋資料夾。查詢途中失敗時，已建立的目錄與部分產物會保留；重試時須使用新的搜尋名稱。
 
 下載與轉換搜尋結果檔案的詳細動作，請參考設計文件。
 
@@ -132,7 +144,7 @@ Startup 檢查包含 Windows Credential Manager 中的 Google Drive token、`sec
 設定與本次專屬 log 初始化完成後，stderr 會先輸出一行可解析的 query 啟動事件：
 
 ```json
-{"event":"query_started","status":"started","run_id":"a1b2c3d4","output_dir":"C:/path/to/tasks/20260613-130000-manual-test/query_results/20260613-131500-initial-query","log_path":"C:/path/to/logs/kbsearch-20260622-083245-123456-a1b2c3d4.log","monitor":"log","stdout":"final_json_on_success"}
+{"event":"query_started","status":"started","run_id":"a1b2c3d4","output_dir":"C:/path/to/tasks/20260613-130000-manual-test/query_results/20260613-131500-initial-query","log_path":"C:/path/to/_internal/logs/kbsearch-20260622-083245-123456-a1b2c3d4.log","monitor":"log","stdout":"final_json_on_success"}
 ```
 
 `monitor=log` 表示長時間執行時應依 `log_path` 即時監控進度；`stdout=final_json_on_success` 表示 stdout 在程序執行期間不提供啟動摘要，僅在成功或部分成功完成時輸出下列最終 JSON。
@@ -141,7 +153,7 @@ Startup 檢查包含 Windows Credential Manager 中的 Google Drive token、`sec
 {
   "status": "finished_with_errors",
   "run_id": "a1b2c3d4",
-  "log_path": "C:/path/to/logs/kbsearch-20260622-083245-123456-a1b2c3d4.log",
+  "log_path": "C:/path/to/_internal/logs/kbsearch-20260622-083245-123456-a1b2c3d4.log",
   "output_dir": "C:/path/to/tasks/20260613-130000-manual-test/query_results/20260613-131500-initial-query",
   "full_text_count": 1,
   "vector_count": 4,
@@ -208,7 +220,7 @@ Query progress: phase=query status=failed run_id=a1b2c3d4 ...
 
 `warnings` 記錄非失敗但會影響閱讀完整性的狀況，完整清單同時寫入 `warnings.json`。例如 `vector_pages_unrendered` 表示向量搜尋命中頁碼存在，但該檔案沒有產生對應的 `pages/*.png`；常見原因是 Drive 上同一個 `file_id` 的檔案在同步後變成不支援文件處理的 MIME type。此時檔案仍算下載成功，但 Agent 應改以原始下載檔或其他工具能力判讀，並在必要時向使用者說明該向量命中頁面無法直接閱讀。
 
-設定成功載入後，每次查詢會在 `KBSEARCH_QUERY_LOGS_ROOT` 建立獨立 log，檔名格式為 `kbsearch-<日期時間>-<run_id>.log`。時間使用 UTC，level 由 `KBSEARCH_LOG_LEVEL` 控制。
+設定成功載入後，每次查詢會在 `_internal/logs/` 建立獨立 log，檔名格式為 `kbsearch-<日期時間>-<run_id>.log`。時間使用 UTC，level 由 `KBSEARCH_LOG_LEVEL` 控制。
 
 `KBSEARCH_QUERY_LOG_RETENTION_DAYS` 控制 per-run log 保留天數，預設 `14`。每次 query 啟動時會刪除較舊的 `kbsearch-*.log`；設為 `0` 可停用自動清理。清理失敗時該次 query 會記錄錯誤並停止。
 
@@ -297,10 +309,10 @@ Query progress: phase=query status=failed run_id=a1b2c3d4 ...
 
 ### 開啟搜尋結果檢視網頁
 
-查詢完成後，可啟動搜尋結果檢視頁。檢視頁會從 `KBSEARCH_TASKS_ROOT` 讀取任務資料夾，並使用 `KBSEARCH_VIEWER_PORT` 指定的 port：
+查詢完成後，可啟動搜尋結果檢視頁，使用 `KBSEARCH_VIEWER_PORT` 指定的 port：
 
 ```powershell
-kbsearch view-results
+.\.venv\Scripts\kbsearch.exe view-results
 ```
 
 指令啟動後會輸出可開啟的 `viewer_url`，以及可預設載入指定任務與搜尋結果的網址範例。若同一個 port 上已有 KBSearch 檢視頁，會先關閉後重啟；若該 port 被其他服務占用，指令會停止並提示調整 `KBSEARCH_VIEWER_PORT`。
@@ -317,20 +329,23 @@ kbsearch view-results
 
 ### 指定 PDF 頁面轉圖
 
-指定 PDF 路徑與頁碼，將額外需要閱讀的頁面轉為 PNG：
+指定搜尋結果中的文件與頁碼，將額外需要閱讀的頁面轉為 PNG：
 
 ```powershell
-kbsearch render-pdf-pages `
-  --pdf "C:\path\to\<safe_file_name_prefix>-<google_file_id_prefix>\pdf\document.pdf" `
-  --pages "3,5,8-10" `
-  --output-dir "C:\path\to\<safe_file_name_prefix>-<google_file_id_prefix>\pages"
+.\.venv\Scripts\kbsearch.exe render-pdf-pages `
+  --task-name "<task-name>" `
+  --query-name "<query-name>" `
+  --document-name "<safe_file_name_prefix>-<google_file_id_prefix>" `
+  --pages "3,5,8-10"
 ```
 
-- `--pdf`：要處理的 `pdf/document.pdf` 路徑。
-- `--output-dir`：完整輸出資料夾位置路徑。以目前設計，需指定到同一文件子資料夾內的 `pages/`；目錄不存在時會建立，已存在時直接使用。
+- `--task-name`、`--query-name`：文件所屬的任務與搜尋資料夾名稱。
+- `--document-name`：文件子資料夾名稱。例如 `downloaded_files.json` 的 `directory` 為 `…/query_results/search-01/Alpha.pdf-abcde`，就填 `Alpha.pdf-abcde`。
 - `--pages`：頁碼從 `1` 開始，支援逗號清單與區間。
 
-`--pdf` 與 `--output-dir` 均可使用絕對或相對路徑；相對路徑以執行指令時的目前工作目錄解析。
+以上資料夾參數只填名稱，不填路徑。
+
+指令讀取 `tasks/<task-name>/query_results/<query-name>/<document-name>/pdf/document.pdf`，輸出至同一文件的 `pages/`；輸出目錄不存在時會建立。
 
 指定頁面的同名 PNG 會直接覆蓋，其他既有頁面不受影響。成功時 stdout 會輸出包含頁碼與 PNG 路徑的 JSON。
 
