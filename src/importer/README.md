@@ -14,61 +14,23 @@
 
 ## 目錄與設定
 
-### 開發用 repo 目錄
-
-```text
-importer/
-  main.py                           # 入口：python main.py
-  app/                              # 應用程式模組
-  config/
-    .env                            # 設定與 secret（不納版控）
-    .env.example                    # .env 範本
-    gcp-adc.json                    # Service Account JSON（不納版控）
-    google_drive_sources.example.yaml  # 掃描來源範本
-    google_drive_sources.yaml       # 掃描來源（不納版控）
-  docker/
-    Dockerfile                      # image 建置定義
-    docker-compose.yml              # 本機 build 與執行 compose
-  logs/                             # 執行 log（不納版控）
-  work/                             # 同步時暫存檔儲存位置（不納版控）
-  tests/                            # 單元測試
-  requirements.txt                  # Python 相依套件
-```
-
-### 正式部署目錄
-
-importer 從 repo 複製 `docker/docker-compose.yml` 到服務根目錄，並建立 `config/`、`logs/`、`work/`：
-
-```text
-importer/
-  docker-compose.yml
-  config/
-    .env
-    gcp-adc.json
-    google_drive_sources.yaml
-  logs/
-  work/
-```
+程式與單元測試位於 `src/importer/`，image 建置檔位於根目錄 `docker/`。本機執行使用 `deploy/importer/`，目錄配置見 [部署說明](../../deploy/README.md#目錄與準備)。
 
 ### `.env`
 
-自 `config/.env.example` 複製為 `config/.env`。一般檔案路徑相對 `importer/` 根目錄；`KBSEARCH_CJK_FONT_PATH` 必須使用絕對路徑。
+自 `config/.env.example` 複製為 `config/.env`，填寫以下設定。
 
 | 變數 | 說明 |
 |------|------|
-| `GOOGLE_APPLICATION_CREDENTIALS` | Service Account JSON 路徑 |
-| `GOOGLE_DRIVE_SOURCE_CONFIG` | 掃描來源 YAML 路徑；檔內 `sources` 可列多筆且名稱與來源識別不得重複（見 `google_drive_sources.example.yaml`） |
 | `GOOGLE_DWD_SUBJECT_EMAIL` | Domain-Wide Delegation 模擬使用者 |
 | `DASHSCOPE_API_KEY` | DashScope API key |
 | `DASHSCOPE_EMBEDDING_MODEL` | Embedding 模型 |
-| `DASHSCOPE_VECTOR_SIZE` | 正整數向量維度（須與 `QDRANT_VECTOR_SIZE` 相同） |
+| `KBSEARCH_VECTOR_SIZE` | Embedding 與 Qdrant 共用的正整數向量維度；須與 backend 相同 |
 | `DASHSCOPE_IMAGE_MAX_BYTES` | 送入 Qwen embedding API 的圖片上限；範圍 1–10,485,760 bytes，預設 9,728,000。真實 DashScope API 實測此限制以 base64 解碼後的圖片 bytes 計，不以 base64 字串或整個 request payload 計 |
 | `DASHSCOPE_JPEG_QUALITY` | 圖片超過上限時轉 JPEG 的起始品質；範圍 1–100，預設 95，以保留 embedding 所需細節 |
-| `QDRANT_URL` | 本機測試時用 `http://127.0.0.1:6333`；docker 部署時用 `http://qdrant:6333` |
+| `QDRANT_URL` | Container 內使用 `http://qdrant:6333` |
 | `QDRANT_API_KEY` | 選填；地端預設不啟用 API key，雲端託管時再填 |
 | `QDRANT_COLLECTION` | Collection 名稱 |
-| `QDRANT_VECTOR_SIZE` | Collection 正整數向量維度 |
-| `KBSEARCH_CJK_FONT_PATH` | CJK 字型絕對路徑 |
 | `IMPORTER_PDF_RENDER_TARGET_DPI` | PDF 一般頁面的目標渲染解析度；範圍 72–600，預設 200；極大頁面為符合像素上限會降低實際 DPI |
 | `IMPORTER_PDF_RENDER_MAX_PIXELS` | PDF 單頁渲染像素上限；範圍 1–89,000,000，預設 80,000,000，避免巨型 PNG 觸發 Pillow 安全限制或大量記憶體用量 |
 | `IMPORTER_KEEP_SUCCESS_WORK_FILES` | 檔案匯入成功後是否保留 `work/` 暫存，預設 `false` |
@@ -77,7 +39,9 @@ importer/
 | `IMPORTER_LOG_LEVEL` | Log level，可設為 `DEBUG`、`INFO`、`WARNING` 或 `ERROR`，預設 `INFO` |
 
 
-Google 存取使用 Service Account JSON + Domain-Wide Delegation，管理端設定見 [Google 設定指引](../docs/google-setup.md)。
+Google 存取使用 `config/gcp-adc.json` 的 Service Account JSON + Domain-Wide Delegation，管理端設定見 [Google 設定指引](../../docs/google-setup.md)。
+
+`config/google_drive_sources.yaml` 的 `sources` 可列多筆來源，名稱與來源識別不得重複（見範例）；`GOOGLE_DWD_SUBJECT_EMAIL` 須有來源存取權限。
 
 ### Qwen 圖片前處理
 
@@ -85,153 +49,46 @@ PDF 頁面通常依 `IMPORTER_PDF_RENDER_TARGET_DPI` 轉成 PNG；只有預估�
 
 執行 log：每次執行寫入 `logs/importer-YYYYMMDD-HHMMSS-ffffff-pPID.log`，並同時輸出 stdout；時間使用 UTC，level 由 `IMPORTER_LOG_LEVEL` 控制。Importer 依 `IMPORTER_LOG_RETENTION_DAYS` 清理舊 log（預設 14 天），清理失敗時會記錄錯誤並中止匯入。
 
-## 開發測試環境準備
+## 開發與測試
 
-### 建立基本環境
-
-本機開發使用 repo 共用的 conda 環境名稱 `kbsearch`。先檢查環境是否存在：
-
-```powershell
-conda env list | Select-String kbsearch
-```
-
-若沒有 `kbsearch`，先建立環境：
-
-```powershell
-conda create -n kbsearch python=3.12 pip setuptools wheel
-```
-
-進入環境並安裝依賴（在 `importer/` 目錄下執行）：
+離線單元測試使用[根 README](../../README.md#本機開發測試環境準備)的 conda 環境。在 repo 根目錄執行：
 
 ```powershell
 conda activate kbsearch
-cd importer
-python -m pip install -r requirements.txt
-```
-
-### 安裝文件處理工具
-
-安裝 LibreOffice，並將其 `program` 目錄加入 Windows 系統 `PATH`。importer 固定以 `soffice` 指令執行 LibreOffice。
-
-```powershell
-Test-Path "C:\Program Files\LibreOffice\program\soffice.exe"
-Get-Command soffice
-soffice --version
-```
-
-另需準備一個 CJK 字型檔供 TXT／MD 轉 PDF，並將其絕對路徑設定於 `KBSEARCH_CJK_FONT_PATH`。
-
-```powershell
-Test-Path "C:\Windows\Fonts\msjh.ttc"
-```
-
-### 建立本機設定
-
-建立本機設定檔：
-
-```powershell
-cd importer
-Copy-Item config\.env.example config\.env
-Copy-Item config\google_drive_sources.example.yaml config\google_drive_sources.yaml
-```
-
-### 其他前置環境準備
-
-- 確認 `google_drive_sources.yaml` 中設定的 Google Drive 同步來源正確。
-- 確認 `.env` 中的字型存在，若不存在請設定其他本機存在的字型檔，如 `mingliu.ttc`（細明體) 或 `kaiu.ttf`（標楷體）。
-- 確認已跟 GCP 管理員拿到 Service Account JSON 認證檔，放到 `config/` 後，確定與 `.env` 中設定一致。
-- 確定 `GOOGLE_DWD_SUBJECT_EMAIL` 中設定的 Google Workspace 使用者有所有要同步的 Google Drive 來源的存取權限。
-- 須先啟動 Qdrant，並確認 `.env` 中的 `QDRANT_URL` 設定為 `http://127.0.0.1:6333`。
-- 確認 `.env` 中的 `dashscope` 設定正確。
-
-編輯 `config/.env`、`config/google_drive_sources.yaml`，並放入 `config/gcp-adc.json`。
-
-### 執行同步
-```powershell
-cd importer
-python main.py
-```
-
-### 執行測試
-```powershell
+python -m pip install -e ./src/importer
+cd src/importer
 python -m unittest discover -s tests
 ```
 
+### 建置 image
+
+需安裝 Docker 並啟動引擎。第一次執行，或 pyproject.toml／Dockerfile 變更時，在 repo 根目錄建置：
+
+```powershell
+./docker/docker_build_importer.ps1
+```
+
+Image 名稱為 `kbsearch-importer`，以 Python 3.12／Debian 12（Bookworm）建置，內含無介面版 LibreOffice；TXT／Markdown 轉 PDF 使用內建的文泉驛正黑字型。Debian 套件預設從官方來源下載；若下載較慢，可指定鏡像，例如 `./docker/docker_build_importer.ps1 -DebianMirror http://ftp.tw.debian.org/debian`。
+
+### 準備設定與執行
+
+在 repo 根目錄建立開發設定：
+
+```powershell
+Copy-Item deploy/importer/config/.env.example deploy/importer/config/.env
+Copy-Item deploy/importer/config/google_drive_sources.example.yaml deploy/importer/config/google_drive_sources.yaml
+```
+
+依上節填寫測試環境設定並準備憑證。先依 [部署說明](../../deploy/README.md#啟動與停止)啟動 Qdrant，再執行：
+
+```powershell
+./deploy/importer/docker_run.ps1 -Dev
+```
+
+`-Dev` 會載入 `deploy/importer/docker-compose.dev.yml`，唯讀掛載 `src/importer/kbsearch_importer/`，執行 container 內的 `python -m kbsearch_importer`。程式修改後重新執行即可；
+
+設定、log 與暫存分別位於 `deploy/importer/config/`、`logs/`、`work/`。
+
 ## 正式環境部署
 
-需確認正式環境主機須已安裝 Docker 且 Docker 引擎在建立 image 與排程觸發時為運行中。
-
-以下步驟會先建置 image、完成環境準備並在手動測試 OK 後，再設定作業系統排程每次都從此 image 啟動一個 container，執行同步後結束（**跑完即停**的 batch job）。
-
-### 建置/匯出/匯入 image：
-
-```powershell
-cd importer/docker
-docker compose build
-```
-
-建置完成後本機 image 名稱為 `kbsearch-importer`。
-
-匯出 image（於建置機執行，產生 tar 檔供搬移至正式環境）：
-
-```powershell
-docker save -o kbsearch-importer.tar kbsearch-importer:latest
-```
-
-將 `kbsearch-importer.tar` 複製到正式機後匯入：
-
-```powershell
-docker load -i kbsearch-importer.tar
-```
-
-### 準備正式環境
-在正式環境依照以下資料夾結構建立 `importer/` 服務根目錄；子資料夾內僅保留下方列出的檔案：
-
-```text
-importer/
-  docker-compose.yml
-  config/
-    .env
-    gcp-adc.json
-    google_drive_sources.yaml
-  logs/
-  work/
-```
-
-參考 `開發測試環境準備` 中的設定檔複製/調整與其他建置環境準備的內容準備正式環境。
-其中：
-
-- `QDRANT_URL` 必須改成 `http://qdrant:6333`。
-- 測試環境使用 Windows 字型；正式環境為 Linux image，`KBSEARCH_CJK_FONT_PATH` 必須改為：
-
-```env
-KBSEARCH_CJK_FONT_PATH=/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc
-```
-
-
-### 手動測試
-在服務根目錄手動執行同步：
-
-```powershell
-cd C:\path\to\importer
-docker compose run --rm importer
-```
-
-`docker compose run --rm` 會啟動 container、執行 `python main.py`、結束後移除 container。執行紀錄寫入 `logs/importer-YYYYMMDD-HHMMSS-ffffff-pPID.log`。
-
-### 設定排程執行
-
-透過作業系統的排程服務，在服務根目錄執行 `docker compose run --rm importer`；且同一時間只可以跑一個同步。
-
-**Windows 工作排程器**
-
-1. 開啟「工作排程器」→「建立工作」（或「建立基本工作」）。
-2. **一般**：名稱例如 `KBSearch Importer`；勾選「不論使用者登入與否均執行」（無人值守主機）；執行中帳戶須能執行 Docker。
-3. **觸發程序**：依需求設定（例如每日一次）。
-4. **動作** →「啟動程式」：
-   - **程式或腳本**：`docker`（若找不到指令，改填完整路徑，例如 `C:\Program Files\Docker\Docker\resources\bin\docker.exe`）
-   - **新增引數**：`compose run --rm importer`
-   - **開始於**：服務根目錄的完整路徑（例如 `C:\deploy\kbsearch\importer`）；須含 `docker-compose.yml` 與 `config/`
-5. **設定**：若工作已在執行，選擇「不要啟動新執行個體」，避免單次同步超過觸發間隔時重疊執行。
-6. 主機須已安裝 Docker 且 Docker 引擎在排程觸發時為運行中（Windows 上通常為 Docker Desktop 或同等服務）。
-7. 排程的「動作」與上方「手動測試」相同；啟用排程前請先完成手動測試。儲存後可在工作排程器對該工作按「執行」，並檢查 `logs/` 下最新的 `importer-*.log`。
+Image 匯出與匯入、部署準備、執行及排程見 [部署說明](../../deploy/README.md)。
