@@ -2,6 +2,7 @@
 **
 !pyproject.toml
 !LICENSE
-!kbsearch_importer/
-!kbsearch_importer/**/
-!kbsearch_importer/**/*.py
+!src/
+!src/kbsearch_importer/
+!src/kbsearch_importer/**/
+!src/kbsearch_importer/**/*.py

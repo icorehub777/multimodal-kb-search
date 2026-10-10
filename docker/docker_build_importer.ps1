@@ -4,6 +4,6 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$buildContext = Join-Path $PSScriptRoot '../src/importer'
+$buildContext = Join-Path $PSScriptRoot '../importer'
 & docker build -f (Join-Path $PSScriptRoot 'Dockerfile.importer') -t kbsearch-importer --build-arg "DEBIAN_MIRROR=$($DebianMirror.TrimEnd('/'))" $buildContext
 exit $LASTEXITCODE

@@ -1,6 +1,6 @@
 # AGENTS.md
 
-本文件補充 `src/importer/` 的工程約束；共通規範以根目錄 `AGENTS.md` 為準。修改功能前先閱讀 [`README.md`](README.md) 中相關的同步、設定與執行契約。
+本文件補充 `importer/` 的工程約束；共通規範以根目錄 `AGENTS.md` 為準。修改功能前先閱讀 [`README.md`](README.md) 中相關的同步、設定與執行契約。
 
 ## 實作入口
 

@@ -2,11 +2,11 @@
 
 繁體中文 | [English](README.en.md)
 
-`src/secure_backend/` 是 KBSearch 的內部 FastAPI 服務。它封裝 DashScope embedding model 與 Qdrant vector store 操作，並以 API key 保護服務 API。
+`secure_backend/` 是 KBSearch 的內部 FastAPI 服務。它封裝 DashScope embedding model 與 Qdrant vector store 操作，並以 API key 保護服務 API。
 
 ## 目錄與設定
 
-程式位於 `src/secure_backend/`，測試位於 `tests/secure_backend/`，image 建置檔位於根目錄 `docker/`。本機執行使用 `deploy/secure_backend/`，目錄配置見 [部署說明](../../deploy/README.md#目錄與準備)。
+程式位於 `secure_backend/src/kbsearch_backend/`，測試位於 `tests/secure_backend/`，image 建置檔位於根目錄 `docker/`。本機執行使用 `deploy/secure_backend/`，目錄配置見 [部署說明](../deploy/README.md#目錄與準備)。
 
 `config/.env` 的設定如下：
 
@@ -30,11 +30,11 @@
 
 ## 開發與測試
 
-離線單元測試使用[根 README](../../README.md#本機開發測試環境準備)的 conda 環境。在 repo 根目錄執行：
+離線單元測試使用[根 README](../README.md#本機開發測試環境準備)的 conda 環境。在 repo 根目錄執行：
 
 ```powershell
 conda activate kbsearch
-python -m pip install -e "./src/secure_backend[dev]"
+python -m pip install -e "./secure_backend[dev]"
 python -m unittest discover -s tests/secure_backend -t .
 ```
 
@@ -56,7 +56,7 @@ Image 名稱為 `kbsearch-secure-backend`。
 Copy-Item deploy/secure_backend/config/.env.example deploy/secure_backend/config/.env
 ```
 
-填寫 API key、DashScope 與測試 collection 設定，先依 [部署說明](../../deploy/README.md#啟動與停止)啟動 Qdrant，再執行：
+填寫 API key、DashScope 與測試 collection 設定，先依 [部署說明](../deploy/README.md#啟動與停止)啟動 Qdrant，再執行：
 
 ```powershell
 ./deploy/secure_backend/docker_run.ps1 -Dev
@@ -64,13 +64,13 @@ Copy-Item deploy/secure_backend/config/.env.example deploy/secure_backend/config
 
 啟動後的 API 位址為 `http://localhost:8000`。
 
-`-Dev` 會載入 `deploy/secure_backend/docker-compose.dev.yml`，唯讀掛載 `src/secure_backend/kbsearch_backend/` 並啟用 reload，即可在開發期直接使用 Docker 執行，且程式修改後自動重啟，不需每次重新建置 image。
+`-Dev` 會載入 `deploy/secure_backend/docker-compose.dev.yml`，唯讀掛載 `secure_backend/src/kbsearch_backend/` 並啟用 reload，即可在開發期直接使用 Docker 執行，且程式修改後自動重啟，不需每次重新建置 image。
 
 服務啟動時會檢查設定、DashScope 與 Qdrant collection；失敗時退出並記錄錯誤。
 
 ## 正式環境部署
 
-Image 匯出與匯入、部署準備及服務啟停見 [部署說明](../../deploy/README.md)。
+Image 匯出與匯入、部署準備及服務啟停見 [部署說明](../deploy/README.md)。
 
 ## API Contract
 

@@ -14,7 +14,7 @@
 
 ## 目錄與設定
 
-程式位於 `src/importer/`，測試位於 `tests/importer/`，image 建置檔位於根目錄 `docker/`。本機執行使用 `deploy/importer/`，目錄配置見 [部署說明](../../deploy/README.md#目錄與準備)。
+程式位於 `importer/src/kbsearch_importer/`，測試位於 `tests/importer/`，image 建置檔位於根目錄 `docker/`。本機執行使用 `deploy/importer/`，目錄配置見 [部署說明](../deploy/README.md#目錄與準備)。
 
 ### `.env`
 
@@ -39,7 +39,7 @@
 | `IMPORTER_LOG_LEVEL` | Log level，可設為 `DEBUG`、`INFO`、`WARNING` 或 `ERROR`，預設 `INFO` |
 
 
-Google 存取使用 `config/gcp-adc.json` 的 Service Account JSON + Domain-Wide Delegation，管理端設定見 [Google 設定指引](../../docs/google-setup.md)。
+Google 存取使用 `config/gcp-adc.json` 的 Service Account JSON + Domain-Wide Delegation，管理端設定見 [Google 設定指引](../docs/google-setup.md)。
 
 `config/google_drive_sources.yaml` 的 `sources` 可列多筆來源，名稱與來源識別不得重複（見範例）；`GOOGLE_DWD_SUBJECT_EMAIL` 須有來源存取權限。
 
@@ -51,11 +51,11 @@ PDF 頁面通常依 `IMPORTER_PDF_RENDER_TARGET_DPI` 轉成 PNG；只有預估�
 
 ## 開發與測試
 
-離線單元測試使用[根 README](../../README.md#本機開發測試環境準備)的 conda 環境。在 repo 根目錄執行：
+離線單元測試使用[根 README](../README.md#本機開發測試環境準備)的 conda 環境。在 repo 根目錄執行：
 
 ```powershell
 conda activate kbsearch
-python -m pip install -e ./src/importer
+python -m pip install -e ./importer
 python -m unittest discover -s tests/importer -t .
 ```
 
@@ -78,16 +78,16 @@ Copy-Item deploy/importer/config/.env.example deploy/importer/config/.env
 Copy-Item deploy/importer/config/google_drive_sources.example.yaml deploy/importer/config/google_drive_sources.yaml
 ```
 
-依上節填寫測試環境設定並準備憑證。先依 [部署說明](../../deploy/README.md#啟動與停止)啟動 Qdrant，再執行：
+依上節填寫測試環境設定並準備憑證。先依 [部署說明](../deploy/README.md#啟動與停止)啟動 Qdrant，再執行：
 
 ```powershell
 ./deploy/importer/docker_run.ps1 -Dev
 ```
 
-`-Dev` 會載入 `deploy/importer/docker-compose.dev.yml`，唯讀掛載 `src/importer/kbsearch_importer/`，執行 container 內的 `python -m kbsearch_importer`。程式修改後重新執行即可；
+`-Dev` 會載入 `deploy/importer/docker-compose.dev.yml`，唯讀掛載 `importer/src/kbsearch_importer/`，執行 container 內的 `python -m kbsearch_importer`。程式修改後重新執行即可；
 
 設定、log 與暫存分別位於 `deploy/importer/config/`、`logs/`、`work/`。
 
 ## 正式環境部署
 
-Image 匯出與匯入、部署準備、執行及排程見 [部署說明](../../deploy/README.md)。
+Image 匯出與匯入、部署準備、執行及排程見 [部署說明](../deploy/README.md)。

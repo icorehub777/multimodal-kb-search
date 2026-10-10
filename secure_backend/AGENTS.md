@@ -1,6 +1,6 @@
 # AGENTS.md
 
-本文件補充 `src/secure_backend/` 的工程約束；共通規範以根目錄 `AGENTS.md` 為準。修改功能前先閱讀 [`README.md`](README.md) 中相關的設定、API 與執行契約。
+本文件補充 `secure_backend/` 的工程約束；共通規範以根目錄 `AGENTS.md` 為準。修改功能前先閱讀 [`README.md`](README.md) 中相關的設定、API 與執行契約。
 
 ## 框架與分層
 

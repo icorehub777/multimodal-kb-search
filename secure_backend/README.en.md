@@ -2,11 +2,11 @@
 
 [繁體中文](README.md) | English
 
-`src/secure_backend/` is KBSearch's internal FastAPI service. It encapsulates DashScope embedding model and Qdrant vector store operations and protects its APIs with an API key.
+`secure_backend/` is KBSearch's internal FastAPI service. It encapsulates DashScope embedding model and Qdrant vector store operations and protects its APIs with an API key.
 
 ## Directories and Configuration
 
-Source is in `src/secure_backend/`, tests are in `tests/secure_backend/`, and image build files are in the root `docker/` directory. Local execution uses `deploy/secure_backend/`; see the [deployment guide](../../deploy/README.en.md#directories-and-preparation) for its directory layout.
+Source is in `secure_backend/src/kbsearch_backend/`, tests are in `tests/secure_backend/`, and image build files are in the root `docker/` directory. Local execution uses `deploy/secure_backend/`; see the [deployment guide](../deploy/README.en.md#directories-and-preparation) for its directory layout.
 
 Settings in `config/.env`:
 
@@ -30,11 +30,11 @@ Application logs are written to `logs/secure_backend.log` in the service directo
 
 ## Development and Testing
 
-Offline unit tests use the conda environment in the [root README](../../README.en.md#local-development-environment). From the repository root:
+Offline unit tests use the conda environment in the [root README](../README.en.md#local-development-environment). From the repository root:
 
 ```powershell
 conda activate kbsearch
-python -m pip install -e "./src/secure_backend[dev]"
+python -m pip install -e "./secure_backend[dev]"
 python -m unittest discover -s tests/secure_backend -t .
 ```
 
@@ -56,7 +56,7 @@ From the repository root:
 Copy-Item deploy/secure_backend/config/.env.example deploy/secure_backend/config/.env
 ```
 
-Configure the API key, DashScope, and test collection. Start Qdrant using the [deployment guide](../../deploy/README.en.md#starting-and-stopping), then run:
+Configure the API key, DashScope, and test collection. Start Qdrant using the [deployment guide](../deploy/README.en.md#starting-and-stopping), then run:
 
 ```powershell
 ./deploy/secure_backend/docker_run.ps1 -Dev
@@ -64,13 +64,13 @@ Configure the API key, DashScope, and test collection. Start Qdrant using the [d
 
 The API is available at `http://localhost:8000` after startup.
 
-`-Dev` loads `deploy/secure_backend/docker-compose.dev.yml`, mounts `src/secure_backend/kbsearch_backend/` read-only, and enables reload. This lets development run directly in Docker, with automatic restarts after source changes and no need to rebuild the image each time.
+`-Dev` loads `deploy/secure_backend/docker-compose.dev.yml`, mounts `secure_backend/src/kbsearch_backend/` read-only, and enables reload. This lets development run directly in Docker, with automatic restarts after source changes and no need to rebuild the image each time.
 
 Startup checks configuration, DashScope, and the Qdrant collection; failures exit and are logged.
 
 ## Production Deployment
 
-See the [deployment guide](../../deploy/README.en.md) for image export/import, deployment preparation, and service startup/shutdown.
+See the [deployment guide](../deploy/README.en.md) for image export/import, deployment preparation, and service startup/shutdown.
 
 ## API Contract
 

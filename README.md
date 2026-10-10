@@ -13,10 +13,12 @@ KBSearch/
   docs/
   docker/
   tests/
-  src/
-    importer/
-    query_cli/
-    secure_backend/
+  importer/
+    src/kbsearch_importer/
+  query_cli/
+    src/kbsearch_cli/
+  secure_backend/
+    src/kbsearch_backend/
   agent_runtime/
   deploy/
 ```
@@ -24,9 +26,9 @@ KBSearch/
 - `docs/`：設計文件。
 - `docker/`：Dockerfile 與 image 建置指令入口。
 - `tests/`：依子專案分類的正式測試程式。
-- `src/importer/`：Goolge Workspace 文件與向量庫同步子專案。
-- `src/query_cli/`：協助 Agent 進行 google workspace 關鍵字搜尋與向量庫查詢的指令工具子專案，並透過 `secure_backend` 存取 embedding model 與操作 vector store。
-- `src/secure_backend/`：FastAPI 子專案，封裝阿里雲 embedding model 存取與 Qdrant vector store 操作(因為此兩服務的 api key 不得讓一般使用者看到，所以必須切割出這個 api 服務專案)。
+- `importer/`：Goolge Workspace 文件與向量庫同步子專案。
+- `query_cli/`：協助 Agent 進行 google workspace 關鍵字搜尋與向量庫查詢的指令工具子專案，並透過 `secure_backend` 存取 embedding model 與操作 vector store。
+- `secure_backend/`：FastAPI 子專案，封裝阿里雲 embedding model 存取與 Qdrant vector store 操作(因為此兩服務的 api key 不得讓一般使用者看到，所以必須切割出這個 api 服務專案)。
 - `agent_runtime/`：正式環境中 Agent 的運作區，會把 query_cli 的指令工具打包放到此環境給 Agent 使用。
 - `deploy/`：Qdrant、importer 與 secure_backend 的本機執行與部署目錄；包含 compose、啟動入口及設定範本，實際設定、憑證與產物不納版控。
 
@@ -49,9 +51,9 @@ KBSearch/
 
 ## 執行環境分工
 
-- `src/importer/`：開發與部署均以 container 執行；部署時由外部排程啟動同步工作。
-- `src/secure_backend/`：開發與部署均以 container 執行，提供常態性的 FastAPI 服務。
-- `src/query_cli/`：打包成 Python package，安裝到 `agent_runtime` 使用的 Python 環境中，提供 `kbsearch` 指令。
+- `importer/`：開發與部署均以 container 執行；部署時由外部排程啟動同步工作。
+- `secure_backend/`：開發與部署均以 container 執行，提供常態性的 FastAPI 服務。
+- `query_cli/`：打包成 Python package，安裝到 `agent_runtime` 使用的 Python 環境中，提供 `kbsearch` 指令。
 - `agent_runtime/`：正式環境中 Agent 進行 KB search 的工作目錄；正式運行時只需要這個目錄、已安裝的 `kbsearch` 指令。
 
 ## 本機開發測試環境準備

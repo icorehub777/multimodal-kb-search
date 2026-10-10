@@ -13,7 +13,7 @@ from kbsearch_cli.paths import require_scoped_path
 CJK_TEXT_FONT_NAME = "KBSearchTextCJK"
 _LIBREOFFICE_MAX_SOURCE_PATH = 240
 SOFFICE_EXECUTABLE = "soffice"
-# Keep this map aligned with src/importer/kbsearch_importer/document_processing.py.
+# Keep this map aligned with importer/src/kbsearch_importer/document_processing.py.
 _MIME_TYPE_TO_DOCUMENT_TYPE = {
     "application/pdf": "pdf",
     "application/vnd.google-apps.document": "pdf",
@@ -28,7 +28,7 @@ _MIME_TYPE_TO_DOCUMENT_TYPE = {
     "image/jpeg": "image",
     "image/webp": "image",
 }
-# Keep this set aligned with src/importer/kbsearch_importer/document_processing.py.
+# Keep this set aligned with importer/src/kbsearch_importer/document_processing.py.
 _SPREADSHEET_MIME_TYPES = {
     "application/vnd.ms-excel",
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

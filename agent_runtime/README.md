@@ -69,11 +69,11 @@ unzip -v
 
 ### 2. 準備 CLI package
 
-交付驗證與正式部署時，取得 `src/query_cli/` 建置的 `kbsearch_cli-*.whl`，並放到 `agent_runtime\_internal\packages\` 中。
+交付驗證與正式部署時，取得 `query_cli/` 建置的 `kbsearch_cli-*.whl`，並放到 `agent_runtime\_internal\packages\` 中。
 
 ### 3. 準備設定檔
 
-依 [`src/query_cli/README.md` 的「建立本機設定」](../src/query_cli/README.md#建立本機設定)準備 `_internal/config/.env` 與 `oauth_client.json`；開發與部署均使用此處的設定。
+依 [`query_cli/README.md` 的「建立本機設定」](../query_cli/README.md#建立本機設定)準備 `_internal/config/.env` 與 `oauth_client.json`；開發與部署均使用此處的設定。
 
 完整設定項目與可用值見上述文件。使用本文件建議的 `agent_runtime` 資料夾結構時，須確認以下部署相關設定：
 
@@ -101,7 +101,7 @@ python -m venv .venv
 開發時使用 editable install，程式修改後不需重新打包：
 
 ```powershell
-.\.venv\Scripts\python.exe -m pip install -e ../../src/query_cli
+.\.venv\Scripts\python.exe -m pip install -e ../../query_cli
 ```
 
 交付驗證與正式部署使用 `kbsearch_cli` wheel。以下程式碼區塊需整段複製至 PowerShell 執行：

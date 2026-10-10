@@ -2,4 +2,4 @@ services:
   secure-backend:
     command: ["uvicorn", "kbsearch_backend.__main__:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "/app/kbsearch_backend"]
     volumes:
-      - ../../src/secure_backend/kbsearch_backend:/app/kbsearch_backend:ro
+      - ../../secure_backend/src/kbsearch_backend:/app/kbsearch_backend:ro

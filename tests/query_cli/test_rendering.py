@@ -360,7 +360,7 @@ def _available_cjk_font_path() -> Path | None:
 
 def _load_importer_document_processing():
     repo_root = Path(__file__).resolve().parents[2]
-    module_path = repo_root / "src" / "importer" / "kbsearch_importer" / "document_processing.py"
+    module_path = repo_root / "importer" / "src" / "kbsearch_importer" / "document_processing.py"
     spec = importlib.util.spec_from_file_location(
         "kbsearch_importer_document_processing_for_test",
         module_path,

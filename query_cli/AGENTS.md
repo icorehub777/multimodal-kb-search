@@ -1,6 +1,6 @@
 # AGENTS.md
 
-本文件補充 `src/query_cli/` 的工程約束；共通規範以根目錄 `AGENTS.md` 為準。修改功能前先閱讀 [`README.md`](README.md) 中相關的設定、指令與產物契約。
+本文件補充 `query_cli/` 的工程約束；共通規範以根目錄 `AGENTS.md` 為準。修改功能前先閱讀 [`README.md`](README.md) 中相關的設定、指令與產物契約。
 
 ## 框架與實作入口
 

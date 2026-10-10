@@ -29,7 +29,7 @@ deploy/
 
 部署主機須安裝 Docker 並啟動引擎。依上述結構複製服務的 Compose、啟動入口及設定範本；不要將開發環境的實際設定、憑證或執行資料當作部署範本。
 
-Importer 的 `config/` 須準備 `.env`、`google_drive_sources.yaml` 與管理者提供的 `gcp-adc.json`；backend 須準備 `config/.env`。設定說明與 image 建置方式見 [importer README](../src/importer/README.md) 與 [secure_backend README](../src/secure_backend/README.md)。
+Importer 的 `config/` 須準備 `.env`、`google_drive_sources.yaml` 與管理者提供的 `gcp-adc.json`；backend 須準備 `config/.env`。設定說明與 image 建置方式見 [importer README](../importer/README.md) 與 [secure_backend README](../secure_backend/README.md)。
 
 ## Image 匯出與匯入
 

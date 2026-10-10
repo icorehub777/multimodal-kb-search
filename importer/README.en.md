@@ -14,7 +14,7 @@ If a document fails during download, conversion, pagination, embedding, or vecto
 
 ## Directories and Configuration
 
-Source is in `src/importer/`, tests are in `tests/importer/`, and image build files are in the root `docker/` directory. Local execution uses `deploy/importer/`; see the [deployment guide](../../deploy/README.en.md#directories-and-preparation) for its directory layout.
+Source is in `importer/src/kbsearch_importer/`, tests are in `tests/importer/`, and image build files are in the root `docker/` directory. Local execution uses `deploy/importer/`; see the [deployment guide](../deploy/README.en.md#directories-and-preparation) for its directory layout.
 
 ### `.env`
 
@@ -38,7 +38,7 @@ Copy `config/.env.example` to `config/.env` and fill in the following settings.
 | `IMPORTER_LOG_RETENTION_DAYS` | Execution log retention in days; older `logs/importer-*.log` files are removed at startup; `0` disables automatic cleanup |
 | `IMPORTER_LOG_LEVEL` | Log level: `DEBUG`, `INFO`, `WARNING`, or `ERROR`; default `INFO` |
 
-Google access uses Service Account JSON in `config/gcp-adc.json` with Domain-Wide Delegation. See the [Google setup guide](../../docs/google-setup.en.md) for administrator configuration.
+Google access uses Service Account JSON in `config/gcp-adc.json` with Domain-Wide Delegation. See the [Google setup guide](../docs/google-setup.en.md) for administrator configuration.
 
 The `sources` list in `config/google_drive_sources.yaml` supports multiple entries with unique names and source identifiers (see the example). `GOOGLE_DWD_SUBJECT_EMAIL` must have access to these sources.
 
@@ -50,11 +50,11 @@ Each run writes to `logs/importer-YYYYMMDD-HHMMSS-ffffff-pPID.log` and stdout. T
 
 ## Development and Testing
 
-Offline unit tests use the conda environment in the [root README](../../README.en.md#local-development-environment). From the repository root:
+Offline unit tests use the conda environment in the [root README](../README.en.md#local-development-environment). From the repository root:
 
 ```powershell
 conda activate kbsearch
-python -m pip install -e ./src/importer
+python -m pip install -e ./importer
 python -m unittest discover -s tests/importer -t .
 ```
 
@@ -77,16 +77,16 @@ Copy-Item deploy/importer/config/.env.example deploy/importer/config/.env
 Copy-Item deploy/importer/config/google_drive_sources.example.yaml deploy/importer/config/google_drive_sources.yaml
 ```
 
-Prepare test settings and credentials as described above. Start Qdrant using the [deployment guide](../../deploy/README.en.md#starting-and-stopping), then run:
+Prepare test settings and credentials as described above. Start Qdrant using the [deployment guide](../deploy/README.en.md#starting-and-stopping), then run:
 
 ```powershell
 ./deploy/importer/docker_run.ps1 -Dev
 ```
 
-`-Dev` loads `deploy/importer/docker-compose.dev.yml`, mounts `src/importer/kbsearch_importer/` read-only, and runs `python -m kbsearch_importer` inside the container. Rerun after source changes.
+`-Dev` loads `deploy/importer/docker-compose.dev.yml`, mounts `importer/src/kbsearch_importer/` read-only, and runs `python -m kbsearch_importer` inside the container. Rerun after source changes.
 
 Configuration, logs, and temporary files are stored under `deploy/importer/config/`, `logs/`, and `work/`.
 
 ## Production Deployment
 
-See the [deployment guide](../../deploy/README.en.md) for image export/import, deployment preparation, execution, and scheduling.
+See the [deployment guide](../deploy/README.en.md) for image export/import, deployment preparation, execution, and scheduling.

@@ -68,11 +68,11 @@ unzip -v
 
 ### 2. Prepare the CLI package
 
-For delivery verification and production deployment, obtain the `kbsearch_cli-*.whl` built from `src/query_cli/` and place it in `agent_runtime\_internal\packages\`.
+For delivery verification and production deployment, obtain the `kbsearch_cli-*.whl` built from `query_cli/` and place it in `agent_runtime\_internal\packages\`.
 
 ### 3. Prepare configuration
 
-Follow ["Create Local Configuration" in `src/query_cli/README.en.md`](../src/query_cli/README.en.md#create-local-configuration) to prepare `_internal/config/.env` and `oauth_client.json`. Development and deployment both use configuration from this location.
+Follow ["Create Local Configuration" in `query_cli/README.en.md`](../query_cli/README.en.md#create-local-configuration) to prepare `_internal/config/.env` and `oauth_client.json`. Development and deployment both use configuration from this location.
 
 The same document lists all settings and supported values. When using the directory structure recommended here, verify these deployment-related settings:
 
@@ -101,7 +101,7 @@ python -m venv .venv
 Use an editable install during development so source changes do not require rebuilding the package:
 
 ```powershell
-.\.venv\Scripts\python.exe -m pip install -e ../../src/query_cli
+.\.venv\Scripts\python.exe -m pip install -e ../../query_cli
 ```
 
 Use the `kbsearch_cli` wheel for delivery verification and production deployment. Copy the entire following block into PowerShell:

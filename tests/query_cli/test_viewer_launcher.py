@@ -46,7 +46,7 @@ class ViewerLauncherTests(unittest.TestCase):
         )
         self.assertTrue(
             _is_kbsearch_viewer_command(
-                r"streamlit run C:\repo\src\query_cli\kbsearch_cli\viewer_app.py"
+                r"streamlit run C:\repo\query_cli\src\kbsearch_cli\viewer_app.py"
             )
         )
         self.assertFalse(_is_kbsearch_viewer_command("python -m http.server 8501"))

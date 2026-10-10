@@ -9,6 +9,14 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 class DeploymentLayoutTests(unittest.TestCase):
+    def test_docker_context_includes_src_packages(self):
+        for project, package in (("importer", "kbsearch_importer"), ("secure_backend", "kbsearch_backend")):
+            with self.subTest(project=project):
+                rules = (REPO_ROOT / project / ".dockerignore").read_text(encoding="utf-8").splitlines()
+                self.assertIn("!src/", rules)
+                self.assertIn(f"!src/{package}/", rules)
+                self.assertIn(f"!src/{package}/**/*.py", rules)
+
     def test_project_tests_are_grouped_under_repository_tests(self):
         for project in ("importer", "secure_backend", "query_cli"):
             with self.subTest(project=project):

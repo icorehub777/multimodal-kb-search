@@ -2,7 +2,7 @@
 
 繁體中文 | [English](README.en.md)
 
-`src/query_cli/` 提供 `kbsearch` 指令作為 Agent 使用的工具集合。
+`query_cli/` 提供 `kbsearch` 指令作為 Agent 使用的工具集合。
 
 它提供的指令包括：
 - Google Drive 登入：由目前使用者透過瀏覽器完成 OAuth 授權。
@@ -12,15 +12,15 @@
 
 ## 開發測試環境準備
 
-離線單元測試與開發工具使用[根 README](../../README.md#本機開發測試環境準備)指定的共用 conda 環境。在 repo 根目錄啟用環境並安裝 CLI package 與 wheel 建置工具：
+離線單元測試與開發工具使用[根 README](../README.md#本機開發測試環境準備)指定的共用 conda 環境。在 repo 根目錄啟用環境並安裝 CLI package 與 wheel 建置工具：
 
 ```powershell
 conda activate kbsearch
-cd src/query_cli
+cd query_cli
 python -m pip install -e ".[dev]"
 ```
 
-手動測試使用 `agent_runtime/_internal/.venv`，以 editable install 載入本子專案；環境準備見 [Agent Runtime](../../agent_runtime/README.md#4-建立-venv-並安裝-cli)。
+手動測試使用 `agent_runtime/_internal/.venv`，以 editable install 載入本子專案；環境準備見 [Agent Runtime](../agent_runtime/README.md#4-建立-venv-並安裝-cli)。
 
 ### 安裝文件處理工具
 
@@ -62,7 +62,7 @@ KBSEARCH_CJK_FONT_PATH=C:\Windows\Fonts\msjh.ttc
 
 `KBSEARCH_SECURE_BACKEND_API_KEY` 須與 `secure_backend` 的 `SECURE_BACKEND_API_KEY` 使用相同值。
 
-`GOOGLE_OAUTH_CLIENT_CONFIG` 指向 Google OAuth **Desktop 用戶端憑證** `oauth_client.json`，此檔由**內部 Google / GCP 管理者**依 [Google 設定指引](../../docs/google-setup.md)維護並隨 CLI 部署提供，使用者不需另外申請或手動放置。
+`GOOGLE_OAUTH_CLIENT_CONFIG` 指向 Google OAuth **Desktop 用戶端憑證** `oauth_client.json`，此檔由**內部 Google / GCP 管理者**依 [Google 設定指引](../docs/google-setup.md)維護並隨 CLI 部署提供，使用者不需另外申請或手動放置。
 
 ## 手動測試
 
@@ -361,15 +361,15 @@ python -m unittest discover -s tests/query_cli -t .
 
 ## 正式環境部署
 
-正式環境中 Agent 使用 `agent_runtime/`，不透過 repo 內 `src/query_cli/` 原始碼執行。部署前需先打包 wheel。
+正式環境中 Agent 使用 `agent_runtime/`，不透過 repo 內 `query_cli/` 原始碼執行。部署前需先打包 wheel。
 
 使用上述開發環境，在 repo 根目錄執行：
 
 ```powershell
 cd C:\path\to\KBSearch
-python -m build src/query_cli --wheel
+python -m build query_cli --wheel
 ```
 
-`python -m build` 會產生 `src/query_cli/build/`（建置暫存）與 `src/query_cli/dist/kbsearch_cli-*.whl`。
+`python -m build` 會產生 `query_cli/build/`（建置暫存）與 `query_cli/dist/kbsearch_cli-*.whl`。
 
-提供給 `agent_runtime` 部署的檔案為 `src/query_cli/dist/kbsearch_cli-*.whl`。
+提供給 `agent_runtime` 部署的檔案為 `query_cli/dist/kbsearch_cli-*.whl`。

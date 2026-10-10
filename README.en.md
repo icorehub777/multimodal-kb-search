@@ -14,10 +14,12 @@ KBSearch/
   docs/
   docker/
   tests/
-  src/
-    importer/
-    query_cli/
-    secure_backend/
+  importer/
+    src/kbsearch_importer/
+  query_cli/
+    src/kbsearch_cli/
+  secure_backend/
+    src/kbsearch_backend/
   agent_runtime/
   deploy/
 ```
@@ -25,9 +27,9 @@ KBSearch/
 - `docs/`: Design documents.
 - `docker/`: Dockerfiles and image build launchers.
 - `tests/`: Project tests grouped by subproject.
-- `src/importer/`: Subproject that synchronizes Google Workspace documents with the vector database.
-- `src/query_cli/`: Command-line tools that let Agent search Google Workspace by keyword and query the vector database. It accesses the embedding model and vector store through `secure_backend`.
-- `src/secure_backend/`: FastAPI subproject that encapsulates access to the Alibaba Cloud embedding model and Qdrant vector store. These services are isolated behind this API because their API keys must not be exposed to regular users.
+- `importer/`: Subproject that synchronizes Google Workspace documents with the vector database.
+- `query_cli/`: Command-line tools that let Agent search Google Workspace by keyword and query the vector database. It accesses the embedding model and vector store through `secure_backend`.
+- `secure_backend/`: FastAPI subproject that encapsulates access to the Alibaba Cloud embedding model and Qdrant vector store. These services are isolated behind this API because their API keys must not be exposed to regular users.
 - `agent_runtime/`: Production workspace for Agent, including the packaged `query_cli` command-line tools.
 - `deploy/`: Local execution and deployment directories for Qdrant, importer, and secure_backend, containing Compose files, launchers, and configuration templates. Actual settings, credentials, and runtime artifacts are not tracked.
 
@@ -50,9 +52,9 @@ Development Agents implement the code from these documents using test-driven dev
 
 ## Runtime Responsibilities
 
-- `src/importer/`: Runs in a container during development and deployment; an external scheduler starts production synchronization jobs.
-- `src/secure_backend/`: Runs in a container during development and deployment and provides a persistent FastAPI service.
-- `src/query_cli/`: Is packaged as a Python package and installed in the Python environment used by `agent_runtime`, providing the `kbsearch` command.
+- `importer/`: Runs in a container during development and deployment; an external scheduler starts production synchronization jobs.
+- `secure_backend/`: Runs in a container during development and deployment and provides a persistent FastAPI service.
+- `query_cli/`: Is packaged as a Python package and installed in the Python environment used by `agent_runtime`, providing the `kbsearch` command.
 - `agent_runtime/`: Is the production working directory where Agent performs KB searches. At runtime it only requires this directory and the installed `kbsearch` command.
 
 ## Local Development Environment

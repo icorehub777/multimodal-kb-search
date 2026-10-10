@@ -29,7 +29,7 @@ deploy/
 
 Install Docker and start its engine on the deployment host. Copy the services' Compose files, launchers, and configuration templates using the layout above. Do not use actual development settings, credentials, or runtime data as deployment templates.
 
-Importer requires `.env`, `google_drive_sources.yaml`, and the administrator-provided `gcp-adc.json` under `config/`; backend requires `config/.env`. For settings and image building, see the [importer README](../src/importer/README.en.md) and [secure_backend README](../src/secure_backend/README.en.md).
+Importer requires `.env`, `google_drive_sources.yaml`, and the administrator-provided `gcp-adc.json` under `config/`; backend requires `config/.env`. For settings and image building, see the [importer README](../importer/README.en.md) and [secure_backend README](../secure_backend/README.en.md).
 
 ## Image Export and Import
 

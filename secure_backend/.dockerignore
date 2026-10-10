@@ -2,6 +2,7 @@
 **
 !pyproject.toml
 !LICENSE
-!kbsearch_backend/
-!kbsearch_backend/**/
-!kbsearch_backend/**/*.py
+!src/
+!src/kbsearch_backend/
+!src/kbsearch_backend/**/
+!src/kbsearch_backend/**/*.py

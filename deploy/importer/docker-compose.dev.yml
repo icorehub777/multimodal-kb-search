@@ -1,4 +1,4 @@
 services:
   importer:
     volumes:
-      - ../../src/importer/kbsearch_importer:/app/kbsearch_importer:ro
+      - ../../importer/src/kbsearch_importer:/app/kbsearch_importer:ro

@@ -2,7 +2,7 @@
 
 [繁體中文](README.md) | English
 
-`src/query_cli/` provides the `kbsearch` command as a set of tools for Agent.
+`query_cli/` provides the `kbsearch` command as a set of tools for Agent.
 
 Available commands include:
 
@@ -13,15 +13,15 @@ Available commands include:
 
 ## Development and Test Setup
 
-Offline unit tests and development tools use the shared conda environment specified in the [root README](../../README.en.md#local-development-environment). From the repository root, activate it and install the CLI package and wheel build tools:
+Offline unit tests and development tools use the shared conda environment specified in the [root README](../README.en.md#local-development-environment). From the repository root, activate it and install the CLI package and wheel build tools:
 
 ```powershell
 conda activate kbsearch
-cd src/query_cli
+cd query_cli
 python -m pip install -e ".[dev]"
 ```
 
-Manual testing uses `agent_runtime/_internal/.venv` with an editable install of this subproject. See [Agent Runtime](../../agent_runtime/README.en.md#4-create-venv-and-install-the-cli) for setup.
+Manual testing uses `agent_runtime/_internal/.venv` with an editable install of this subproject. See [Agent Runtime](../agent_runtime/README.en.md#4-create-venv-and-install-the-cli) for setup.
 
 ### Install Document Processing Tools
 
@@ -63,7 +63,7 @@ Settings reside in the workspace's `_internal/config/.env`. All task data is sto
 
 `KBSEARCH_SECURE_BACKEND_API_KEY` must match `SECURE_BACKEND_API_KEY` in `secure_backend`.
 
-`GOOGLE_OAUTH_CLIENT_CONFIG` points to the Google OAuth **Desktop client credentials** file `oauth_client.json`. It is maintained by the **internal Google / GCP administrator** following the [Google setup guide](../../docs/google-setup.en.md) and supplied with the CLI deployment; users do not need to request or place it themselves.
+`GOOGLE_OAUTH_CLIENT_CONFIG` points to the Google OAuth **Desktop client credentials** file `oauth_client.json`. It is maintained by the **internal Google / GCP administrator** following the [Google setup guide](../docs/google-setup.en.md) and supplied with the CLI deployment; users do not need to request or place it themselves.
 
 ## Manual Testing
 
@@ -130,7 +130,7 @@ agent_runtime/tasks/<task-name>/query_results/<query-name>
 
 After the checks pass, the CLI creates missing parent directories and the directory for this search. If the query fails, existing directories and partial artifacts are retained; retries require a new query name.
 
-See the [design specification](../../docs/design_spec/en/01-high-level-design.md) for details of search-result downloads and conversion.
+See the [design specification](../docs/design_spec/en/01-high-level-design.md) for details of search-result downloads and conversion.
 
 Progress is written to **stderr**. Downloading begins with a union-level `phase=download status=started` event containing summaries such as `union_count`. Each successful file download emits `phase=download status=started` and `phase=download status=finished`; completion includes text-page and rendered-page counts. A failed file emits `phase=download status=failed`. Use `file_id`, `index`, and `total` to distinguish per-file events from union-level progress.
 
@@ -354,15 +354,15 @@ python -m unittest discover -s tests/query_cli -t .
 
 ## Production Deployment
 
-In production, Agent uses `agent_runtime/` rather than executing source code from `src/query_cli/`. Build a wheel before deployment.
+In production, Agent uses `agent_runtime/` rather than executing source code from `query_cli/`. Build a wheel before deployment.
 
 Using the development environment above, run from the repository root:
 
 ```powershell
 cd C:\path\to\KBSearch
-python -m build src/query_cli --wheel
+python -m build query_cli --wheel
 ```
 
-`python -m build` creates `src/query_cli/build/` for temporary build files and `src/query_cli/dist/kbsearch_cli-*.whl`.
+`python -m build` creates `query_cli/build/` for temporary build files and `query_cli/dist/kbsearch_cli-*.whl`.
 
-Deploy `src/query_cli/dist/kbsearch_cli-*.whl` to `agent_runtime`.
+Deploy `query_cli/dist/kbsearch_cli-*.whl` to `agent_runtime`.

@@ -45,10 +45,10 @@ jobs:
           python-version: "3.12"
       - name: Install importer
         if: matrix.project == 'importer'
-        run: python -m pip install -e ./src/importer
+        run: python -m pip install -e ./importer
       - name: Install package and development dependencies
         if: matrix.project != 'importer'
-        run: python -m pip install -e "./src/${{ matrix.project }}[dev]"
+        run: python -m pip install -e "./${{ matrix.project }}[dev]"
       - name: Prepare CJK test font
         if: matrix.project != 'secure_backend'
         run: |
@@ -73,7 +73,7 @@ jobs:
           sys.exit(0 if result.wasSuccessful() else 1)
       - name: Build CLI wheel
         if: matrix.project == 'query_cli'
-        run: python -m build src/query_cli --wheel --outdir "$env:RUNNER_TEMP/wheel"
+        run: python -m build query_cli --wheel --outdir "$env:RUNNER_TEMP/wheel"
       - name: Install wheel into a clean environment
         if: matrix.project == 'query_cli'
         run: |
