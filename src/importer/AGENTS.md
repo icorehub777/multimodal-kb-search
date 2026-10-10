@@ -1,11 +1,11 @@
 # AGENTS.md
 
-本文件記錄開發 `importer/` 子專案時必須遵守的工程規範。共通規則仍以 repo 根目錄 `AGENTS.md` 為準。
+本文件記錄開發 `src/importer/` 子專案時必須遵守的工程規範。共通規則仍以 repo 根目錄 `AGENTS.md` 為準；功能、同步行為、設定及開發與部署操作見同目錄 [`README.md`](README.md)。
 
 ## 子專案邊界
 
-- `importer/` 負責後端批次 indexing 與同步流程。
-- 不在 `importer/` 中實作互動式查詢、使用者端 CLI 或 Agent runtime 專屬流程。
+- `src/importer/` 負責後端批次 indexing 與同步流程。
+- 不在 `src/importer/` 中實作互動式查詢、使用者端 CLI 或 Agent runtime 專屬流程。
 
 ## 分層與依賴方向
 
@@ -16,7 +16,7 @@
 
 ## Config
 
-- 所有設定讀取集中在 `app.config`，其他模組不得直接讀取環境變數。
+- 所有設定讀取集中在 `kbsearch_importer.config`，其他模組不得直接讀取環境變數。
 - 設定值與結構化設定檔須在載入時完成必要欄位、型別、範圍與唯一性驗證；設定無效時必須明確失敗。
 - 新增設定時同步更新 `.env.example`、config model 與測試。
 
