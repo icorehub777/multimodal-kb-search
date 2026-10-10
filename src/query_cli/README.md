@@ -2,7 +2,7 @@
 
 繁體中文 | [English](README.en.md)
 
-`query_cli/` 提供 `kbsearch` 指令作為 Agent 使用的工具集合。
+`src/query_cli/` 提供 `kbsearch` 指令作為 Agent 使用的工具集合。
 
 它提供的指令包括：
 - Google Drive 登入：由目前使用者透過瀏覽器完成 OAuth 授權。
@@ -12,24 +12,12 @@
 
 ## 開發測試環境準備
 
-本機開發使用 repo 共用的 conda 環境名稱 `kbsearch`。先檢查環境是否存在：
-
-```powershell
-conda env list | Select-String kbsearch
-```
-
-若沒有 `kbsearch`，先建立環境：
-
-```powershell
-conda create -n kbsearch python=3.12 pip setuptools wheel
-```
-
-進入環境並安裝 `query_cli` package：
+依[根 README](../../README.md#本機開發測試環境準備)準備共用 conda 環境，再於 repo 根目錄啟用環境並安裝 `query_cli` package 與開發工具：
 
 ```powershell
 conda activate kbsearch
-cd query_cli
-python -m pip install -e .  # 調整程式後會即時更新
+cd src/query_cli
+python -m pip install -e ".[dev]"  # 調整程式後會即時更新
 ```
 
 ### 安裝文件處理工具
@@ -50,10 +38,10 @@ Test-Path "C:\Windows\Fonts\msjh.ttc"
 
 ### 建立本機設定
 
-建立本機設定檔：
+在 repo 根目錄建立本機設定檔：
 
 ```powershell
-Copy-Item query_cli\config\.env.example query_cli\config\.env
+Copy-Item src\query_cli\config\.env.example src\query_cli\config\.env
 ```
 
 `config/.env` 範例：
@@ -72,7 +60,7 @@ KBSEARCH_CJK_FONT_PATH=C:\Windows\Fonts\msjh.ttc
 
 `KBSEARCH_SECURE_BACKEND_API_KEY` 須與 `secure_backend` 的 `SECURE_BACKEND_API_KEY` 使用相同值。
 
-`GOOGLE_OAUTH_CLIENT_CONFIG` 指向 Google OAuth **Desktop 用戶端憑證** `oauth_client.json`，此檔由**內部 Google / GCP 管理者**依 [Google 設定指引](../docs/google-setup.md)維護並隨 CLI 部署提供，使用者不需另外申請或手動放置。
+`GOOGLE_OAUTH_CLIENT_CONFIG` 指向 Google OAuth **Desktop 用戶端憑證** `oauth_client.json`，此檔由**內部 Google / GCP 管理者**依 [Google 設定指引](../../docs/google-setup.md)維護並隨 CLI 部署提供，使用者不需另外申請或手動放置。
 
 ## 手動測試
 
@@ -92,7 +80,7 @@ Windows Credential Manager 並非 CLI 專屬的存取隔離；同一 Windows 使
 
 若要做相似度搜尋，執行前請確認 `secure_backend` 已在本機啟動並可連線。
 
-手動測試時需保持與 `agent_runtime` 中一樣的資料夾結構 (如此搜尋結果網頁才能正確解析)。也就是在根目錄的 tasks 資料夾下先建立任務資料夾，且若有搜尋用圖片，亦須將其放在任務資料夾中：
+手動測試時，需在根目錄的 tasks 資料夾下先建立任務資料夾，且若有搜尋用圖片，亦須將其放在任務資料夾中：
 
 ```text
 tasks/<task-name>/
@@ -105,7 +93,7 @@ tasks/<task-name>/<image-file>
 tasks/<task-name>/query_results/<query-name>
 ```
 
-接下來請在 `query_cli/` 目錄下，執行以下指令：
+接下來請在 `src/query_cli/` 目錄下，執行以下指令：
 
 ```powershell
 kbsearch query `
@@ -352,27 +340,21 @@ kbsearch render-pdf-pages `
 在 repo 根目錄執行：
 
 ```powershell
-python -m unittest discover -s query_cli\tests
+python -m unittest discover -s src\query_cli\tests
 ```
 
 
 ## 正式環境部署
 
-正式環境中 Agent 使用 `agent_runtime/`，不透過 repo 內 `query_cli/` 原始碼執行。部署前需先打包 wheel。
+正式環境中 Agent 使用 `agent_runtime/`，不透過 repo 內 `src/query_cli/` 原始碼執行。部署前需先打包 wheel。
 
-若全域 python 中沒有安裝 build 打包工具，則可使用此指令安裝：
-
-```powershell
-python -m pip install build  
-```
-
-在 repo 根目錄執行（需已安裝 Python 與 `build`）：
+使用上述開發環境，在 repo 根目錄執行：
 
 ```powershell
 cd C:\path\to\KBSearch
-python -m build query_cli --wheel
+python -m build src/query_cli --wheel
 ```
 
-`python -m build` 會產生 `query_cli/build/`（建置暫存）與 `query_cli/dist/kbsearch_cli-*.whl`。
+`python -m build` 會產生 `src/query_cli/build/`（建置暫存）與 `src/query_cli/dist/kbsearch_cli-*.whl`。
 
-提供給 `agent_runtime` 部署的檔案為 `query_cli/dist/kbsearch_cli-*.whl`。
+提供給 `agent_runtime` 部署的檔案為 `src/query_cli/dist/kbsearch_cli-*.whl`。

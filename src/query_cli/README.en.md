@@ -2,7 +2,7 @@
 
 [繁體中文](README.md) | English
 
-`query_cli/` provides the `kbsearch` command as a set of tools for Agent.
+`src/query_cli/` provides the `kbsearch` command as a set of tools for Agent.
 
 Available commands include:
 
@@ -13,24 +13,12 @@ Available commands include:
 
 ## Development and Test Setup
 
-Local development uses the repository's shared `kbsearch` conda environment. Check whether it exists:
-
-```powershell
-conda env list | Select-String kbsearch
-```
-
-Create it when necessary:
-
-```powershell
-conda create -n kbsearch python=3.12 pip setuptools wheel
-```
-
-Activate the environment and install the `query_cli` package:
+Prepare the shared conda environment using the [root README](../../README.en.md#local-development-environment). From the repository root, activate it and install the `query_cli` package and development tools:
 
 ```powershell
 conda activate kbsearch
-cd query_cli
-python -m pip install -e .  # Source changes take effect immediately
+cd src/query_cli
+python -m pip install -e ".[dev]"  # Source changes take effect immediately
 ```
 
 ### Install Document Processing Tools
@@ -51,10 +39,10 @@ Test-Path "C:\Windows\Fonts\msjh.ttc"
 
 ### Create Local Configuration
 
-Create the local configuration file:
+Create the local configuration file from the repository root:
 
 ```powershell
-Copy-Item query_cli\config\.env.example query_cli\config\.env
+Copy-Item src\query_cli\config\.env.example src\query_cli\config\.env
 ```
 
 Example `config/.env`:
@@ -73,7 +61,7 @@ KBSEARCH_CJK_FONT_PATH=C:\Windows\Fonts\msjh.ttc
 
 `KBSEARCH_SECURE_BACKEND_API_KEY` must match `SECURE_BACKEND_API_KEY` in `secure_backend`.
 
-`GOOGLE_OAUTH_CLIENT_CONFIG` points to the Google OAuth **Desktop client credentials** file `oauth_client.json`. It is maintained by the **internal Google / GCP administrator** following the [Google setup guide](../docs/google-setup.en.md) and supplied with the CLI deployment; users do not need to request or place it themselves.
+`GOOGLE_OAUTH_CLIENT_CONFIG` points to the Google OAuth **Desktop client credentials** file `oauth_client.json`. It is maintained by the **internal Google / GCP administrator** following the [Google setup guide](../../docs/google-setup.en.md) and supplied with the CLI deployment; users do not need to request or place it themselves.
 
 ## Manual Testing
 
@@ -93,7 +81,7 @@ Windows Credential Manager does not isolate credentials exclusively to the CLI. 
 
 Before similarity search, verify that `secure_backend` is running locally and reachable.
 
-Manual tests must use the same directory structure as `agent_runtime` so the results viewer can interpret it correctly. First create a task directory under the root tasks directory and place any query images in that task directory:
+For manual tests, first create a task directory under the root tasks directory and place any query images in that task directory:
 
 ```text
 tasks/<task-name>/
@@ -106,7 +94,7 @@ Search results use this path:
 tasks/<task-name>/query_results/<query-name>
 ```
 
-Run the following command from `query_cli/`:
+Run the following command from `src/query_cli/`:
 
 ```powershell
 kbsearch query `
@@ -133,7 +121,7 @@ Similarity search covers only documents synchronized by importer. It is skipped 
 
 The CLI first validates query arguments and verifies that `output_dir` does not exist. It then loads configuration, creates a dedicated log, and performs startup checks. These checks cover the Google Drive token in Windows Credential Manager, `secure_backend /healthz` when `--vector-query` or `--image` is supplied, `soffice` in the system `PATH`, and the CJK font. Once all checks pass, the CLI creates `output_dir` without overwriting an existing directory and begins the search. If another process creates that path during the checks, the command stops. A missing or explicitly invalid token ends the command with an `authentication` error and prompts `kbsearch login`. If a query fails after creating its directory, the directory and partial artifacts are retained; the same path must not be reused.
 
-See the [design specification](../docs/design_spec/en/01-high-level-design.md) for details of search-result downloads and conversion.
+See the [design specification](../../docs/design_spec/en/01-high-level-design.md) for details of search-result downloads and conversion.
 
 Progress is written to **stderr**. Downloading begins with a union-level `phase=download status=started` event containing summaries such as `union_count`. Each successful file download emits `phase=download status=started` and `phase=download status=finished`; completion includes text-page and rendered-page counts. A failed file emits `phase=download status=failed`. Use `file_id`, `index`, and `total` to distinguish per-file events from union-level progress.
 
@@ -349,26 +337,20 @@ Existing PNGs for the specified pages are overwritten; other pages remain unaffe
 Run from the repository root:
 
 ```powershell
-python -m unittest discover -s query_cli\tests
+python -m unittest discover -s src\query_cli\tests
 ```
 
 ## Production Deployment
 
-In production, Agent uses `agent_runtime/` rather than executing source code from `query_cli/`. Build a wheel before deployment.
+In production, Agent uses `agent_runtime/` rather than executing source code from `src/query_cli/`. Build a wheel before deployment.
 
-If the build tool is not installed in the global Python environment, install it with:
-
-```powershell
-python -m pip install build
-```
-
-Run from the repository root with Python and `build` installed:
+Using the development environment above, run from the repository root:
 
 ```powershell
 cd C:\path\to\KBSearch
-python -m build query_cli --wheel
+python -m build src/query_cli --wheel
 ```
 
-`python -m build` creates `query_cli/build/` for temporary build files and `query_cli/dist/kbsearch_cli-*.whl`.
+`python -m build` creates `src/query_cli/build/` for temporary build files and `src/query_cli/dist/kbsearch_cli-*.whl`.
 
-Deploy `query_cli/dist/kbsearch_cli-*.whl` to `agent_runtime`.
+Deploy `src/query_cli/dist/kbsearch_cli-*.whl` to `agent_runtime`.
