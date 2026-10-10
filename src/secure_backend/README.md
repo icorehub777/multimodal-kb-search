@@ -2,51 +2,11 @@
 
 繁體中文 | [English](README.en.md)
 
-`secure_backend/` 是 KBSearch 的內部 FastAPI 服務。它封裝 DashScope embedding model 與 Qdrant vector store 操作，並以 API key 保護服務 API。
+`src/secure_backend/` 是 KBSearch 的內部 FastAPI 服務。它封裝 DashScope embedding model 與 Qdrant vector store 操作，並以 API key 保護服務 API。
 
-## 目錄結構
+## 目錄與設定
 
-```text
-secure_backend/
-  main.py              # uvicorn 入口：main:app
-  app/                 # 應用程式模組
-    factory.py         # create_app()
-    config.py
-    ...
-  config/
-    .env
-  docker/              # 正式環境 image 與 compose
-  tests/
-  requirements.txt
-```
-
-## 開發測試環境準備
-
-本機開發使用 repo 共用的 conda 環境名稱 `kbsearch`。先檢查環境是否存在：
-
-```powershell
-conda env list | Select-String kbsearch
-```
-
-若沒有 `kbsearch`，先建立環境：
-
-```powershell
-conda create -n kbsearch python=3.12 pip setuptools wheel
-```
-
-進入環境並安裝外部依賴：
-
-```powershell
-conda activate kbsearch
-python -m pip install -r requirements.txt
-```
-
-複製 `.env.example` 到 `.env`（在 `secure_backend/` 目錄下執行）：
-
-```powershell
-cd secure_backend
-Copy-Item config\.env.example config\.env
-```
+程式與單元測試位於 `src/secure_backend/`，image 建置檔位於根目錄 `docker/`。本機執行使用 `deploy/secure_backend/`，目錄配置見 [部署說明](../../deploy/README.md#目錄與準備)。
 
 `config/.env` 的設定如下：
 
@@ -55,89 +15,63 @@ Copy-Item config\.env.example config\.env
 | `SECURE_BACKEND_API_KEY` | 呼叫 API 時使用的共用 API key |
 | `DASHSCOPE_API_KEY` | DashScope API key |
 | `DASHSCOPE_EMBEDDING_MODEL` | embedding model 名稱 |
-| `DASHSCOPE_VECTOR_SIZE` | 正整數向量維度，須與 `QDRANT_VECTOR_SIZE` 相同 |
+| `KBSEARCH_VECTOR_SIZE` | Embedding 與 Qdrant 共用的正整數向量維度；須與 importer 相同 |
 | `DASHSCOPE_IMAGE_MAX_BYTES` | 傳送至 DashScope 的單張圖片大小上限 |
 | `DASHSCOPE_JPEG_QUALITY` | 圖片壓縮時的起始 JPEG 品質 |
-| `QDRANT_URL` | Qdrant URL；本機預設為 `http://127.0.0.1:6333` |
+| `QDRANT_URL` | Container 內使用 `http://qdrant:6333` |
 | `QDRANT_API_KEY` | Qdrant API key；未啟用時可留空 |
 | `QDRANT_COLLECTION` | 查詢使用的 collection |
-| `QDRANT_VECTOR_SIZE` | Collection 正整數向量維度 |
 | `SECURE_BACKEND_MAX_QUERY_LENGTH` | 查詢文字字數上限，預設 `4000` |
 | `SECURE_BACKEND_MAX_IMAGES` | 每次查詢的圖片數量上限，預設 `5` |
 | `SECURE_BACKEND_MAX_SEARCH_LIMIT` | 每次查詢的結果筆數上限，預設 `100` |
 | `SECURE_BACKEND_LOG_LEVEL` | Log level，可設為 `DEBUG`、`INFO`、`WARNING` 或 `ERROR`，預設 `INFO` |
 
-應用程式 log 寫入 `logs/secure_backend.log` 並同時輸出 stdout；時間與每日輪替均使用 UTC，保留 14 份輪替檔案。Docker 部署時可由 `docker/logs/` 取得 log。
+應用程式 log 寫入服務目錄的 `logs/secure_backend.log` 並同時輸出 stdout；時間與每日輪替均使用 UTC，保留 14 份輪替檔案。
 
-啟動本機 API（在 `secure_backend/` 目錄下執行）。服務啟動時會自動檢查設定、DashScope embedding 與 Qdrant collection；檢查失敗時程序會退出，並在 log 中留下錯誤摘要：
+## 開發與測試
 
-```powershell
-cd secure_backend
-uvicorn main:app --host 127.0.0.1 --port 8000
-```
-
-離線單元測試：
+離線單元測試使用[根 README](../../README.md#本機開發測試環境準備)的 conda 環境。在 repo 根目錄執行：
 
 ```powershell
-cd secure_backend
+conda activate kbsearch
+python -m pip install -e "./src/secure_backend[dev]"
+cd src/secure_backend
 python -m unittest discover -s tests
 ```
 
+### 建置 image
+
+需安裝 Docker 並啟動引擎。第一次執行，或 pyproject.toml／Dockerfile 變更時，在 repo 根目錄建置：
+
+```powershell
+./docker/docker_build_secure_backend.ps1
+```
+
+Image 名稱為 `kbsearch-secure-backend`。
+
+### 準備設定與啟動
+
+在 repo 根目錄建立設定：
+
+```powershell
+Copy-Item deploy/secure_backend/config/.env.example deploy/secure_backend/config/.env
+```
+
+填寫 API key、DashScope 與測試 collection 設定，先依 [部署說明](../../deploy/README.md#啟動與停止)啟動 Qdrant，再執行：
+
+```powershell
+./deploy/secure_backend/docker_run.ps1 -Dev
+```
+
+啟動後的 API 位址為 `http://localhost:8000`。
+
+`-Dev` 會載入 `deploy/secure_backend/docker-compose.dev.yml`，唯讀掛載 `src/secure_backend/kbsearch_backend/` 並啟用 reload，即可在開發期直接使用 Docker 執行，且程式修改後自動重啟，不需每次重新建置 image。
+
+服務啟動時會檢查設定、DashScope 與 Qdrant collection；失敗時退出並記錄錯誤。
+
 ## 正式環境部署
 
-`secure_backend/docker/` 提供 image 建置與服務啟動所需檔案：
-
-建置 image：
-
-```powershell
-cd secure_backend/docker
-docker compose build
-```
-
-建置完成後本機 image 名稱為 `kbsearch-secure-backend`。
-
-匯出 image（於建置機執行，產生 tar 檔供搬移至正式環境）：
-
-```powershell
-docker save -o kbsearch-secure-backend.tar kbsearch-secure-backend:latest
-```
-
-將 `kbsearch-secure-backend.tar` 複製到正式機後匯入：
-
-```powershell
-docker load -i kbsearch-secure-backend.tar
-```
-
-在正式環境依照以下資料夾結構建立 secure_backend 資料夾：
-
-```text
-secure_backend/
-  docker-compose.yml
-  config/
-    .env
-  logs/
-```
-
-| 路徑 | 用途 |
-|------|------|
-| `docker-compose.yml` | 從專案資料夾中的 `docker/` 中複製。以建置、啟動與管理服務 |
-| `config/.env` | 從專案資料夾中的 `config/` 中複製，包含各種 secret 設定 |
-| `logs/` | 服務 log 輸出目錄 |
-
-依照正式環境的狀況調整 `.env` 中的設定後（`QDRANT_URL` 要改成 `http://qdrant:6333`），於此服務根目錄執行以下指令啟動 container：
-
-```powershell
-docker compose up -d
-```
-
-常駐容器名稱為 `kbsearch-secure-backend`（`docker ps` 可見）。
-
-查看 log 或停止服務：
-
-```powershell
-docker compose logs -f
-docker compose down
-```
+Image 匯出與匯入、部署準備及服務啟停見 [部署說明](../../deploy/README.md)。
 
 ## API Contract
 

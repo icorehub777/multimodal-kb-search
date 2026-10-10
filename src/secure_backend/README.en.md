@@ -2,142 +2,76 @@
 
 [繁體中文](README.md) | English
 
-`secure_backend/` is KBSearch's internal FastAPI service. It encapsulates DashScope embedding model and Qdrant vector store operations and protects its APIs with an API key.
+`src/secure_backend/` is KBSearch's internal FastAPI service. It encapsulates DashScope embedding model and Qdrant vector store operations and protects its APIs with an API key.
 
-## Directory Structure
+## Directories and Configuration
 
-```text
-secure_backend/
-  main.py              # uvicorn entry point: main:app
-  app/                 # Application modules
-    factory.py         # create_app()
-    config.py
-    ...
-  config/
-    .env
-  docker/              # Production image and Compose files
-  tests/
-  requirements.txt
-```
+Source and unit tests are in `src/secure_backend/`; image build files are in the root `docker/` directory. Local execution uses `deploy/secure_backend/`; see the [deployment guide](../../deploy/README.en.md#directories-and-preparation) for its directory layout.
 
-## Development and Test Setup
-
-Local development uses the repository's shared `kbsearch` conda environment. Check whether it exists:
-
-```powershell
-conda env list | Select-String kbsearch
-```
-
-Create it when necessary:
-
-```powershell
-conda create -n kbsearch python=3.12 pip setuptools wheel
-```
-
-Activate the environment and install external dependencies:
-
-```powershell
-conda activate kbsearch
-python -m pip install -r requirements.txt
-```
-
-Copy `.env.example` to `.env` from the `secure_backend/` directory:
-
-```powershell
-cd secure_backend
-Copy-Item config\.env.example config\.env
-```
-
-The settings in `config/.env` are:
+Settings in `config/.env`:
 
 | Setting | Purpose |
 |---------|---------|
 | `SECURE_BACKEND_API_KEY` | Shared API key used to call the service |
 | `DASHSCOPE_API_KEY` | DashScope API key |
 | `DASHSCOPE_EMBEDDING_MODEL` | Embedding model name |
-| `DASHSCOPE_VECTOR_SIZE` | Positive integer vector dimension; must match `QDRANT_VECTOR_SIZE` |
+| `KBSEARCH_VECTOR_SIZE` | Positive integer dimension shared by embedding and Qdrant; must match the importer |
 | `DASHSCOPE_IMAGE_MAX_BYTES` | Maximum image size sent to DashScope |
 | `DASHSCOPE_JPEG_QUALITY` | Initial JPEG quality used when compressing images |
-| `QDRANT_URL` | Qdrant URL; defaults locally to `http://127.0.0.1:6333` |
+| `QDRANT_URL` | Use `http://qdrant:6333` inside containers |
 | `QDRANT_API_KEY` | Qdrant API key; may be left empty when authentication is disabled |
 | `QDRANT_COLLECTION` | Collection used for search |
-| `QDRANT_VECTOR_SIZE` | Positive integer vector dimension of the collection |
 | `SECURE_BACKEND_MAX_QUERY_LENGTH` | Maximum query text length; defaults to `4000` |
 | `SECURE_BACKEND_MAX_IMAGES` | Maximum number of images per query; defaults to `5` |
 | `SECURE_BACKEND_MAX_SEARCH_LIMIT` | Maximum number of results per query; defaults to `100` |
 | `SECURE_BACKEND_LOG_LEVEL` | Log level: `DEBUG`, `INFO`, `WARNING`, or `ERROR`; defaults to `INFO` |
 
-Application logs are written to `logs/secure_backend.log` and stdout. Timestamps and daily rotation use UTC, and 14 rotated files are retained. With Docker deployment, logs are available under `docker/logs/`.
+Application logs are written to `logs/secure_backend.log` in the service directory and stdout. Timestamps and daily rotation use UTC; 14 rotated files are retained.
 
-Start the local API from `secure_backend/`. At startup, the service validates its settings, the DashScope embedding service, and the Qdrant collection. If a check fails, the process exits and records an error summary in the log.
+## Development and Testing
 
-```powershell
-cd secure_backend
-uvicorn main:app --host 127.0.0.1 --port 8000
-```
-
-Run the offline unit tests:
+Offline unit tests use the conda environment in the [root README](../../README.en.md#local-development-environment). From the repository root:
 
 ```powershell
-cd secure_backend
+conda activate kbsearch
+python -m pip install -e "./src/secure_backend[dev]"
+cd src/secure_backend
 python -m unittest discover -s tests
 ```
 
+### Build the Image
+
+Install Docker and start its engine. Build from the repository root before first use or when pyproject.toml or the Dockerfile change:
+
+```powershell
+./docker/docker_build_secure_backend.ps1
+```
+
+The image is named `kbsearch-secure-backend`.
+
+### Configure and Start
+
+From the repository root:
+
+```powershell
+Copy-Item deploy/secure_backend/config/.env.example deploy/secure_backend/config/.env
+```
+
+Configure the API key, DashScope, and test collection. Start Qdrant using the [deployment guide](../../deploy/README.en.md#starting-and-stopping), then run:
+
+```powershell
+./deploy/secure_backend/docker_run.ps1 -Dev
+```
+
+The API is available at `http://localhost:8000` after startup.
+
+`-Dev` loads `deploy/secure_backend/docker-compose.dev.yml`, mounts `src/secure_backend/kbsearch_backend/` read-only, and enables reload. This lets development run directly in Docker, with automatic restarts after source changes and no need to rebuild the image each time.
+
+Startup checks configuration, DashScope, and the Qdrant collection; failures exit and are logged.
+
 ## Production Deployment
 
-`secure_backend/docker/` contains the files needed to build and run the service image.
-
-Build the image:
-
-```powershell
-cd secure_backend/docker
-docker compose build
-```
-
-The resulting local image is named `kbsearch-secure-backend`.
-
-Export the image on the build machine to produce a tar file for transfer:
-
-```powershell
-docker save -o kbsearch-secure-backend.tar kbsearch-secure-backend:latest
-```
-
-After copying `kbsearch-secure-backend.tar` to the production machine, import it:
-
-```powershell
-docker load -i kbsearch-secure-backend.tar
-```
-
-Create the following `secure_backend` directory structure in production:
-
-```text
-secure_backend/
-  docker-compose.yml
-  config/
-    .env
-  logs/
-```
-
-| Path | Purpose |
-|------|---------|
-| `docker-compose.yml` | Copy from the project's `docker/` directory; builds, starts, and manages the service |
-| `config/.env` | Copy from the project's `config/` directory; contains secret settings |
-| `logs/` | Service log output directory |
-
-Adjust `.env` for the production environment, including setting `QDRANT_URL` to `http://qdrant:6333`, then start the container from the service root:
-
-```powershell
-docker compose up -d
-```
-
-The persistent container is named `kbsearch-secure-backend` and is visible in `docker ps`.
-
-View logs or stop the service:
-
-```powershell
-docker compose logs -f
-docker compose down
-```
+See the [deployment guide](../../deploy/README.en.md) for image export/import, deployment preparation, and service startup/shutdown.
 
 ## API Contract
 
@@ -146,8 +80,6 @@ Every endpoint requires this header:
 ```http
 X-API-Key: <SECURE_BACKEND_API_KEY>
 ```
-
-This service is intended for a trusted internal environment. The shared API key protects the service endpoint but does not represent individual Google Drive permissions. Callers holding the key can retrieve search metadata; `query_cli` performs user-permission filtering.
 
 Health check:
 
