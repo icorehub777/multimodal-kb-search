@@ -1,11 +1,11 @@
 # AGENTS.md
 
-本文件記錄開發 `secure_backend/` 子專案時必須遵守的工程規範。共通規則仍以 repo 根目錄 `AGENTS.md` 為準。
+本文件記錄開發 `src/secure_backend/` 子專案時必須遵守的工程規範。共通規則仍以 repo 根目錄 `AGENTS.md` 為準；功能、設定、API contract 及開發與部署操作見同目錄 [`README.md`](README.md)。
 
 ## 子專案邊界
 
-- `secure_backend/` 提供受保護的查詢 API，封裝 embedding 與 vector store 存取。
-- 不在 `secure_backend/` 中實作使用者端認證流程、CLI 流程協調、檔案產物處理或 Agent runtime 操作。
+- `src/secure_backend/` 提供受保護的查詢 API，封裝 embedding 與 vector store 存取。
+- 不在 `src/secure_backend/` 中實作使用者端認證流程、CLI 流程協調、檔案產物處理或 Agent runtime 操作。
 
 ## 分層與依賴方向
 
@@ -16,7 +16,7 @@
 
 ## Config
 
-- 所有設定讀取集中在 `app.config`，其他模組不得直接讀取環境變數。
+- 所有設定讀取集中在 `kbsearch_backend.config`，其他模組不得直接讀取環境變數。
 - 設定值須在載入時完成必要欄位、型別與範圍驗證；設定無效時必須明確失敗。
 - 新增或修改設定時同步更新設定範例、config model 與測試。
 
