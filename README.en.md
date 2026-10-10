@@ -13,6 +13,7 @@ KBSearch is designed to:
 KBSearch/
   docs/
   docker/
+  tests/
   src/
     importer/
     query_cli/
@@ -23,6 +24,7 @@ KBSearch/
 
 - `docs/`: Design documents.
 - `docker/`: Dockerfiles and image build launchers.
+- `tests/`: Project tests grouped by subproject.
 - `src/importer/`: Subproject that synchronizes Google Workspace documents with the vector database.
 - `src/query_cli/`: Command-line tools that let Agent search Google Workspace by keyword and query the vector database. It accesses the embedding model and vector store through `secure_backend`.
 - `src/secure_backend/`: FastAPI subproject that encapsulates access to the Alibaba Cloud embedding model and Qdrant vector store. These services are isolated behind this API because their API keys must not be exposed to regular users.
@@ -80,7 +82,7 @@ Each subproject's README describes its development setup. See the [deployment gu
 ## Additional Notes
 
 - This README provides only a project overview. See the subproject documentation for details.
-- The root `tests/` directory is used for local verification and is not tracked by Git.
+- The root `TechTests/` directory contains local research, temporary verification, and backups and is not tracked by Git.
 
 ## License
 

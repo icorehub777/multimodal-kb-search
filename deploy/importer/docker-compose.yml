@@ -1,0 +1,17 @@
+name: kbsearch-importer
+
+services:
+  importer:
+    image: kbsearch-importer
+    volumes:
+      - ./config:/app/config:ro
+      - ./logs:/app/logs
+      - ./work:/app/work
+    restart: "no"
+    networks:
+      - kbsearch
+
+networks:
+  kbsearch:
+    name: kbsearch
+    external: true

@@ -1,0 +1,30 @@
+[project]
+name = "kbsearch-importer"
+version = "0.1.0"
+description = "KBSearch document indexing and synchronization."
+requires-python = ">=3.12,<3.13"
+license = "AGPL-3.0-only"
+license-files = ["LICENSE"]
+readme = "README.en.md"
+dependencies = [
+    "python-dotenv==1.2.2",
+    "PyYAML==6.0.3",
+    "google-api-python-client==2.197.0",
+    "google-auth==2.53.0",
+    "google-auth-httplib2==0.4.0",
+    "httplib2==0.31.2",
+    "requests==2.34.2",
+    "qdrant-client==1.18.0",
+    "dashscope==1.25.19",
+    "PyMuPDF==1.27.2.3",
+    "reportlab==4.5.1",
+    "Pillow==12.2.0",
+]
+
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["kbsearch_importer*"]

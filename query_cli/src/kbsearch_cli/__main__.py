@@ -14,9 +14,13 @@ from kbsearch_cli.cli_output import (
     format_query_started_event,
     format_query_success_output,
 )
-from kbsearch_cli.config import ConfigError, load_query_cli_config
+from kbsearch_cli.config import (
+    ConfigError, load_login_config, load_query_cli_config, load_viewer_config,
+    resolve_workspace_tasks_root,
+)
 from kbsearch_cli.errors import (
     AuthenticationError,
+    DocumentRenderError,
     ExternalServiceError,
     QueryCliError,
     QueryInputError,
@@ -28,7 +32,13 @@ from kbsearch_cli.logging_config import (
     cleanup_old_query_log_files,
     new_query_run_id,
 )
-from kbsearch_cli.output import reserve_output_directory
+from kbsearch_cli.output import (
+    reserve_output_directory,
+    resolve_query_image_paths,
+    resolve_query_output_directory,
+    resolve_render_paths,
+    validate_path_name,
+)
 from kbsearch_cli.rendering import DocumentPageRenderer, parse_page_numbers
 from kbsearch_cli.startup_probe import probe_startup_environment
 from kbsearch_cli.viewer_launcher import run_viewer
@@ -105,10 +115,9 @@ def _run_startup_probe(
         raise
     logger.info(
         "startup_probe succeeded secure_backend_base_url=%s google_drive_authenticated=%s "
-        "oauth_client=%s cjk_font_path=%s",
+        "cjk_font_path=%s",
         result.secure_backend_base_url,
         result.google_drive_authenticated,
-        result.google_oauth_client_config,
         result.cjk_font_path,
     )
     progress(
@@ -160,11 +169,12 @@ def main(argv: list[str] | None = None) -> int:
         description="執行搜尋、下載結果並建立可供 Agent 讀取的產物。",
     )
     query_parser.add_argument(
-        "--output-dir", required=True, help="本次新建的搜尋結果目錄；執行前不得存在。"
+        "--task-name", required=True, help="工作區 tasks/ 下的任務資料夾名稱。"
     )
+    query_parser.add_argument("--query-name", required=True, help="本次搜尋資料夾名稱；執行前不得存在。")
     query_parser.add_argument("--vector-query", default=None, help="送往 secure_backend 的語意查詢文字。")
     query_parser.add_argument("--drive-query", default=None, help="原樣送往 Google Drive API 的 q 查詢式。")
-    query_parser.add_argument("--image", action="append", default=[], help="向量搜尋圖片路徑；可重複指定。")
+    query_parser.add_argument("--image", action="append", default=[], help="任務資料夾內的向量搜尋圖片檔名；可重複指定。")
     query_parser.add_argument("--limit", type=int, default=10, help="每種搜尋的結果筆數上限，預設 10。")
     query_parser.add_argument("--min-score", type=float, default=None, help="向量結果最低分數；省略時不過濾。")
 
@@ -173,9 +183,10 @@ def main(argv: list[str] | None = None) -> int:
         help="將指定 PDF 頁面轉為 PNG。",
         description="將一或多個 PDF 頁面轉為 PNG 並輸出 JSON 結果。",
     )
-    render_parser.add_argument("--pdf", required=True, help="來源 PDF 路徑。")
+    render_parser.add_argument("--task-name", required=True, help="任務資料夾名稱。")
+    render_parser.add_argument("--query-name", required=True, help="搜尋資料夾名稱。")
+    render_parser.add_argument("--document-name", required=True, help="搜尋結果中的文件子資料夾名稱。")
     render_parser.add_argument("--pages", required=True, help="頁碼清單或區間，例如 3,5,8-10。")
-    render_parser.add_argument("--output-dir", required=True, help="PNG 輸出目錄。")
 
     subparsers.add_parser(
         "view-results",
@@ -187,7 +198,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "login":
         try:
-            login_google_drive(load_query_cli_config())
+            login_google_drive(load_login_config())
         except (ConfigError, QueryCliError, RuntimeError) as exc:
             print(
                 f"Login failed: error_kind={_error_kind(exc)} message={exc}",
@@ -199,23 +210,27 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "view-results":
         try:
-            config = load_query_cli_config()
+            config = load_viewer_config()
             return run_viewer(
-                tasks_dir=config.tasks_root,
                 host="127.0.0.1",
                 port=config.viewer_port,
             )
-        except (ConfigError, RuntimeError) as exc:
-            print(f"View results failed: {exc}", file=sys.stderr)
+        except (ConfigError, QueryCliError, RuntimeError, OSError) as exc:
+            print(f"View results failed: error_kind={_error_kind(exc)} message={exc}", file=sys.stderr)
             return 1
 
     if args.command == "render-pdf-pages":
         try:
-            pdf_path = Path(args.pdf)
-            if not pdf_path.is_file():
-                raise QueryCliError(f"PDF file not found: {pdf_path}")
-            page_numbers = parse_page_numbers(args.pages)
-            output_dir = Path(args.output_dir)
+            for name, option in ((args.task_name, "--task-name"), (args.query_name, "--query-name"),
+                                 (args.document_name, "--document-name")):
+                validate_path_name(name, option)
+            try:
+                page_numbers = parse_page_numbers(args.pages)
+            except DocumentRenderError as exc:
+                raise QueryInputError(f"--pages: {exc}") from exc
+            pdf_path, output_dir = resolve_render_paths(
+                resolve_workspace_tasks_root(), args.task_name, args.query_name, args.document_name,
+            )
             print(
                 "Render PDF pages progress: "
                 f"status=started pdf={pdf_path} pages={','.join(map(str, page_numbers))}",
@@ -226,8 +241,8 @@ def main(argv: list[str] | None = None) -> int:
                 output_dir,
                 page_numbers,
             )
-        except (QueryCliError, RuntimeError, OSError) as exc:
-            print(f"Render PDF pages failed: {exc}", file=sys.stderr)
+        except (ConfigError, QueryCliError, RuntimeError, OSError) as exc:
+            print(f"Render PDF pages failed: error_kind={_error_kind(exc)} message={exc}", file=sys.stderr)
             return 1
         print(
             "Render PDF pages progress: "
@@ -252,17 +267,19 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "query":
         vector_query = _normalize_optional_query(args.vector_query)
         drive_query = _normalize_optional_query(args.drive_query)
-        output_dir = Path(args.output_dir)
-        image_paths = [Path(path) for path in args.image]
+        try:
+            validate_path_name(args.task_name, "--task-name")
+            validate_path_name(args.query_name, "--query-name")
+            for name in args.image:
+                validate_path_name(name, "--image")
+        except QueryInputError as exc:
+            _print_query_failure(exc, None, None)
+            return 1
 
         if vector_query is None and drive_query is None and not args.image:
             input_error = QueryInputError(
                 "at least one of --vector-query, --drive-query or --image must be provided"
             )
-            _print_query_failure(input_error, None, None)
-            return 1
-        if output_dir.exists():
-            input_error = QueryInputError(f"Output directory already exists: {output_dir}")
             _print_query_failure(input_error, None, None)
             return 1
         if args.limit < 1:
@@ -275,11 +292,6 @@ def main(argv: list[str] | None = None) -> int:
             )
             _print_query_failure(input_error, None, None)
             return 1
-        for image_path in image_paths:
-            if not image_path.is_file():
-                input_error = QueryInputError(f"Query image not found: {image_path}")
-                _print_query_failure(input_error, None, None)
-                return 1
 
         do_vector_search = vector_query is not None or bool(args.image)
         logger: logging.Logger | None = None
@@ -304,6 +316,8 @@ def main(argv: list[str] | None = None) -> int:
 
         try:
             config = load_query_cli_config()
+            output_dir = resolve_query_output_directory(config.tasks_root, args.task_name, args.query_name)
+            image_paths = resolve_query_image_paths(config.tasks_root, args.task_name, args.image)
             started_at = datetime.now(timezone.utc)
             log_context = create_query_log_context(
                 config.query_logs_root,
@@ -356,6 +370,7 @@ def main(argv: list[str] | None = None) -> int:
                 progress,
                 probe_secure_backend=do_vector_search,
             )
+            output_dir = resolve_query_output_directory(config.tasks_root, args.task_name, args.query_name)
             reserve_output_directory(output_dir)
             logger.info("query output directory reserved output_dir=%s", output_dir)
             result = create_query_orchestrator(config).run(

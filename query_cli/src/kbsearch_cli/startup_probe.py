@@ -21,7 +21,6 @@ CreateDriveService = Callable[[QueryCliConfig], Any]
 @dataclass(frozen=True)
 class StartupProbeResult:
     secure_backend_base_url: str
-    google_oauth_client_config: Path
     google_drive_authenticated: bool
     cjk_font_path: Path
 
@@ -44,7 +43,6 @@ def probe_startup_environment(
     )
     return StartupProbeResult(
         secure_backend_base_url=config.secure_backend_base_url,
-        google_oauth_client_config=config.google_oauth_client_config,
         google_drive_authenticated=True,
         cjk_font_path=config.cjk_font_path,
     )

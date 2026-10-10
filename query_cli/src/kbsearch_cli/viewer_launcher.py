@@ -8,6 +8,7 @@ import sys
 import time
 from pathlib import Path
 from urllib.parse import urlencode
+from kbsearch_cli.config import resolve_workspace_tasks_root
 
 
 def build_viewer_url(
@@ -164,7 +165,6 @@ def restart_existing_viewer_on_port(port: int) -> int:
 
 def run_viewer(
     *,
-    tasks_dir: Path,
     host: str,
     port: int,
 ) -> int:
@@ -176,8 +176,7 @@ def run_viewer(
             "Install kbsearch-cli with the viewer dependencies."
         ) from exc
 
-    resolved_tasks_dir = tasks_dir.resolve()
-    os.environ["KBSEARCH_VIEWER_TASKS_DIR"] = str(resolved_tasks_dir)
+    resolved_tasks_dir = resolve_workspace_tasks_root()
     app_path = Path(__file__).with_name("viewer_app.py")
     url = build_viewer_url(host=host, port=port)
     task_query_url_example = build_task_query_url_example(host=host, port=port)

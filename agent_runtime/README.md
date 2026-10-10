@@ -14,6 +14,7 @@ agent_runtime/
   _internal/
     .venv/                        # Python 虛擬環境（本機建立，不納版控、不複製自其他機器）
     config/
+      .env.example                # kbsearch 設定範本
       .env                        # kbsearch 設定
       oauth_client.json           # Google OAuth Desktop 用戶端憑證（不納版控）
     packages/                     # kbsearch_cli wheel
@@ -66,15 +67,13 @@ Get-Command unzip
 unzip -v
 ```
 
-### 2. 放入 wheel
+### 2. 準備 CLI package
 
-取得 `query_cli` 子專案中的 `kbsearch_cli-*.whl`，並放到 `agent_runtime\_internal\packages\` 中。
+交付驗證與正式部署時，取得 `src/query_cli/` 建置的 `kbsearch_cli-*.whl`，並放到 `agent_runtime\_internal\packages\` 中。
 
 ### 3. 準備設定檔
 
-將 `query_cli\config\.env.example` 複製為 `agent_runtime\_internal\config\.env`。
-
-依 [`query_cli/README.md` 的「建立本機設定」](../query_cli/README.md#建立本機設定)準備 `oauth_client.json`，並將 `GOOGLE_OAUTH_CLIENT_CONFIG` 設為其路徑；建議放在 `agent_runtime\_internal\config\oauth_client.json`。
+依 [`src/query_cli/README.md` 的「建立本機設定」](../src/query_cli/README.md#建立本機設定)準備 `_internal/config/.env` 與 `oauth_client.json`；開發與部署均使用此處的設定。
 
 完整設定項目與可用值見上述文件。使用本文件建議的 `agent_runtime` 資料夾結構時，須確認以下部署相關設定：
 
@@ -86,10 +85,9 @@ Get-ChildItem "C:\Windows\Fonts" -Include *.ttf,*.ttc -Recurse | Select-Object -
 ```
 - `KBSEARCH_SECURE_BACKEND_BASE_URL`：改為運作端可連線的 backend URL
 - `KBSEARCH_SECURE_BACKEND_API_KEY`：設定為 `secure_backend` 使用的 `SECURE_BACKEND_API_KEY`
-- `KBSEARCH_TASKS_ROOT`：因為是在 `_internal` 資料夾執行指令，所以須改為 `..\tasks`
 - `KBSEARCH_VIEWER_PORT`：搜尋結果檢視頁使用的 port，預設使用 Streamlit 標準 `8501`。
 
-### 4. 建立 .venv 並安裝 wheel
+### 4. 建立 .venv 並安裝 CLI
 
 建立 `.venv` 並安裝基礎依賴：
 
@@ -100,7 +98,13 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r ..\requirements.txt
 ```
 
-安裝 `kbsearch_cli` wheel。以下程式碼區塊需整段複製至 PowerShell 執行：
+開發時使用 editable install，程式修改後不需重新打包：
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -e ../../src/query_cli
+```
+
+交付驗證與正式部署使用 `kbsearch_cli` wheel。以下程式碼區塊需整段複製至 PowerShell 執行：
 
 ```powershell
 $wheels = @(Get-ChildItem -LiteralPath .\packages -Filter kbsearch_cli-*.whl)

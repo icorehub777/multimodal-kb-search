@@ -5,7 +5,7 @@ import logging
 from typing import Any
 
 from kbsearch_cli.backend_client import SecureBackendClient
-from kbsearch_cli.config import QueryCliConfig
+from kbsearch_cli.config import LoginConfig, QueryCliConfig
 from kbsearch_cli.credential_store import CredentialStore, WindowsCredentialStore
 from kbsearch_cli.errors import AuthenticationError, ConfigError, ExternalServiceError
 from kbsearch_cli.google_drive import GoogleDriveQueryClient
@@ -104,7 +104,7 @@ def create_drive_service(
 
 
 def login_google_drive(
-    config: QueryCliConfig,
+    config: LoginConfig,
     *,
     credential_store: CredentialStore | None = None,
 ):

@@ -14,6 +14,7 @@ agent_runtime/
   _internal/
     .venv/                        # Locally created Python environment; not tracked or copied between machines
     config/
+      .env.example                # kbsearch configuration template
       .env                        # kbsearch settings
       oauth_client.json           # Google OAuth Desktop client credentials; not tracked
     packages/                     # kbsearch_cli wheel
@@ -65,15 +66,13 @@ Get-Command unzip
 unzip -v
 ```
 
-### 2. Add the wheel
+### 2. Prepare the CLI package
 
-Obtain `kbsearch_cli-*.whl` from the `query_cli` subproject and place it in `agent_runtime\_internal\packages\`.
+For delivery verification and production deployment, obtain the `kbsearch_cli-*.whl` built from `src/query_cli/` and place it in `agent_runtime\_internal\packages\`.
 
 ### 3. Prepare configuration
 
-Copy `query_cli\config\.env.example` to `agent_runtime\_internal\config\.env`.
-
-Follow ["Create Local Configuration" in `query_cli/README.en.md`](../query_cli/README.en.md#create-local-configuration) to prepare `oauth_client.json`, then set `GOOGLE_OAUTH_CLIENT_CONFIG` to its path. The recommended location is `agent_runtime\_internal\config\oauth_client.json`.
+Follow ["Create Local Configuration" in `src/query_cli/README.en.md`](../src/query_cli/README.en.md#create-local-configuration) to prepare `_internal/config/.env` and `oauth_client.json`. Development and deployment both use configuration from this location.
 
 The same document lists all settings and supported values. When using the directory structure recommended here, verify these deployment-related settings:
 
@@ -86,10 +85,9 @@ Get-ChildItem "C:\Windows\Fonts" -Include *.ttf,*.ttc -Recurse | Select-Object -
 
 - `KBSEARCH_SECURE_BACKEND_BASE_URL`: Set to a backend URL reachable from the runtime machine.
 - `KBSEARCH_SECURE_BACKEND_API_KEY`: Set to the same value as `SECURE_BACKEND_API_KEY` in `secure_backend`.
-- `KBSEARCH_TASKS_ROOT`: Because commands run from `_internal`, set this to `..\tasks`.
 - `KBSEARCH_VIEWER_PORT`: Port used by the search-results viewer; defaults to Streamlit's standard port `8501`.
 
-### 4. Create .venv and install the wheel
+### 4. Create .venv and install the CLI
 
 Create `.venv` and install the base dependencies:
 
@@ -100,7 +98,13 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r ..\requirements.txt
 ```
 
-Install the `kbsearch_cli` wheel. Copy the entire following block into PowerShell:
+Use an editable install during development so source changes do not require rebuilding the package:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -e ../../src/query_cli
+```
+
+Use the `kbsearch_cli` wheel for delivery verification and production deployment. Copy the entire following block into PowerShell:
 
 ```powershell
 $wheels = @(Get-ChildItem -LiteralPath .\packages -Filter kbsearch_cli-*.whl)

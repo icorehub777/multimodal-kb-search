@@ -5,15 +5,15 @@ import subprocess
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
-
-from kbsearch_cli.errors import DocumentRenderError
+from kbsearch_cli.errors import DocumentRenderError, QueryInputError
 from kbsearch_cli.full_text import locate_full_text_keyword_pages
 from kbsearch_cli.models import ProcessedDocument
+from kbsearch_cli.paths import require_scoped_path
 
 CJK_TEXT_FONT_NAME = "KBSearchTextCJK"
 _LIBREOFFICE_MAX_SOURCE_PATH = 240
 SOFFICE_EXECUTABLE = "soffice"
-# Keep this map aligned with importer/app/document_processing.py.
+# Keep this map aligned with src/importer/kbsearch_importer/document_processing.py.
 _MIME_TYPE_TO_DOCUMENT_TYPE = {
     "application/pdf": "pdf",
     "application/vnd.google-apps.document": "pdf",
@@ -28,7 +28,7 @@ _MIME_TYPE_TO_DOCUMENT_TYPE = {
     "image/jpeg": "image",
     "image/webp": "image",
 }
-# Keep this set aligned with importer/app/document_processing.py.
+# Keep this set aligned with src/importer/kbsearch_importer/document_processing.py.
 _SPREADSHEET_MIME_TYPES = {
     "application/vnd.ms-excel",
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -236,6 +236,10 @@ class DocumentPageRenderer:
         if not selected_pages:
             return []
 
+        require_scoped_path(pdf_path, output_dir.parent)
+        require_scoped_path(output_dir, output_dir.parent)
+        for page_number in selected_pages:
+            require_scoped_path(output_dir / f"{page_number:04d}.png", output_dir.parent)
         output_dir.mkdir(parents=True, exist_ok=True)
         paths: list[Path] = []
         previous_display_errors = fitz.TOOLS.mupdf_display_errors(False)
@@ -253,13 +257,14 @@ class DocumentPageRenderer:
                         )
                     for page_number in selected_pages:
                         output_path = output_dir / f"{page_number:04d}.png"
+                        require_scoped_path(output_path, output_dir.parent)
                         if output_path.exists() and not overwrite:
                             paths.append(output_path)
                             continue
                         page = document[page_number - 1]
                         page.get_pixmap(dpi=self._dpi).save(output_path)
                         paths.append(output_path)
-            except DocumentRenderError:
+            except (DocumentRenderError, QueryInputError):
                 raise
             except Exception as exc:
                 raise DocumentRenderError(f"PDF page rendering failed: {pdf_path}") from exc

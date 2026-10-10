@@ -41,6 +41,10 @@ agent_runtime/memory.md
 .claude/
 
 # Local outputs
+deploy/*/config/*
+!deploy/*/config/*.example*
+deploy/importer/work/
+deploy/qdrant/qdrant_storage/
 .output/
 output/
 logs/
@@ -57,7 +61,7 @@ query_cli/build/
 query_cli/dist/
 
 # Local integration / spike tests (not part of the product repo)
-/tests/
+/TechTests/
 
 # Runtime workspace generated content
 agent_runtime/_internal/packages/*
@@ -71,3 +75,24 @@ agent_runtime/tasks/*
 !agent_runtime/tasks/.gitkeep
 query_cli/tasks/*
 !query_cli/tasks/.gitkeep
+
+# importer local files
+src/importer/config/google_drive_sources.yaml
+src/importer/config/gcp-adc.json
+src/importer/config/*.json
+src/importer/work/
+
+# query_cli local files
+src/query_cli/config/*.json
+src/query_cli/config/oauth_client.json
+src/query_cli/config/token.json
+src/query_cli/config/token_cache.json
+src/query_cli/build/
+src/query_cli/dist/
+src/query_cli/query_results/*
+!src/query_cli/query_results/.gitkeep
+src/query_cli/tasks/*
+!src/query_cli/tasks/.gitkeep
+
+src/*/build/
+src/*/dist/

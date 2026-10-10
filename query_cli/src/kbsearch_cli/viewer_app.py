@@ -3,13 +3,15 @@ from __future__ import annotations
 import base64
 import html
 import json
-import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from kbsearch_cli.config import resolve_workspace_tasks_root
+from kbsearch_cli.errors import QueryInputError
+from kbsearch_cli.paths import require_scoped_path
 
-DEFAULT_TASKS_DIR = Path.cwd() / "tasks"
+
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
 
 
@@ -28,10 +30,7 @@ class QueryResult:
 
 
 def viewer_tasks_dir() -> Path:
-    value = os.getenv("KBSEARCH_VIEWER_TASKS_DIR")
-    if value:
-        return Path(value).expanduser().resolve()
-    return DEFAULT_TASKS_DIR.resolve()
+    return resolve_workspace_tasks_root()
 
 
 def discover_query_results(tasks_dir: Path | None = None) -> list[QueryResult]:
@@ -41,21 +40,26 @@ def discover_query_results(tasks_dir: Path | None = None) -> list[QueryResult]:
         return []
 
     results: list[QueryResult] = []
+    tasks_dir = tasks_dir.resolve()
     task_dirs = sorted((p for p in tasks_dir.iterdir() if p.is_dir()), key=lambda p: p.name, reverse=True)
     for task_dir in task_dirs:
+        require_scoped_path(task_dir, tasks_dir)
         query_results_dir = task_dir / "query_results"
+        require_scoped_path(query_results_dir, task_dir)
         if not query_results_dir.exists():
             continue
         query_dirs = sorted((p for p in query_results_dir.iterdir() if p.is_dir()), key=lambda p: p.name, reverse=True)
         for query_dir in query_dirs:
+            require_scoped_path(query_dir, query_results_dir)
             results.append(QueryResult(task_name=task_dir.name, query_name=query_dir.name, path=query_dir))
     return results
 
 
-def read_json(path: Path, default: Any) -> JsonState:
-    if not path.exists():
-        return JsonState(ok=True, data=default)
+def read_json(path: Path, default: Any, *, boundary: Path) -> JsonState:
     try:
+        require_scoped_path(path, boundary)
+        if not path.exists():
+            return JsonState(ok=True, data=default)
         return JsonState(ok=True, data=json.loads(path.read_text(encoding="utf-8")))
     except Exception as exc:
         return JsonState(ok=False, data=default, error=f"{path.name}: {exc}")
@@ -125,11 +129,9 @@ def resolve_recorded_path(query_dir: Path, raw_path: Any) -> Path | None:
     if not raw_path:
         return None
     path = Path(str(raw_path))
-    candidates = [path] if path.is_absolute() else [Path.cwd() / path, query_dir / path]
-    for candidate in candidates:
-        if candidate.exists():
-            return candidate
-    return None
+    candidate = path if path.is_absolute() else query_dir / path
+    candidate = require_scoped_path(candidate, query_dir)
+    return candidate if candidate.exists() else None
 
 
 def find_document_dir(
@@ -140,7 +142,10 @@ def find_document_dir(
     downloaded_file = downloaded_files.get(str(result.get("google_file_id") or ""))
     if downloaded_file is None:
         return None
-    return resolve_recorded_path(query_dir, downloaded_file.get("directory"))
+    directory = resolve_recorded_path(query_dir, downloaded_file.get("directory"))
+    if directory is not None and (directory.parent != query_dir.resolve() or not directory.is_dir()):
+        raise QueryInputError(f"Document directory must be a direct child of the query: {directory}")
+    return directory
 
 
 def find_page_image(
@@ -153,18 +158,20 @@ def find_page_image(
     if downloaded_file is None:
         return None
 
-    for raw_page_path in downloaded_file.get("page_paths") or []:
-        image_path = resolve_recorded_path(query_dir, raw_page_path)
-        if image_path is not None and image_path.name in {f"{page_number:04d}.png", f"{page_number}.png"}:
-            return image_path
-
     document_dir = find_document_dir(query_dir, result, downloaded_files)
     if document_dir is None:
         return None
+    pages_dir = require_scoped_path(document_dir / "pages", document_dir)
+    for raw_page_path in downloaded_file.get("page_paths") or []:
+        image_path = resolve_recorded_path(query_dir, raw_page_path)
+        if image_path is not None:
+            require_scoped_path(image_path, pages_dir)
+        if image_path is not None and image_path.name in {f"{page_number:04d}.png", f"{page_number}.png"}:
+            return image_path
 
-    pages_dir = document_dir / "pages"
     for file_name in (f"{page_number:04d}.png", f"{page_number}.png"):
         image_path = pages_dir / file_name
+        require_scoped_path(image_path, document_dir)
         if image_path.exists():
             return image_path
     return None
@@ -180,17 +187,13 @@ def find_condition_images(query_dir: Path, plan: dict[str, Any]) -> list[Path]:
         if not raw_path:
             continue
         path = Path(str(raw_path))
-        candidates = [
-            path,
-            query_dir / path,
-            query_dir.parent.parent / path,
-            viewer_tasks_dir() / path,
-            Path(__file__).resolve().parent / path,
-        ]
-        for candidate in candidates:
-            if candidate.exists() and candidate.suffix.lower() in IMAGE_EXTENSIONS:
-                images.append(candidate)
-                break
+        task_dir = query_dir.parent.parent
+        candidate = path if path.is_absolute() else task_dir / path
+        candidate = require_scoped_path(candidate, task_dir)
+        if candidate.parent != task_dir.resolve():
+            raise QueryInputError(f"Query image must be directly within the task directory: {candidate}")
+        if candidate.is_file() and candidate.suffix.lower() in IMAGE_EXTENSIONS:
+            images.append(candidate)
     return images
 
 
@@ -200,7 +203,8 @@ def format_score(value: Any) -> str:
     return ""
 
 
-def image_to_data_uri(path: Path) -> str:
+def image_to_data_uri(path: Path, *, boundary: Path) -> str:
+    require_scoped_path(path, boundary)
     mime_type = "image/png"
     suffix = path.suffix.lower()
     if suffix in {".jpg", ".jpeg"}:
@@ -545,7 +549,7 @@ def render_conditions(query: QueryResult, plan_state: JsonState) -> None:
     image_html = ""
     if image_paths:
         image_tags = "".join(
-            f'<img src="{image_to_data_uri(path)}" alt="{html.escape(path.name)}">' for path in image_paths
+            f'<img src="{image_to_data_uri(path, boundary=query.path.parent.parent)}" alt="{html.escape(path.name)}">' for path in image_paths
         )
         image_html = f'<div class="condition-images">{image_tags}</div>'
 
@@ -633,7 +637,11 @@ def run_app() -> None:
     inject_styles()
     inject_image_modal_script()
 
-    query_results = discover_query_results()
+    try:
+        query_results = discover_query_results()
+    except QueryInputError as exc:
+        st.error(str(exc))
+        return
     if not query_results:
         st.info(f"找不到查詢結果資料夾：{viewer_tasks_dir()}")
         return
@@ -655,15 +663,20 @@ def run_app() -> None:
         st.query_params["task"] = selected_task
         st.query_params["query"] = selected_query_name
 
-    plan_state = read_json(selected_query.path / "query_plan.json", {})
-    vector_state = read_json(selected_query.path / "vector_results.json", [])
-    keyword_state = read_json(selected_query.path / "full_text_results.json", [])
-    downloaded_files_state = read_json(selected_query.path / "downloaded_files.json", [])
+    plan_state = read_json(selected_query.path / "query_plan.json", {}, boundary=selected_query.path)
+    vector_state = read_json(selected_query.path / "vector_results.json", [], boundary=selected_query.path)
+    keyword_state = read_json(selected_query.path / "full_text_results.json", [], boundary=selected_query.path)
+    downloaded_files_state = read_json(selected_query.path / "downloaded_files.json", [], boundary=selected_query.path)
     vector_results = normalize_results(vector_state.data) if vector_state.ok else []
     keyword_results = normalize_results(keyword_state.data) if keyword_state.ok else []
     downloaded_files = normalize_downloaded_files(downloaded_files_state.data) if downloaded_files_state.ok else {}
+    if not downloaded_files_state.ok:
+        st.error(downloaded_files_state.error)
 
-    render_conditions(selected_query, plan_state)
+    try:
+        render_conditions(selected_query, plan_state)
+    except QueryInputError as exc:
+        st.error(str(exc))
 
     tab_vector, tab_keyword = st.tabs(["**相似度搜尋清單**", "**關鍵字搜尋清單**"])
     inject_tab_tooltips(result_summary(vector_results), result_summary(keyword_results))
@@ -700,7 +713,11 @@ def render_result_tab(
 
             columns = st.columns(4)
             for index, page in enumerate(pages):
-                image_path = find_page_image(query.path, result, page["page_number"], downloaded_files)
+                try:
+                    image_path = find_page_image(query.path, result, page["page_number"], downloaded_files)
+                except QueryInputError as exc:
+                    st.error(str(exc))
+                    continue
                 with columns[index % 4]:
                     if image_path is None:
                         st.markdown(
@@ -709,7 +726,10 @@ def render_result_tab(
                         )
                         continue
 
-                    render_page_thumbnail(st, image_path, page)
+                    try:
+                        render_page_thumbnail(st, image_path, page, boundary=query.path)
+                    except QueryInputError as exc:
+                        st.error(str(exc))
 
 
 def format_page_caption(page: dict[str, Any]) -> str:
@@ -732,8 +752,8 @@ def page_caption_text(page: dict[str, Any]) -> str:
     return " / ".join(lines)
 
 
-def render_page_thumbnail(st: Any, image_path: Path, page: dict[str, Any]) -> None:
-    image_uri = image_to_data_uri(image_path)
+def render_page_thumbnail(st: Any, image_path: Path, page: dict[str, Any], *, boundary: Path) -> None:
+    image_uri = image_to_data_uri(image_path, boundary=boundary)
     title = page_caption_text(page)
     st.markdown(
         f"""

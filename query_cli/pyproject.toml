@@ -18,6 +18,9 @@ dependencies = [
     "streamlit>=1.36,<2",
 ]
 
+[project.optional-dependencies]
+dev = ["build==1.5.0"]
+
 [project.scripts]
 kbsearch = "kbsearch_cli.__main__:main"
 
@@ -26,4 +29,5 @@ requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-where = ["src"]
+where = ["."]
+include = ["kbsearch_cli*"]

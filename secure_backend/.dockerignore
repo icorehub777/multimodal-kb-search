@@ -1,8 +1,7 @@
-# Only files required by docker/Dockerfile enter the build context.
+# Only image runtime files enter the build context.
 **
-!main.py
-!requirements.txt
+!pyproject.toml
 !LICENSE
-!app/
-!app/**/
-!app/**/*.py
+!kbsearch_backend/
+!kbsearch_backend/**/
+!kbsearch_backend/**/*.py

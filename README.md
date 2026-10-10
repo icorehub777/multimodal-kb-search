@@ -12,6 +12,7 @@ KBSearch 專案主要目的：
 KBSearch/
   docs/
   docker/
+  tests/
   src/
     importer/
     query_cli/
@@ -22,6 +23,7 @@ KBSearch/
 
 - `docs/`：設計文件。
 - `docker/`：Dockerfile 與 image 建置指令入口。
+- `tests/`：依子專案分類的正式測試程式。
 - `src/importer/`：Goolge Workspace 文件與向量庫同步子專案。
 - `src/query_cli/`：協助 Agent 進行 google workspace 關鍵字搜尋與向量庫查詢的指令工具子專案，並透過 `secure_backend` 存取 embedding model 與操作 vector store。
 - `src/secure_backend/`：FastAPI 子專案，封裝阿里雲 embedding model 存取與 Qdrant vector store 操作(因為此兩服務的 api key 不得讓一般使用者看到，所以必須切割出這個 api 服務專案)。
@@ -79,7 +81,7 @@ conda create -n kbsearch python=3.12 pip setuptools wheel
 ## 補充說明
 
 - 根目錄 README 只提供專案總覽；子專案細節請看各子專案文件。
-- 根目錄 `tests/` 是本機驗證用資料夾，不納入 Git 版控。
+- 根目錄 `TechTests/` 是本機研究、臨時驗證與備份資料夾，不納入 Git 版控。
 
 ## 授權
 

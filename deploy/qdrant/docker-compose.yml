@@ -1,0 +1,25 @@
+name: kbsearch-qdrant
+
+services:
+  qdrant:
+    image: qdrant/qdrant:v1.18.0
+    container_name: kbsearch-qdrant
+    # 主機端僅供本機檢查；其他 container 使用 http://qdrant:6333。
+    ports:
+      - "127.0.0.1:6333:6333"
+    volumes:
+      - ./qdrant_storage:/qdrant/storage
+    restart: unless-stopped
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    networks:
+      kbsearch:
+        aliases:
+          - qdrant
+
+networks:
+  kbsearch:
+    name: kbsearch
+    driver: bridge
