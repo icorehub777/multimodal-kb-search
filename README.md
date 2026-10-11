@@ -11,7 +11,7 @@ KBSearch 專案主要目的：
 ```text
 KBSearch/
   docs/
-  docker/
+  build_scripts/
   tests/
   importer/
     src/kbsearch_importer/
@@ -24,7 +24,7 @@ KBSearch/
 ```
 
 - `docs/`：設計文件。
-- `docker/`：Dockerfile 與 image 建置指令入口。
+- `build_scripts/`：Dockerfile、image 與 wheel 建置指令入口。
 - `tests/`：依子專案分類的正式測試程式。
 - `importer/`：Goolge Workspace 文件與向量庫同步子專案。
 - `query_cli/`：協助 Agent 進行 google workspace 關鍵字搜尋與向量庫查詢的指令工具子專案，並透過 `secure_backend` 存取 embedding model 與操作 vector store。

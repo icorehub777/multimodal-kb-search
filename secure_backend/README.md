@@ -6,7 +6,7 @@
 
 ## 目錄與設定
 
-程式位於 `secure_backend/src/kbsearch_backend/`，測試位於 `tests/secure_backend/`，image 建置檔位於根目錄 `docker/`。本機執行使用 `deploy/secure_backend/`，目錄配置見 [部署說明](../deploy/README.md#目錄與準備)。
+程式位於 `secure_backend/src/kbsearch_backend/`，測試位於 `tests/secure_backend/`，image 建置檔位於根目錄 `build_scripts/`。本機執行使用 `deploy/secure_backend/`，目錄配置見 [部署說明](../deploy/README.md#目錄與準備)。
 
 `config/.env` 的設定如下：
 
@@ -43,7 +43,7 @@ python -m unittest discover -s tests/secure_backend -t .
 需安裝 Docker 並啟動引擎。第一次執行，或 pyproject.toml／Dockerfile 變更時，在 repo 根目錄建置：
 
 ```powershell
-./docker/docker_build_secure_backend.ps1
+./build_scripts/docker_build_secure_backend.ps1
 ```
 
 Image 名稱為 `kbsearch-secure-backend`。

@@ -366,10 +366,7 @@ python -m unittest discover -s tests/query_cli -t .
 使用上述開發環境，在 repo 根目錄執行：
 
 ```powershell
-cd C:\path\to\KBSearch
-python -m build query_cli --wheel
+./build_scripts/build_wheel_query_cli.ps1
 ```
 
-`python -m build` 會產生 `query_cli/build/`（建置暫存）與 `query_cli/dist/kbsearch_cli-*.whl`。
-
-提供給 `agent_runtime` 部署的檔案為 `query_cli/dist/kbsearch_cli-*.whl`。
+Wheel 輸出至 `agent_runtime/_internal/packages/`；建置成功後，只保留本次的 CLI wheel。`query_cli/build/` 為建置暫存，不納版控。交付驗證與安裝方式見 [Agent Runtime](../agent_runtime/README.md#4-建立-venv-並安裝-cli)。

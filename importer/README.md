@@ -14,7 +14,7 @@
 
 ## 目錄與設定
 
-程式位於 `importer/src/kbsearch_importer/`，測試位於 `tests/importer/`，image 建置檔位於根目錄 `docker/`。本機執行使用 `deploy/importer/`，目錄配置見 [部署說明](../deploy/README.md#目錄與準備)。
+程式位於 `importer/src/kbsearch_importer/`，測試位於 `tests/importer/`，image 建置檔位於根目錄 `build_scripts/`。本機執行使用 `deploy/importer/`，目錄配置見 [部署說明](../deploy/README.md#目錄與準備)。
 
 ### `.env`
 
@@ -64,10 +64,10 @@ python -m unittest discover -s tests/importer -t .
 需安裝 Docker 並啟動引擎。第一次執行，或 pyproject.toml／Dockerfile 變更時，在 repo 根目錄建置：
 
 ```powershell
-./docker/docker_build_importer.ps1
+./build_scripts/docker_build_importer.ps1
 ```
 
-Image 名稱為 `kbsearch-importer`，以 Python 3.12／Debian 12（Bookworm）建置，內含無介面版 LibreOffice；TXT／Markdown 轉 PDF 使用內建的文泉驛正黑字型。Debian 套件預設從官方來源下載；若下載較慢，可指定鏡像，例如 `./docker/docker_build_importer.ps1 -DebianMirror http://ftp.tw.debian.org/debian`。
+Image 名稱為 `kbsearch-importer`，以 Python 3.12／Debian 12（Bookworm）建置，內含無介面版 LibreOffice；TXT／Markdown 轉 PDF 使用內建的文泉驛正黑字型。Debian 套件預設從官方來源下載；若下載較慢，可指定鏡像，例如 `./build_scripts/docker_build_importer.ps1 -DebianMirror http://ftp.tw.debian.org/debian`。
 
 ### 準備設定與執行
 

@@ -14,7 +14,7 @@ If a document fails during download, conversion, pagination, embedding, or vecto
 
 ## Directories and Configuration
 
-Source is in `importer/src/kbsearch_importer/`, tests are in `tests/importer/`, and image build files are in the root `docker/` directory. Local execution uses `deploy/importer/`; see the [deployment guide](../deploy/README.en.md#directories-and-preparation) for its directory layout.
+Source is in `importer/src/kbsearch_importer/`, tests are in `tests/importer/`, and image build files are in the root `build_scripts/` directory. Local execution uses `deploy/importer/`; see the [deployment guide](../deploy/README.en.md#directories-and-preparation) for its directory layout.
 
 ### `.env`
 
@@ -63,10 +63,10 @@ python -m unittest discover -s tests/importer -t .
 Install Docker and start its engine. Build from the repository root before first use or when pyproject.toml or the Dockerfile change:
 
 ```powershell
-./docker/docker_build_importer.ps1
+./build_scripts/docker_build_importer.ps1
 ```
 
-The image is named `kbsearch-importer`, built on Python 3.12 / Debian 12 (Bookworm), and includes headless LibreOffice. TXT/Markdown-to-PDF conversion uses the bundled WenQuanYi Zen Hei font. Debian packages are downloaded from the official source by default; if downloads are slow, specify a mirror, for example `./docker/docker_build_importer.ps1 -DebianMirror http://ftp.tw.debian.org/debian`.
+The image is named `kbsearch-importer`, built on Python 3.12 / Debian 12 (Bookworm), and includes headless LibreOffice. TXT/Markdown-to-PDF conversion uses the bundled WenQuanYi Zen Hei font. Debian packages are downloaded from the official source by default; if downloads are slow, specify a mirror, for example `./build_scripts/docker_build_importer.ps1 -DebianMirror http://ftp.tw.debian.org/debian`.
 
 ### Configure and Run
 

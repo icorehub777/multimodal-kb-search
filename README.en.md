@@ -12,7 +12,7 @@ KBSearch is designed to:
 ```text
 KBSearch/
   docs/
-  docker/
+  build_scripts/
   tests/
   importer/
     src/kbsearch_importer/
@@ -25,7 +25,7 @@ KBSearch/
 ```
 
 - `docs/`: Design documents.
-- `docker/`: Dockerfiles and image build launchers.
+- `build_scripts/`: Dockerfiles and image/wheel build launchers.
 - `tests/`: Project tests grouped by subproject.
 - `importer/`: Subproject that synchronizes Google Workspace documents with the vector database.
 - `query_cli/`: Command-line tools that let Agent search Google Workspace by keyword and query the vector database. It accesses the embedding model and vector store through `secure_backend`.

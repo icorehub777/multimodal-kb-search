@@ -6,7 +6,7 @@
 
 ## Directories and Configuration
 
-Source is in `secure_backend/src/kbsearch_backend/`, tests are in `tests/secure_backend/`, and image build files are in the root `docker/` directory. Local execution uses `deploy/secure_backend/`; see the [deployment guide](../deploy/README.en.md#directories-and-preparation) for its directory layout.
+Source is in `secure_backend/src/kbsearch_backend/`, tests are in `tests/secure_backend/`, and image build files are in the root `build_scripts/` directory. Local execution uses `deploy/secure_backend/`; see the [deployment guide](../deploy/README.en.md#directories-and-preparation) for its directory layout.
 
 Settings in `config/.env`:
 
@@ -43,7 +43,7 @@ python -m unittest discover -s tests/secure_backend -t .
 Install Docker and start its engine. Build from the repository root before first use or when pyproject.toml or the Dockerfile change:
 
 ```powershell
-./docker/docker_build_secure_backend.ps1
+./build_scripts/docker_build_secure_backend.ps1
 ```
 
 The image is named `kbsearch-secure-backend`.

@@ -359,10 +359,7 @@ In production, Agent uses `agent_runtime/` rather than executing source code fro
 Using the development environment above, run from the repository root:
 
 ```powershell
-cd C:\path\to\KBSearch
-python -m build query_cli --wheel
+./build_scripts/build_wheel_query_cli.ps1
 ```
 
-`python -m build` creates `query_cli/build/` for temporary build files and `query_cli/dist/kbsearch_cli-*.whl`.
-
-Deploy `query_cli/dist/kbsearch_cli-*.whl` to `agent_runtime`.
+The wheel is written to `agent_runtime/_internal/packages/`. After a successful build, only the newly built CLI wheel is retained. `query_cli/build/` contains untracked build temporary files. See [Agent Runtime](../agent_runtime/README.en.md#4-create-venv-and-install-the-cli) for delivery verification and installation.
