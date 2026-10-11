@@ -10,7 +10,7 @@ from kbsearch_cli.config import ConfigError, find_query_cli_env_file, load_query
 class QueryCliConfigTests(unittest.TestCase):
     def test_log_root_is_fixed_even_when_environment_supplies_another_path(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            internal = Path(temp_dir) / "_internal"
+            internal = Path(temp_dir).resolve() / "_internal"
             with patch("pathlib.Path.cwd", return_value=internal), patch.dict(os.environ, {
                 "KBSEARCH_SECURE_BACKEND_BASE_URL": "http://127.0.0.1:8000",
                 "KBSEARCH_SECURE_BACKEND_API_KEY": "test-key",
@@ -26,11 +26,11 @@ class QueryCliConfigTests(unittest.TestCase):
         from kbsearch_cli.config import resolve_query_logs_root
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            internal = Path(temp_dir) / "_internal"
+            internal = Path(temp_dir).resolve() / "_internal"
             logs = internal / "logs"
             original_resolve = Path.resolve
             with patch("pathlib.Path.cwd", return_value=internal), patch.object(Path, "resolve", autospec=True,
-                side_effect=lambda path: Path(temp_dir) / "outside" if path == logs else original_resolve(path)):
+                side_effect=lambda path: Path(temp_dir).resolve() / "outside" if path == logs else original_resolve(path)):
                 with self.assertRaisesRegex(ConfigError, "within _internal"):
                     resolve_query_logs_root()
 
@@ -43,7 +43,7 @@ class QueryCliConfigTests(unittest.TestCase):
         from kbsearch_cli.config import resolve_workspace_tasks_root
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            internal = Path(temp_dir) / "_internal"
+            internal = Path(temp_dir).resolve() / "_internal"
             with patch("pathlib.Path.cwd", return_value=internal), patch.dict(os.environ, {"KBSEARCH_TASKS_ROOT": "C:/outside"}):
                 self.assertEqual(resolve_workspace_tasks_root(), internal.parent / "tasks")
                 self.assertFalse((internal.parent / "tasks").exists())
@@ -59,19 +59,19 @@ class QueryCliConfigTests(unittest.TestCase):
         from kbsearch_cli.config import resolve_workspace_tasks_root
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            workspace = Path(temp_dir) / "workspace"
+            workspace = Path(temp_dir).resolve() / "workspace"
             tasks = workspace / "tasks"
             original_resolve = Path.resolve
             with patch("pathlib.Path.cwd", return_value=workspace / "_internal"), patch.object(
                 Path, "resolve", autospec=True,
-                side_effect=lambda path: Path(temp_dir) / "outside" if path == tasks else original_resolve(path),
+                side_effect=lambda path: Path(temp_dir).resolve() / "outside" if path == tasks else original_resolve(path),
             ):
                 with self.assertRaisesRegex(ConfigError, "within the workspace"):
                     resolve_workspace_tasks_root()
 
     def test_load_query_cli_config_reads_required_values(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            internal_root = Path(temp_dir) / "agent_runtime" / "_internal"
+            internal_root = Path(temp_dir).resolve() / "agent_runtime" / "_internal"
             config_dir = internal_root / "config"
             config_dir.mkdir(parents=True)
             env_file = config_dir / ".env"
@@ -105,7 +105,7 @@ class QueryCliConfigTests(unittest.TestCase):
 
     def test_load_query_cli_config_defaults_runtime_paths_to_cwd(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            env_file = Path(temp_dir) / ".env"
+            env_file = Path(temp_dir).resolve() / ".env"
             env_file.write_text(
                 "\n".join(
                     [
@@ -117,7 +117,7 @@ class QueryCliConfigTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
-            cwd = Path(temp_dir) / "_internal"
+            cwd = Path(temp_dir).resolve() / "_internal"
             cwd.mkdir()
 
             with patch.dict(os.environ, {}, clear=True), patch("pathlib.Path.cwd", return_value=cwd):
@@ -130,7 +130,7 @@ class QueryCliConfigTests(unittest.TestCase):
 
     def test_load_viewer_config_rejects_invalid_viewer_port(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            env_file = Path(temp_dir) / ".env"
+            env_file = Path(temp_dir).resolve() / ".env"
             env_file.write_text(
                 "\n".join(
                     [
@@ -151,7 +151,7 @@ class QueryCliConfigTests(unittest.TestCase):
 
     def test_load_query_cli_config_accepts_zero_log_retention_days(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            env_file = Path(temp_dir) / ".env"
+            env_file = Path(temp_dir).resolve() / ".env"
             env_file.write_text(
                 "\n".join(
                     [
@@ -172,7 +172,7 @@ class QueryCliConfigTests(unittest.TestCase):
 
     def test_load_query_cli_config_rejects_negative_log_retention_days(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            env_file = Path(temp_dir) / ".env"
+            env_file = Path(temp_dir).resolve() / ".env"
             env_file.write_text(
                 "\n".join(
                     [
@@ -195,7 +195,7 @@ class QueryCliConfigTests(unittest.TestCase):
 
     def test_find_query_cli_env_file_uses_current_working_directory_config(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            cwd = Path(temp_dir) / "agent_runtime" / "_internal"
+            cwd = Path(temp_dir).resolve() / "agent_runtime" / "_internal"
             env_file = cwd / "config" / ".env"
             env_file.parent.mkdir(parents=True)
             env_file.write_text("", encoding="utf-8")
@@ -205,7 +205,7 @@ class QueryCliConfigTests(unittest.TestCase):
 
     def test_load_query_cli_config_rejects_missing_backend_url(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            env_file = Path(temp_dir) / ".env"
+            env_file = Path(temp_dir).resolve() / ".env"
             env_file.write_text(
                 "\n".join(
                     [
@@ -223,7 +223,7 @@ class QueryCliConfigTests(unittest.TestCase):
 
     def test_load_query_cli_config_rejects_missing_backend_api_key(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            env_file = Path(temp_dir) / ".env"
+            env_file = Path(temp_dir).resolve() / ".env"
             env_file.write_text(
                 "\n".join(
                     [
@@ -241,7 +241,7 @@ class QueryCliConfigTests(unittest.TestCase):
 
     def test_load_query_cli_config_rejects_missing_cjk_font_path(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            env_file = Path(temp_dir) / ".env"
+            env_file = Path(temp_dir).resolve() / ".env"
             env_file.write_text(
                 "\n".join(
                     [
@@ -259,7 +259,7 @@ class QueryCliConfigTests(unittest.TestCase):
 
     def test_load_query_cli_config_rejects_relative_cjk_font_path(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            env_file = Path(temp_dir) / ".env"
+            env_file = Path(temp_dir).resolve() / ".env"
             env_file.write_text(
                 "\n".join(
                     [
@@ -278,7 +278,7 @@ class QueryCliConfigTests(unittest.TestCase):
 
     def test_load_query_cli_config_rejects_invalid_log_level(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            env_file = Path(temp_dir) / ".env"
+            env_file = Path(temp_dir).resolve() / ".env"
             env_file.write_text(
                 "\n".join(
                     [

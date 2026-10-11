@@ -60,7 +60,7 @@ class CliOutputTests(unittest.TestCase):
 
     def test_build_query_success_payload_includes_output_dir_and_counts(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            bundle_dir = Path(temp_dir) / "20260531-120000-手動測試"
+            bundle_dir = Path(temp_dir).resolve() / "20260531-120000-手動測試"
             bundle_dir.mkdir()
             bundle = QueryResultBundle(
                 path=bundle_dir,

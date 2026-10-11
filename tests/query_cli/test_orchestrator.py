@@ -438,7 +438,7 @@ class QueryOrchestratorTests(unittest.TestCase):
                 document_processor=processor,
             )
 
-            image_path = Path(temp_dir) / "sample.png"
+            image_path = Path(temp_dir).resolve() / "sample.png"
             image_path.write_bytes(b"png")
             result = orchestrator.run(
                 output_dir=_create_output_dir(temp_dir, "客戶查詢"),
@@ -1015,7 +1015,7 @@ class QueryOrchestratorTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             google_drive = FakeGoogleDriveClient()
             backend = FakeBackendClient()
-            image_path = Path(temp_dir) / "sample.png"
+            image_path = Path(temp_dir).resolve() / "sample.png"
             image_path.write_bytes(b"png")
             orchestrator = QueryOrchestrator(
                 google_drive=google_drive,

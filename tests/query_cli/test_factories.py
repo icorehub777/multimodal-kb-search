@@ -51,7 +51,7 @@ def _sample_config(root: Path) -> QueryCliConfig:
 class GoogleCredentialsFactoryTests(unittest.TestCase):
     def test_create_query_orchestrator_configures_document_processor(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            config = _sample_config(Path(temp_dir))
+            config = _sample_config(Path(temp_dir).resolve())
 
             with patch("kbsearch_cli.factories.create_drive_service", return_value=object()):
                 orchestrator = create_query_orchestrator(config)
@@ -120,7 +120,7 @@ class GoogleCredentialsFactoryTests(unittest.TestCase):
 
     def test_create_drive_service_requires_login_without_opening_browser(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            config = _sample_config(Path(temp_dir))
+            config = _sample_config(Path(temp_dir).resolve())
 
             with self.assertRaisesRegex(AuthenticationError, "kbsearch login"), patch(
                 "google_auth_oauthlib.flow.InstalledAppFlow.from_client_secrets_file"
@@ -131,7 +131,7 @@ class GoogleCredentialsFactoryTests(unittest.TestCase):
 
     def test_login_google_drive_runs_browser_flow_and_writes_credential_store(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            oauth_client = Path(temp_dir) / "oauth_client.json"
+            oauth_client = Path(temp_dir).resolve() / "oauth_client.json"
             oauth_client.write_text("{}", encoding="utf-8")
             config = LoginConfig(google_oauth_client_config=oauth_client)
             store = FakeCredentialStore()

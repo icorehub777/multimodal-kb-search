@@ -58,7 +58,7 @@ class BackendClientTests(unittest.TestCase):
             return FakeResponse()
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            image_path = Path(temp_dir) / "sample.png"
+            image_path = Path(temp_dir).resolve() / "sample.png"
             image_path.write_bytes(b"png-bytes")
 
             with patch("requests.post", side_effect=fake_post):

@@ -53,7 +53,7 @@ def _drive_service(error: Exception | None = None):
 class StartupProbeTests(unittest.TestCase):
     def test_probe_succeeds_when_services_and_local_tools_are_ready(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            config = _sample_config(Path(temp_dir))
+            config = _sample_config(Path(temp_dir).resolve())
             response = type("Response", (), {"status_code": 200})()
             with patch("shutil.which", return_value="soffice"), patch(
                 "requests.get", return_value=response
@@ -72,7 +72,7 @@ class StartupProbeTests(unittest.TestCase):
 
     def test_probe_requires_authentication_without_stored_credentials(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            config = _sample_config(Path(temp_dir))
+            config = _sample_config(Path(temp_dir).resolve())
             with patch("shutil.which", return_value="soffice"), patch(
                 "kbsearch_cli.startup_probe.load_google_credentials", return_value=None
             ), self.assertRaisesRegex(AuthenticationError, "kbsearch login"):
@@ -84,7 +84,7 @@ class StartupProbeTests(unittest.TestCase):
 
     def test_probe_fails_when_libreoffice_missing(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            config = _sample_config(Path(temp_dir))
+            config = _sample_config(Path(temp_dir).resolve())
             with patch("shutil.which", return_value=None), self.assertRaisesRegex(
                 ConfigError, "LibreOffice command not found"
             ):
@@ -92,7 +92,7 @@ class StartupProbeTests(unittest.TestCase):
 
     def test_probe_fails_when_cjk_font_missing(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            config = _sample_config(Path(temp_dir), cjk_font_exists=False)
+            config = _sample_config(Path(temp_dir).resolve(), cjk_font_exists=False)
             with patch("shutil.which", return_value="soffice"), self.assertRaisesRegex(
                 ConfigError, "CJK font not found"
             ):
@@ -102,7 +102,7 @@ class StartupProbeTests(unittest.TestCase):
         import requests
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            config = _sample_config(Path(temp_dir))
+            config = _sample_config(Path(temp_dir).resolve())
             with patch("shutil.which", return_value="soffice"), patch(
                 "requests.get", side_effect=requests.RequestException("connection refused")
             ), self.assertRaisesRegex(ExternalServiceError, "Secure backend unreachable"):
@@ -110,7 +110,7 @@ class StartupProbeTests(unittest.TestCase):
 
     def test_probe_reports_rejected_backend_api_key_as_config_error(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            config = _sample_config(Path(temp_dir))
+            config = _sample_config(Path(temp_dir).resolve())
             response = type("Response", (), {"status_code": 401})()
             with patch("shutil.which", return_value="soffice"), patch(
                 "requests.get", return_value=response
@@ -120,7 +120,7 @@ class StartupProbeTests(unittest.TestCase):
     def test_probe_preserves_credential_on_transient_drive_failure(self):
         store = FakeCredentialStore()
         with tempfile.TemporaryDirectory() as temp_dir:
-            config = _sample_config(Path(temp_dir))
+            config = _sample_config(Path(temp_dir).resolve())
             with patch("shutil.which", return_value="soffice"), patch(
                 "kbsearch_cli.startup_probe.load_google_credentials", return_value=object()
             ), self.assertRaisesRegex(ExternalServiceError, "validation failed"):
@@ -135,7 +135,7 @@ class StartupProbeTests(unittest.TestCase):
     def test_probe_deletes_explicitly_invalid_credential(self):
         store = FakeCredentialStore()
         with tempfile.TemporaryDirectory() as temp_dir:
-            config = _sample_config(Path(temp_dir))
+            config = _sample_config(Path(temp_dir).resolve())
             with patch("shutil.which", return_value="soffice"), patch(
                 "kbsearch_cli.startup_probe.load_google_credentials", return_value=object()
             ), self.assertRaisesRegex(AuthenticationError, "kbsearch login"):

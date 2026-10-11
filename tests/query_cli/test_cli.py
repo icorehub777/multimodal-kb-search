@@ -45,7 +45,7 @@ class CliTests(unittest.TestCase):
 
     def test_missing_query_image_fails_before_logs_or_external_calls(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir) / "tasks"
+            root = Path(temp_dir).resolve() / "tasks"
             config = type("Config", (), {"tasks_root": root})()
             with patch("kbsearch_cli.__main__.load_query_cli_config", return_value=config), patch(
                 "kbsearch_cli.__main__.configure_query_cli_logging"
@@ -59,7 +59,7 @@ class CliTests(unittest.TestCase):
 
     def test_query_creates_missing_task_root_and_result_directory(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
+            root = Path(temp_dir).resolve()
             tasks_root = root / "tasks"
             output = tasks_root / "task" / "query_results" / "search"
             config = type("Config", (), {"tasks_root": tasks_root, "query_logs_root": root / "logs", "query_log_retention_days": 14, "log_level": "INFO"})()
@@ -598,7 +598,7 @@ class CliTests(unittest.TestCase):
 
     def test_render_pdf_pages_renders_selected_pages_without_loading_query_config(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
+            root = Path(temp_dir).resolve()
             document = root / "tasks" / "task" / "query_results" / "query" / "document"
             (document / "pdf").mkdir(parents=True)
             pdf_path = document / "pdf" / "document.pdf"
@@ -677,13 +677,13 @@ class CliTests(unittest.TestCase):
 
     def test_query_failure_after_logging_started_includes_log_path(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            log_root = Path(temp_dir) / "configured-logs"
+            log_root = Path(temp_dir).resolve() / "configured-logs"
             config = type(
                 "Config",
                 (),
-                {"tasks_root": Path(temp_dir), "query_logs_root": log_root, "query_log_retention_days": 14, "log_level": "INFO"},
+                {"tasks_root": Path(temp_dir).resolve(), "query_logs_root": log_root, "query_log_retention_days": 14, "log_level": "INFO"},
             )()
-            output_dir = Path(temp_dir) / "task-01" / "query_results" / "new-query"
+            output_dir = Path(temp_dir).resolve() / "task-01" / "query_results" / "new-query"
             log_context = QueryLogContext(
                 run_id="run12345",
                 log_path=log_root / "kbsearch-20260622-083000-run12345.log",
@@ -730,18 +730,18 @@ class CliTests(unittest.TestCase):
             self.assertIn("query failed", log_text)
             self.assertIn("run_id=run12345", log_text)
             self.assertFalse(output_dir.exists())
-            self.assertFalse((Path(temp_dir) / "task-01").exists())
+            self.assertFalse((Path(temp_dir).resolve() / "task-01").exists())
 
     def test_query_rejects_existing_output_dir_before_logging_or_startup_probe(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
+            root = Path(temp_dir).resolve()
             output_dir = root / "task-01" / "query_results" / "existing-query"
             output_dir.mkdir(parents=True)
             log_root = root / "logs"
             config = type(
                 "Config",
                 (),
-                {"tasks_root": Path(temp_dir), "query_logs_root": log_root, "query_log_retention_days": 14, "log_level": "INFO"},
+                {"tasks_root": Path(temp_dir).resolve(), "query_logs_root": log_root, "query_log_retention_days": 14, "log_level": "INFO"},
             )()
             log_context = QueryLogContext(
                 run_id="run12345",
@@ -788,11 +788,11 @@ class CliTests(unittest.TestCase):
 
     def test_query_stops_when_log_cleanup_fails(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            log_root = Path(temp_dir) / "logs"
+            log_root = Path(temp_dir).resolve() / "logs"
             config = type(
                 "Config",
                 (),
-                {"tasks_root": Path(temp_dir), "query_logs_root": log_root, "query_log_retention_days": 14, "log_level": "INFO"},
+                {"tasks_root": Path(temp_dir).resolve(), "query_logs_root": log_root, "query_log_retention_days": 14, "log_level": "INFO"},
             )()
             log_context = QueryLogContext(
                 run_id="run12345",
@@ -850,7 +850,7 @@ class CliTests(unittest.TestCase):
 
     def test_cleanup_old_query_log_files_removes_only_expired_query_logs(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            log_root = Path(temp_dir)
+            log_root = Path(temp_dir).resolve()
             old_log = log_root / "kbsearch-20260101-000000-old.log"
             recent_log = log_root / "kbsearch-20260621-000000-recent.log"
             unrelated_log = log_root / "other.log"
@@ -875,7 +875,7 @@ class CliTests(unittest.TestCase):
 
     def test_cleanup_old_query_log_files_skips_when_retention_is_zero(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            log_root = Path(temp_dir)
+            log_root = Path(temp_dir).resolve()
             old_log = log_root / "kbsearch-20260101-000000-old.log"
             old_log.write_text("old", encoding="utf-8")
 
@@ -892,7 +892,7 @@ class CliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             context = QueryLogContext(
                 run_id="run12345",
-                log_path=Path(temp_dir) / "kbsearch-20260622-083000-run12345.log",
+                log_path=Path(temp_dir).resolve() / "kbsearch-20260622-083000-run12345.log",
             )
             logger = configure_query_cli_logging(context)
             logger.info("query finished status=finished")
@@ -915,7 +915,7 @@ class CliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             context = QueryLogContext(
                 run_id="run12345",
-                log_path=Path(temp_dir) / "debug.log",
+                log_path=Path(temp_dir).resolve() / "debug.log",
             )
             logger = configure_query_cli_logging(context, "DEBUG")
             logger.debug("debug details")

@@ -50,10 +50,10 @@ class RenderingTests(unittest.TestCase):
 
         renderer = DocumentPageRenderer(cjk_font_path=cjk_font_path)
         with tempfile.TemporaryDirectory() as temp_dir:
-            source = Path(temp_dir) / "README.md"
+            source = Path(temp_dir).resolve() / "README.md"
             source.write_text("中文測試\t：文件查詢\n", encoding="utf-8")
 
-            output = renderer._convert_text_to_pdf(source, Path(temp_dir))
+            output = renderer._convert_text_to_pdf(source, Path(temp_dir).resolve())
 
             with fitz.open(output) as document:
                 text = document[0].get_text("text")
@@ -63,7 +63,7 @@ class RenderingTests(unittest.TestCase):
 
     def test_cjk_font_name_uses_only_configured_font_path(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            configured_font = Path(temp_dir) / "custom-cjk.ttf"
+            configured_font = Path(temp_dir).resolve() / "custom-cjk.ttf"
             configured_font.write_bytes(b"font")
             seen_paths = []
 
@@ -97,7 +97,7 @@ class RenderingTests(unittest.TestCase):
     def test_convert_office_to_pdf_uses_short_temp_path_when_source_path_is_too_long(self):
         renderer = DocumentPageRenderer()
         with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
+            root = Path(temp_dir).resolve()
             long_name = "內部_" + ("Bell Taih US CA Unshipped Order Status - 20260522" * 3) + ".pptx"
             source_dir = root / "bundle" / long_name.replace(".pptx", "-file-id")
             source_dir.mkdir(parents=True)
@@ -122,7 +122,7 @@ class RenderingTests(unittest.TestCase):
     def test_convert_office_to_pdf_does_not_leave_pdf_when_libreoffice_fails(self):
         renderer = DocumentPageRenderer()
         with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
+            root = Path(temp_dir).resolve()
             long_name = "內部_" + ("Bell Taih US CA Unshipped Order Status - 20260522" * 3) + ".pptx"
             source_dir = root / "bundle" / long_name.replace(".pptx", "-file-id")
             source_dir.mkdir(parents=True)
@@ -144,7 +144,7 @@ class RenderingTests(unittest.TestCase):
     def test_extract_pdf_text_writes_one_utf8_file_per_page(self):
         renderer = DocumentPageRenderer()
         with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
+            root = Path(temp_dir).resolve()
             pdf_path = root / "sample.pdf"
             _create_pdf(pdf_path, ["first page", "second page"])
 
@@ -157,7 +157,7 @@ class RenderingTests(unittest.TestCase):
     def test_process_copies_pdf_to_standard_document_path(self):
         renderer = DocumentPageRenderer(dpi=72)
         with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
+            root = Path(temp_dir).resolve()
             source_path = root / "original-name.pdf"
             _create_pdf(source_path, ["first page"])
             output_dir = root / "result"
@@ -181,7 +181,7 @@ class RenderingTests(unittest.TestCase):
     def test_process_keeps_spreadsheet_without_derived_files(self):
         renderer = DocumentPageRenderer()
         with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
+            root = Path(temp_dir).resolve()
             source_path = root / "orders.xlsx"
             source_path.write_bytes(b"xlsx")
 
@@ -200,7 +200,7 @@ class RenderingTests(unittest.TestCase):
     def test_process_keeps_unsupported_mime_without_derived_files(self):
         renderer = DocumentPageRenderer()
         with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
+            root = Path(temp_dir).resolve()
             source_path = root / "archive.zip"
             source_path.write_bytes(b"zip")
 
@@ -221,7 +221,7 @@ class RenderingTests(unittest.TestCase):
 
         renderer = DocumentPageRenderer()
         with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
+            root = Path(temp_dir).resolve()
             source_path = root / "photo.jpg"
             Image.new("RGB", (2, 2), color=(255, 0, 0)).save(source_path)
 
@@ -237,7 +237,7 @@ class RenderingTests(unittest.TestCase):
 
         renderer = DocumentPageRenderer()
         with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
+            root = Path(temp_dir).resolve()
             source_path = root / "rotated.jpg"
             image = Image.new("RGB", (2, 3), color=(255, 0, 0))
             exif = image.getexif()
@@ -252,7 +252,7 @@ class RenderingTests(unittest.TestCase):
     def test_prepare_pdf_rejects_image_mime_type(self):
         renderer = DocumentPageRenderer()
         with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
+            root = Path(temp_dir).resolve()
             source_path = root / "photo.jpg"
             source_path.write_bytes(b"image")
 
@@ -262,7 +262,7 @@ class RenderingTests(unittest.TestCase):
     def test_process_uses_mime_type_for_pdf_without_extension(self):
         renderer = DocumentPageRenderer(dpi=72)
         with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
+            root = Path(temp_dir).resolve()
             source_path = root / "downloaded"
             _create_pdf(source_path, ["first page"])
             output_dir = root / "result"
@@ -278,7 +278,7 @@ class RenderingTests(unittest.TestCase):
 
         renderer = DocumentPageRenderer()
         with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
+            root = Path(temp_dir).resolve()
             source_path = root / "downloaded"
             Image.new("RGB", (2, 2), color=(255, 0, 0)).save(source_path, format="JPEG")
 
@@ -291,7 +291,7 @@ class RenderingTests(unittest.TestCase):
     def test_render_pdf_pages_only_renders_requested_pages(self):
         renderer = DocumentPageRenderer(dpi=72)
         with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
+            root = Path(temp_dir).resolve()
             pdf_path = root / "sample.pdf"
             _create_pdf(pdf_path, ["one", "two", "three"])
             pages_dir = root / "pages"
@@ -308,7 +308,7 @@ class RenderingTests(unittest.TestCase):
     def test_process_reuses_existing_query_page_pngs_without_overwriting(self):
         renderer = DocumentPageRenderer(dpi=72)
         with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
+            root = Path(temp_dir).resolve()
             source_path = root / "source.pdf"
             _create_pdf(source_path, ["alpha keyword", "second page"])
             output_dir = root / "result"
@@ -335,7 +335,7 @@ class RenderingTests(unittest.TestCase):
     def test_render_pdf_pages_rejects_page_beyond_document(self):
         renderer = DocumentPageRenderer()
         with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
+            root = Path(temp_dir).resolve()
             pdf_path = root / "sample.pdf"
             _create_pdf(pdf_path, ["one"])
 

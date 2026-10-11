@@ -19,10 +19,10 @@ class QueryOutputTests(unittest.TestCase):
         from kbsearch_cli.output import resolve_query_image_paths, resolve_query_output_directory
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            workspace = Path(temp_dir) / "workspace"
+            workspace = Path(temp_dir).resolve() / "workspace"
             root = workspace / "tasks"
             original_resolve = Path.resolve
-            with patch.object(Path, "resolve", autospec=True, side_effect=lambda path: Path(temp_dir) / "outside" if path == root else original_resolve(path)):
+            with patch.object(Path, "resolve", autospec=True, side_effect=lambda path: Path(temp_dir).resolve() / "outside" if path == root else original_resolve(path)):
                 with self.assertRaisesRegex(QueryInputError, "within the workspace"):
                     resolve_query_output_directory(root, "task", "query")
                 with self.assertRaisesRegex(QueryInputError, "within the workspace"):
@@ -32,7 +32,7 @@ class QueryOutputTests(unittest.TestCase):
         from kbsearch_cli.output import resolve_query_image_paths
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir) / "tasks"
+            root = Path(temp_dir).resolve() / "tasks"
             task = root / "task"
             task.mkdir(parents=True)
             images = [task / "photo.png", task / "圖片.jpg"]
@@ -45,7 +45,7 @@ class QueryOutputTests(unittest.TestCase):
         from kbsearch_cli.output import resolve_query_image_paths
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
+            root = Path(temp_dir).resolve()
             (root / "task" / "folder.png").mkdir(parents=True)
             for name in ("../photo.png", "nested/photo.png", "nested\\photo.png", "C:\\photo.png", "/photo.png", "", "missing.png", "folder.png"):
                 with self.subTest(name=name), self.assertRaises(QueryInputError):
@@ -56,7 +56,7 @@ class QueryOutputTests(unittest.TestCase):
         from kbsearch_cli.output import resolve_query_image_paths
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
+            root = Path(temp_dir).resolve()
             image = root / "task" / "photo.png"
             original_resolve = Path.resolve
             with patch.object(Path, "resolve", autospec=True, side_effect=lambda path: root / "outside.png" if path == image else original_resolve(path)):
@@ -68,10 +68,10 @@ class QueryOutputTests(unittest.TestCase):
         from kbsearch_cli.output import resolve_query_output_directory
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir) / "tasks"
+            root = Path(temp_dir).resolve() / "tasks"
             output = root / "task" / "query_results" / "query"
             original_resolve = Path.resolve
-            with patch.object(Path, "resolve", autospec=True, side_effect=lambda path: Path(temp_dir) / "outside" if path == output else original_resolve(path)):
+            with patch.object(Path, "resolve", autospec=True, side_effect=lambda path: Path(temp_dir).resolve() / "outside" if path == output else original_resolve(path)):
                 with self.assertRaisesRegex(QueryInputError, "within the task root"):
                     resolve_query_output_directory(root, "task", "query")
             self.assertFalse(output.exists())
@@ -81,7 +81,7 @@ class QueryOutputTests(unittest.TestCase):
         from kbsearch_cli.viewer_app import discover_query_results
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir) / "tasks"
+            root = Path(temp_dir).resolve() / "tasks"
             for query in ("first", "second"):
                 output = resolve_query_output_directory(root, "task", query)
                 reserve_output_directory(output)
@@ -94,7 +94,7 @@ class QueryOutputTests(unittest.TestCase):
         from kbsearch_cli.output import resolve_query_output_directory
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir) / "tasks"
+            root = Path(temp_dir).resolve() / "tasks"
             output = resolve_query_output_directory(root, "任務", "搜尋")
             self.assertEqual(output, root / "任務" / "query_results" / "搜尋")
             self.assertFalse(root.exists())
@@ -104,7 +104,7 @@ class QueryOutputTests(unittest.TestCase):
         from kbsearch_cli.output import resolve_query_output_directory
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
+            root = Path(temp_dir).resolve()
             for name in ("", " ", ".", "..", "../x", "x/y", "x\\y", "C:x", "CON", "nul.txt", "x.", "x ", "x\x00"):
                 for task, query in ((name, "query"), ("task", name)):
                     with self.subTest(task=task, query=query), self.assertRaises(QueryInputError):
@@ -121,7 +121,7 @@ class QueryOutputTests(unittest.TestCase):
     def test_query_result_writer_writes_result_lists_to_output_directory(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             writer = QueryResultWriter()
-            output_dir = Path(temp_dir) / "20260524-203000-測試查詢"
+            output_dir = Path(temp_dir).resolve() / "20260524-203000-測試查詢"
             output_dir.mkdir()
 
             bundle = writer.create_bundle(
@@ -185,7 +185,7 @@ class QueryOutputTests(unittest.TestCase):
         from kbsearch_cli.output import reserve_output_directory
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            output_dir = Path(temp_dir) / "task" / "query_results" / "query-01"
+            output_dir = Path(temp_dir).resolve() / "task" / "query_results" / "query-01"
 
             reserve_output_directory(output_dir)
 

@@ -16,7 +16,7 @@ class WorkspaceBoundaryTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.workspace = Path(self.temp.name)
+        self.workspace = Path(self.temp.name).resolve()
         self.internal = self.workspace / '_internal'
         self.internal.mkdir()
         self.tasks = self.workspace / 'tasks'

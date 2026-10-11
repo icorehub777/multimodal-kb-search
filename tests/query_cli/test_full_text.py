@@ -26,7 +26,7 @@ class FullTextKeywordTests(unittest.TestCase):
 
     def test_locate_full_text_keyword_pages_uses_case_insensitive_literal_matches(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
+            root = Path(temp_dir).resolve()
             page_1 = root / "0001.txt"
             page_2 = root / "0002.txt"
             page_3 = root / "0003.txt"

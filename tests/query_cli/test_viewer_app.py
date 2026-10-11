@@ -12,7 +12,7 @@ from kbsearch_cli.viewer_app import (
 class ViewerAppTests(unittest.TestCase):
     def test_find_page_image_uses_downloaded_files_directory_mapping(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            query_dir = Path(temp_dir) / "query"
+            query_dir = Path(temp_dir).resolve() / "query"
             document_dir = query_dir / "same-name-file-1a2b3"
             pages_dir = document_dir / "pages"
             pages_dir.mkdir(parents=True)
@@ -36,7 +36,7 @@ class ViewerAppTests(unittest.TestCase):
 
     def test_find_page_image_uses_downloaded_files_page_paths(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            query_dir = Path(temp_dir) / "query"
+            query_dir = Path(temp_dir).resolve() / "query"
             pages_dir = query_dir / "document-file-1a2b3" / "pages"
             pages_dir.mkdir(parents=True)
             page_image = pages_dir / "0003.png"
@@ -58,7 +58,7 @@ class ViewerAppTests(unittest.TestCase):
 
     def test_find_page_image_does_not_guess_document_directory_without_mapping(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            query_dir = Path(temp_dir) / "query"
+            query_dir = Path(temp_dir).resolve() / "query"
             pages_dir = query_dir / "Spec-file-1a2b3" / "pages"
             pages_dir.mkdir(parents=True)
             (pages_dir / "0002.png").write_bytes(b"image")
