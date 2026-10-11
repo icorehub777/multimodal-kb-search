@@ -201,14 +201,14 @@ class DocumentPageRenderer:
 
     def extract_pdf_text(self, pdf_path: Path, output_dir: Path) -> list[Path]:
         try:
-            import fitz
+            import pymupdf
         except ImportError as exc:
             raise DocumentRenderError("PyMuPDF is required for PDF text extraction.") from exc
 
         output_dir.mkdir(parents=True, exist_ok=True)
         paths: list[Path] = []
         try:
-            with fitz.open(pdf_path) as document:
+            with pymupdf.open(pdf_path) as document:
                 for index, page in enumerate(document, start=1):
                     output_path = output_dir / f"{index:04d}.txt"
                     output_path.write_text(page.get_text("text"), encoding="utf-8")
@@ -226,7 +226,7 @@ class DocumentPageRenderer:
         overwrite: bool = True,
     ) -> list[Path]:
         try:
-            import fitz
+            import pymupdf
         except ImportError as exc:
             raise DocumentRenderError("PyMuPDF is required for PDF page rendering.") from exc
 
@@ -242,10 +242,10 @@ class DocumentPageRenderer:
             require_scoped_path(output_dir / f"{page_number:04d}.png", output_dir.parent)
         output_dir.mkdir(parents=True, exist_ok=True)
         paths: list[Path] = []
-        previous_display_errors = fitz.TOOLS.mupdf_display_errors(False)
+        previous_display_errors = pymupdf.TOOLS.mupdf_display_errors(False)
         try:
             try:
-                with fitz.open(pdf_path) as document:
+                with pymupdf.open(pdf_path) as document:
                     page_count = len(document)
                     invalid_pages = [
                         page_number for page_number in selected_pages if page_number > page_count
@@ -269,7 +269,7 @@ class DocumentPageRenderer:
             except Exception as exc:
                 raise DocumentRenderError(f"PDF page rendering failed: {pdf_path}") from exc
         finally:
-            fitz.TOOLS.mupdf_display_errors(previous_display_errors)
+            pymupdf.TOOLS.mupdf_display_errors(previous_display_errors)
         return paths
 
     def _render_image(

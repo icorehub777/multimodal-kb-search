@@ -461,9 +461,9 @@ def inject_styles() -> None:
 
 
 def inject_image_modal_script() -> None:
-    import streamlit.components.v1 as components
+    import streamlit as st
 
-    components.html(
+    st.iframe(
         """
         <script>
           (() => {
@@ -533,7 +533,8 @@ def inject_image_modal_script() -> None:
           })();
         </script>
         """,
-        height=0,
+        height=1,
+        tab_index=-1,
     )
 
 
@@ -574,7 +575,7 @@ def result_summary(results: list[dict[str, Any]]) -> str:
 
 
 def inject_tab_tooltips(vector_summary: str, keyword_summary: str) -> None:
-    import streamlit.components.v1 as components
+    import streamlit as st
 
     payload = json.dumps(
         {
@@ -583,7 +584,7 @@ def inject_tab_tooltips(vector_summary: str, keyword_summary: str) -> None:
         },
         ensure_ascii=False,
     )
-    components.html(
+    st.iframe(
         f"""
         <script>
           const tooltips = {payload};
@@ -601,7 +602,8 @@ def inject_tab_tooltips(vector_summary: str, keyword_summary: str) -> None:
           setTimeout(applyTooltips, 500);
         </script>
         """,
-        height=0,
+        height=1,
+        tab_index=-1,
     )
 
 

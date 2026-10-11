@@ -40,7 +40,7 @@ class RenderingTests(unittest.TestCase):
 
     def test_text_to_pdf_preserves_chinese_text(self):
         try:
-            import fitz
+            import pymupdf
         except ImportError:
             self.skipTest("PyMuPDF is required for PDF text extraction.")
 
@@ -55,7 +55,7 @@ class RenderingTests(unittest.TestCase):
 
             output = renderer._convert_text_to_pdf(source, Path(temp_dir).resolve())
 
-            with fitz.open(output) as document:
+            with pymupdf.open(output) as document:
                 text = document[0].get_text("text")
 
         self.assertIn("中文測試", text)
@@ -373,9 +373,9 @@ def _load_importer_document_processing():
 
 
 def _create_pdf(path: Path, page_texts: list[str]) -> None:
-    import fitz
+    import pymupdf
 
-    with fitz.open() as document:
+    with pymupdf.open() as document:
         for text in page_texts:
             page = document.new_page()
             page.insert_text((72, 72), text)

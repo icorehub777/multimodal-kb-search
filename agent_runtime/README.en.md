@@ -110,6 +110,8 @@ Install the wheel for delivery verification and production deployment:
 .\.venv\Scripts\python.exe -m pip install --force-reinstall (Get-ChildItem .\packages\kbsearch_cli-*.whl).FullName
 ```
 
+After delivery verification, rerun the editable install command above if you want to continue development.
+
 Do not copy an entire `.venv` from another computer or development environment for direct use, because it is bound to the Python path on the machine where it was created.
 
 ---

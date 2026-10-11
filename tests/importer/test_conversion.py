@@ -147,7 +147,7 @@ class ConversionTests(unittest.TestCase):
                 def open(_pdf_path):
                     return FakeDocument()
 
-            with patch.dict(sys.modules, {"fitz": FakeFitz}):
+            with patch.dict(sys.modules, {"pymupdf": FakeFitz}):
                 pages = renderer.render_pages(Path("Spec.pdf"), Path(temp_dir))
 
         self.assertEqual([page.page_number for page in pages], [1, 2])
@@ -189,7 +189,7 @@ class ConversionTests(unittest.TestCase):
 
         renderer = PdfPageRenderer(target_dpi=200, max_pixels=80_000_000)
         with TemporaryDirectory() as temp_dir:
-            with patch.dict(sys.modules, {"fitz": FakeFitz}):
+            with patch.dict(sys.modules, {"pymupdf": FakeFitz}):
                 renderer.render_pages(Path("oversized.pdf"), Path(temp_dir))
 
         self.assertEqual(seen_dpi, [83])
@@ -219,7 +219,7 @@ class ConversionTests(unittest.TestCase):
 
         renderer = PdfPageRenderer()
         with TemporaryDirectory() as temp_dir:
-            with patch.dict(sys.modules, {"fitz": FakeFitz}):
+            with patch.dict(sys.modules, {"pymupdf": FakeFitz}):
                 renderer.render_pages(Path("Spec.pdf"), Path(temp_dir))
 
         self.assertEqual(display_error_values, [False, True])
@@ -260,7 +260,7 @@ class ConversionTests(unittest.TestCase):
 
     def test_text_to_pdf_preserves_chinese_text(self):
         try:
-            import fitz
+            import pymupdf
         except ImportError:
             self.skipTest("PyMuPDF is required for PDF text extraction.")
 
@@ -278,7 +278,7 @@ class ConversionTests(unittest.TestCase):
 
             output = converter.convert_to_pdf(source, "text/markdown", Path(temp_dir) / "pdf")
 
-            with fitz.open(output) as document:
+            with pymupdf.open(output) as document:
                 text = document[0].get_text("text")
 
         self.assertIn("\u4e2d\u6587\u6e2c\u8a66", text)
@@ -287,7 +287,7 @@ class ConversionTests(unittest.TestCase):
 
     def test_text_to_pdf_supports_cp950_and_logs_selected_encoding(self):
         try:
-            import fitz
+            import pymupdf
         except ImportError:
             self.skipTest("PyMuPDF is required for PDF text extraction.")
 
@@ -307,7 +307,7 @@ class ConversionTests(unittest.TestCase):
 
             output = converter.convert_to_pdf(source, "text/plain", Path(temp_dir) / "pdf")
 
-            with fitz.open(output) as document:
+            with pymupdf.open(output) as document:
                 text = document[0].get_text("text")
 
         self.assertIn("繁體中文測試", text)
@@ -315,7 +315,7 @@ class ConversionTests(unittest.TestCase):
 
     def test_text_to_pdf_honors_utf16_bom(self):
         try:
-            import fitz
+            import pymupdf
         except ImportError:
             self.skipTest("PyMuPDF is required for PDF text extraction.")
 
@@ -330,14 +330,14 @@ class ConversionTests(unittest.TestCase):
 
             output = converter.convert_to_pdf(source, "text/plain", Path(temp_dir) / "pdf")
 
-            with fitz.open(output) as document:
+            with pymupdf.open(output) as document:
                 text = document[0].get_text("text")
 
         self.assertIn("UTF-16 中文", text)
 
     def test_text_to_pdf_wraps_long_chinese_lines(self):
         try:
-            import fitz
+            import pymupdf
         except ImportError:
             self.skipTest("PyMuPDF is required for PDF text extraction.")
 
@@ -352,7 +352,7 @@ class ConversionTests(unittest.TestCase):
 
             output = converter.convert_to_pdf(source, "text/markdown", Path(temp_dir) / "pdf")
 
-            with fitz.open(output) as document:
+            with pymupdf.open(output) as document:
                 text = document[0].get_text("text")
 
         self.assertGreaterEqual(len([line for line in text.splitlines() if line]), 3)

@@ -110,6 +110,8 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install --force-reinstall (Get-ChildItem .\packages\kbsearch_cli-*.whl).FullName
 ```
 
+交付驗證完成後，若要繼續開發，重新執行上述 editable install 指令。
+
 請注意：`.venv` 不可從其他電腦或開發環境整包複製後直接使用，因其綁定建立當下該機器的 Python 路徑。
 
 ---

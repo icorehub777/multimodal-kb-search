@@ -174,15 +174,15 @@ class PdfPageRenderer:
             return PageImageRenderer().render_pages(pdf_path, output_dir)
 
         try:
-            import fitz
+            import pymupdf
         except ImportError as exc:
             raise DocumentConversionError("PyMuPDF is required for PDF page rendering.") from exc
 
         output_dir.mkdir(parents=True, exist_ok=True)
         pages: list[PageImage] = []
-        previous_display_errors = fitz.TOOLS.mupdf_display_errors(False)
+        previous_display_errors = pymupdf.TOOLS.mupdf_display_errors(False)
         try:
-            with fitz.open(pdf_path) as document:
+            with pymupdf.open(pdf_path) as document:
                 for index, page in enumerate(document, start=1):
                     output_path = page_png_path(output_dir, index)
                     render_dpi = _page_render_dpi(
@@ -204,7 +204,7 @@ class PdfPageRenderer:
                     page.get_pixmap(dpi=render_dpi).save(output_path)
                     pages.append(PageImage(page_number=index, path=output_path))
         finally:
-            fitz.TOOLS.mupdf_display_errors(previous_display_errors)
+            pymupdf.TOOLS.mupdf_display_errors(previous_display_errors)
         return pages
 
 
