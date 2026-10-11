@@ -27,7 +27,7 @@ repo_root/
 
 - 收到新的使用者任務時，在 `tasks/` 下建立 `<yyyyMMdd-HHmmss>` 任務資料夾，並同時建立該任務的 `memory.md`；若根目錄 `memory.md` 尚不存在，一併依本文件規範建立。
 - 同一任務的使用者輸入、搜尋結果、分析內容與產出均放在同一任務資料夾；既有任務的後續需求沿用原任務資料夾。
-- 針對每次搜尋結果在該任務的 `query_results/` 下建立 `<yyyyMMdd-HHmmss>` 搜尋結果資料夾存放；其他臨時分析產物也放在目前任務資料夾內，但不得放到 `query_results/` 中。
+- 每次搜尋以 `<yyyyMMdd-HHmmss>` 指定搜尋名稱，由 CLI 建立搜尋結果資料夾；其他臨時建立的分析產物也放在目前任務資料夾內，但不得放到 `query_results/` 中。
 
 ---
 
@@ -55,12 +55,12 @@ repo_root/
 ### 搜尋
 
 ```powershell
-.\.venv\Scripts\kbsearch.exe query --output-dir "../tasks/<任務資料夾>/query_results/<yyyyMMdd-HHmmss>" [--vector-query "<相似度搜尋文字>"] [--drive-query "<Google Drive q 搜尋語法>"] [--image <圖片路徑>] [--limit <數量>] [--min-score <分數>]
+.\.venv\Scripts\kbsearch.exe query --task-name "<任務資料夾>" --query-name "<yyyyMMdd-HHmmss>" [--vector-query "<相似度搜尋文字>"] [--drive-query "<Google Drive q 搜尋語法>"] [--image <圖片檔名>] [--limit <數量>] [--min-score <分數>]
 ```
 
-- `--output-dir` 必填，每次使用尚不存在的新路徑；若指令回報路徑已存在，改用新路徑重新執行，既有資料夾保留原樣。
+- `--task-name` 填入目前任務資料夾名稱；`--query-name` 填入本次搜尋名稱。若回報搜尋資料夾已存在，改用新搜尋名稱重新執行，既有資料夾保留原樣。
 - `--vector-query` 相似度搜尋文字；可與 `--image` 併用或單獨使用。
-- `--image` 圖片路徑，可重複指定；路徑相對 `_internal/`（例如 `../tasks/<任務資料夾>/user-01.png`）。可只帶 `--image` 執行純圖片相似度搜尋。
+- `--image` 填入已存至目前任務資料夾的圖片檔名（例如 `user-01.png`），可重複指定。可只帶 `--image` 執行純圖片相似度搜尋。
 - `--drive-query` 關鍵字搜尋條件，直接送給 Google Drive API `files().list(q=...)`；只使用支援的欄位與運算子，例如 `fullText contains ...`、`name contains ...`、`mimeType`、`modifiedTime`、`createdTime`、`owner`、`sharedWithMe`、`starred`、`trashed`。
 - 只帶本輪搜尋計畫確定要執行的路線參數，每次至少提供 `--vector-query`、`--drive-query` 或 `--image` 其中一個。
 - `--limit` 兩種搜尋各自的回傳筆數上限，傳入與使用者確認的值。
@@ -80,12 +80,11 @@ repo_root/
 ### 產生單頁 PNG
 
 ```powershell
-.\.venv\Scripts\kbsearch.exe render-pdf-pages --pdf "../tasks/<任務資料夾>/query_results/<搜尋資料夾>/<文件資料夾>/pdf/document.pdf" --pages "<頁碼或範圍>" --output-dir "../tasks/<任務資料夾>/query_results/<搜尋資料夾>/<文件資料夾>/pages"
+.\.venv\Scripts\kbsearch.exe render-pdf-pages --task-name "<任務資料夾>" --query-name "<搜尋資料夾>" --document-name "<文件資料夾>" --pages "<頁碼或範圍>"
 ```
 
-- `--pdf` 指定該文件資料夾內的 `pdf/document.pdf`。
+- `--task-name`、`--query-name` 指定文件所屬的任務與搜尋；`--document-name` 使用 `downloaded_files.json` 中 `directory` 的最後一段資料夾名稱。
 - `--pages` 頁碼從 `1` 開始，支援單頁、逗號清單與區間，例如 `3,5,8-10`。
-- `--output-dir` 指定同一文件資料夾內的 `pages/`；同頁碼 PNG 直接覆蓋。
 
 ---
 
@@ -108,7 +107,7 @@ repo_root/
 - 背景程序啟動後，依 stderr 的 `query_started` 事件指引，以短間隔輪詢指定的 log，並依新增進度持續向使用者更新；待程序完成後再解析 stdout，啟動階段沒有 stdout JSON 不視為異常。若程序結束後仍未出現啟動事件，直接依暫存 stderr 排錯，不自行猜測或改追蹤其他 query log。
 - 看到 `phase=query` 終態（`finished`、`finished_with_errors`、`failed`）且背景程序已結束後，才判定 query 完成：成功或部分成功時讀取 stdout JSON，失敗時讀取 stderr 錯誤摘要。程序已結束但沒有終態時視為異常中止，讀取專屬 log 與暫存 stderr 排錯。
 - 完成判讀後刪除重新導向用的暫存檔；保留 `_internal/logs/` 的正式 log 與搜尋結果資料夾（含失敗搜尋的部分產物，供排錯）。
-- 搜尋失敗時先讀 stderr 的 `error_kind` 與該 `run_id` 的專屬 log：`input_or_config` 中可自行修正的路徑、搜尋參數或任務檔案問題，修正後以新輸出路徑重試；`authentication` 依本文件登入流程處理；`external_service` 或 `internal` 向使用者說明原因並協助排除。禁止使用 `kbsearch.exe query` 以外的方式進行搜尋。
+- 搜尋失敗時先讀 stderr 的 `error_kind` 與該 `run_id` 的專屬 log：`input_or_config` 中可自行修正的名稱、搜尋參數或任務檔案問題，修正後以新搜尋名稱重試；`authentication` 依本文件登入流程處理；`external_service` 或 `internal` 向使用者說明原因並協助排除。禁止使用 `kbsearch.exe query` 以外的方式進行搜尋。
 
 ---
 
@@ -155,7 +154,7 @@ repo_root/
 
 解析哪些檔案、哪些頁面及深入程度，以呈現結果後與使用者討論的共識為準；除非使用者另有指示，否則解析時優先利用搜尋結果清單、已轉出的單頁圖片與逐頁文字定位所需內容，盡量避免讀取大型文件的完整內容。
 
-- 所有的內容解析都優先透過解析單頁圖片內容的方式進行，以確保同時讀到頁面中的文字、圖片與表格。因此若要解析的內容，不在已轉出的單頁圖片範圍內，可以相關關鍵字使用 `rg` 搜尋該文件資料夾內的 `text/*.txt` 定位頁碼，再使用 `render-pdf-pages` 將 `pdf/document.pdf` 的指定頁面轉至同一文件資料夾的 `pages/` 後進行圖片讀取。
+- 所有的內容解析都優先透過解析單頁圖片內容的方式進行，以確保同時讀到頁面中的文字、圖片與表格。因此若要解析的內容，不在已轉出的單頁圖片範圍內，可以相關關鍵字使用 `rg` 搜尋該文件資料夾內的 `text/*.txt` 定位頁碼，再使用 `render-pdf-pages` 指定該文件與頁碼後進行圖片讀取。
 - 無法轉成單頁圖片的檔案格式，依 Agent 自身工具能力讀取與分析。
 - 將解析結果用於回答時，須註記引用的文件名稱與頁碼；實際使用的頁面若有單頁圖片，必須在回答中一併嵌入該圖片。
 - 多份來源的內容不一致時，比對文件時間、版本與適用範圍，明確指出衝突及差異，不自行忽略其中任一來源。

@@ -2,7 +2,7 @@
 
 [繁體中文](README.md) | English
 
-This document is for **IT staff** who need to understand the `agent_runtime/` subproject structure and deployment steps within the repository. It is **not deployed to the user's runtime environment**. The root of the user-side Agent workspace is `agent_runtime/`; its operating rules are defined in [`AGENTS.md`](AGENTS.md), which is deployed with the workspace.
+This document is for **IT staff** who need to understand the `agent_runtime/` subproject structure and deployment steps within the repository. The root of the user-side Agent workspace is `agent_runtime/`; its operating rules are defined in [`AGENTS.md`](AGENTS.md), which is deployed with the workspace.
 
 ## Build and Runtime Directory Structure
 
@@ -68,7 +68,7 @@ unzip -v
 
 ### 2. Prepare the CLI package
 
-For delivery verification and production deployment, obtain the `kbsearch_cli-*.whl` built from `query_cli/` and place it in `agent_runtime\_internal\packages\`.
+Follow the [query_cli build instructions](../query_cli/README.en.md#production-deployment) to prepare `_internal/packages/kbsearch_cli-*.whl` for delivery verification and production deployment.
 
 ### 3. Prepare configuration
 
@@ -104,15 +104,13 @@ Use an editable install during development so source changes do not require rebu
 .\.venv\Scripts\python.exe -m pip install -e ../../query_cli
 ```
 
-Use the `kbsearch_cli` wheel for delivery verification and production deployment. Copy the entire following block into PowerShell:
+Install the wheel for delivery verification and production deployment:
 
 ```powershell
-$wheels = @(Get-ChildItem -LiteralPath .\packages -Filter kbsearch_cli-*.whl)
-if ($wheels.Count -ne 1) { throw "Expected exactly one kbsearch_cli wheel, found $($wheels.Count)." }
-.\.venv\Scripts\python.exe -m pip install --force-reinstall $wheels[0].FullName
+.\.venv\Scripts\python.exe -m pip install --force-reinstall (Get-ChildItem .\packages\kbsearch_cli-*.whl).FullName
 ```
 
-`.venv` is bound to the Python path on the machine where it was created. Do not copy an entire environment from another computer or development environment for direct use.
+Do not copy an entire `.venv` from another computer or development environment for direct use, because it is bound to the Python path on the machine where it was created.
 
 ---
 

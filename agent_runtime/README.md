@@ -2,7 +2,7 @@
 
 繁體中文 | [English](README.en.md)
 
-本文件供 **IT 人員**在 repo 內了解 `agent_runtime/` 子專案結構與部署步驟，**不部署至使用者運作環境**。使用者端 Agent 的工作區根目錄為 `agent_runtime/`，運作規則見同目錄 [`AGENTS.md`](AGENTS.md)（此檔會隨工作區一併部署）。
+本文件供 **IT 人員**在 repo 內了解 `agent_runtime/` 子專案結構與部署步驟。使用者端 Agent 的工作區根目錄為 `agent_runtime/`，運作規則見同目錄 [`AGENTS.md`](AGENTS.md)（此檔會隨工作區一併部署）。
 
 ## 建置與運作目錄結構
 
@@ -69,7 +69,7 @@ unzip -v
 
 ### 2. 準備 CLI package
 
-交付驗證與正式部署時，取得 `query_cli/` 建置的 `kbsearch_cli-*.whl`，並放到 `agent_runtime\_internal\packages\` 中。
+依 [query_cli 的建置方式](../query_cli/README.md#正式環境部署)準備 `_internal/packages/kbsearch_cli-*.whl`，供交付驗證與正式部署使用。
 
 ### 3. 準備設定檔
 
@@ -104,15 +104,13 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e ../../query_cli
 ```
 
-交付驗證與正式部署使用 `kbsearch_cli` wheel。以下程式碼區塊需整段複製至 PowerShell 執行：
+交付驗證與正式部署使用 wheel 安裝：
 
 ```powershell
-$wheels = @(Get-ChildItem -LiteralPath .\packages -Filter kbsearch_cli-*.whl)
-if ($wheels.Count -ne 1) { throw "Expected exactly one kbsearch_cli wheel, found $($wheels.Count)." }
-.\.venv\Scripts\python.exe -m pip install --force-reinstall $wheels[0].FullName
+.\.venv\Scripts\python.exe -m pip install --force-reinstall (Get-ChildItem .\packages\kbsearch_cli-*.whl).FullName
 ```
 
-請注意：`.venv` 綁定建立當下該機器的 Python 路徑，不可從其他電腦或開發環境整包複製後直接使用。
+請注意：`.venv` 不可從其他電腦或開發環境整包複製後直接使用，因其綁定建立當下該機器的 Python 路徑。
 
 ---
 
