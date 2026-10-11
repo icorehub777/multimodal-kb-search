@@ -13,6 +13,50 @@ from kbsearch_backend.models import QueryImage
 
 
 class EmbeddingTests(unittest.TestCase):
+    def test_client_fuses_all_query_inputs_into_one_vector(self):
+        client = DashScopeQueryEmbeddingClient("key", "qwen3-vl-embedding", 2, 1_000_000, 95)
+        images = [
+            QueryImage(filename=f"{name}.png", mime_type="image/png", base64_data="YQ==")
+            for name in ("first", "second")
+        ]
+        cases = ((" alpha ", []), ("", images[:1]), ("", images), (" alpha ", images))
+        for query, query_images in cases:
+            with self.subTest(query=query, image_count=len(query_images)):
+                response = MagicMock(status_code=200, output={"embeddings": [{"embedding": [0.1, 0.2]}]})
+                with patch("dashscope.MultiModalEmbedding.call", return_value=response) as call, patch(
+                    "kbsearch_backend.embedding._image_data_uri_from_payload",
+                    side_effect=lambda image, **kwargs: f"data:image/png;base64,{image.filename}",
+                ):
+                    self.assertEqual(client.embed_query(query, query_images), [0.1, 0.2])
+                expected_inputs = [{"text": "alpha"}] if query.strip() else []
+                expected_inputs.extend(
+                    {"image": f"data:image/png;base64,{image.filename}"} for image in query_images
+                )
+                call.assert_called_once_with(
+                    model="qwen3-vl-embedding", input=expected_inputs, api_key="key",
+                    enable_fusion=True, timeout=120,
+                )
+
+    def test_client_requires_exactly_one_returned_embedding(self):
+        client = DashScopeQueryEmbeddingClient("key", "qwen3-vl-embedding", 2, 1_000_000, 95)
+        for embeddings in ([], [{"embedding": [0.1, 0.2]}, {"embedding": [0.3, 0.4]}]):
+            with self.subTest(count=len(embeddings)):
+                response = MagicMock(status_code=200, output={"embeddings": embeddings})
+                with patch("dashscope.MultiModalEmbedding.call", return_value=response), self.assertRaisesRegex(
+                    ExternalServiceError, "invalid response"
+                ):
+                    client.embed_query("alpha", [])
+
+    def test_client_rejects_invalid_fused_vector(self):
+        client = DashScopeQueryEmbeddingClient("key", "qwen3-vl-embedding", 2, 1_000_000, 95)
+        for vector in ([0.1], [True, 0.2], [float("nan"), 0.2], [0.1, float("inf")]):
+            with self.subTest(vector=vector):
+                response = MagicMock(status_code=200, output={"embeddings": [{"embedding": vector}]})
+                with patch("dashscope.MultiModalEmbedding.call", return_value=response), self.assertRaises(
+                    ExternalServiceError
+                ):
+                    client.embed_query("alpha", [])
+
     def test_image_data_uri_from_payload_normalizes_small_image_as_png(self):
         source = _jpeg_bytes((1, 1))
         image = QueryImage(

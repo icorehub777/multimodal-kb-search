@@ -192,6 +192,8 @@ def _register_exception_handlers(app: FastAPI, logger: logging.Logger) -> None:
 
 def _request_validation_detail(exc: RequestValidationError) -> tuple[str | None, str]:
     first_error = exc.errors()[0] if exc.errors() else {}
+    if first_error.get("type") == "json_invalid":
+        return None, "Request body must be valid JSON."
     location = first_error.get("loc", ())
     field = str(location[-1]) if location else None
     if field == "min_score":

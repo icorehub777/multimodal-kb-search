@@ -63,6 +63,7 @@ class DashScopeQueryEmbeddingClient:
                 model=self._model,
                 input=inputs,
                 api_key=self._api_key,
+                enable_fusion=True,
                 timeout=DASHSCOPE_REQUEST_TIMEOUT_SECONDS,
             )
         except Exception as exc:
@@ -80,12 +81,12 @@ class DashScopeQueryEmbeddingClient:
             if not isinstance(output, dict):
                 raise TypeError("output must be an object")
             embeddings = output.get("embeddings")
-            if not isinstance(embeddings, list) or not embeddings:
-                raise TypeError("embeddings must be a non-empty array")
-            first_embedding = embeddings[0]
-            if not isinstance(first_embedding, dict):
+            if not isinstance(embeddings, list) or len(embeddings) != 1:
+                raise TypeError("embeddings must contain exactly one fused embedding")
+            fused_embedding = embeddings[0]
+            if not isinstance(fused_embedding, dict):
                 raise TypeError("embedding item must be an object")
-            vector = first_embedding.get("embedding")
+            vector = fused_embedding.get("embedding")
             if not isinstance(vector, list):
                 raise TypeError("embedding must be an array")
             return validate_embedding_vector(vector, self._dimension)

@@ -114,6 +114,17 @@ class AppTests(unittest.TestCase):
         self.assertEqual(response.json()["error"], "invalid_request")
         self.assertEqual(response.json()["field"], "query")
 
+    def test_malformed_json_returns_actionable_message_without_numeric_field(self):
+        response = self._client().post(
+            "/search/vector", headers={**AUTH_HEADERS, "Content-Type": "application/json"},
+            content='{"query":',
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            "error": "invalid_request", "message": "Request body must be valid JSON.",
+        })
+
     def test_request_uses_configured_query_image_and_limit_bounds(self):
         config = self._config(max_query_length=5, max_images=1, max_search_limit=2)
         client = self._client(config=config)

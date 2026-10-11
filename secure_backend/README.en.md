@@ -110,7 +110,9 @@ Request:
 }
 ```
 
-At least one of `query` and `images` is required. Query text length, image count, and result count must not exceed the server settings. `limit` must be a positive integer. When supplied, `min_score` must be a finite number between `-1` and `1`.
+At least one of `query` and `images` is required. When query text and multiple images are supplied together, they are fused into a single vector for search.
+
+Query text length, image count, and result count must not exceed the server settings. `limit` must be a positive integer. When supplied, `min_score` must be a finite number between `-1` and `1`.
 
 The response groups results by Google file ID. Files are ordered by their highest similarity score, and pages within each file are ordered by similarity score.
 
