@@ -69,12 +69,8 @@ agent_runtime/_internal/packages/*
 agent_runtime/_internal/logs/*
 !agent_runtime/_internal/logs/
 !agent_runtime/_internal/logs/.gitkeep
-query_cli/query_results/*
-!query_cli/query_results/.gitkeep
 agent_runtime/tasks/*
 !agent_runtime/tasks/.gitkeep
-query_cli/tasks/*
-!query_cli/tasks/.gitkeep
 
 # Package build artifacts
 build/
