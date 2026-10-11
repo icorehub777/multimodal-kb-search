@@ -16,7 +16,7 @@ class WheelBuildTests(unittest.TestCase):
     def _run_build(self, mode):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
-        root = Path(temporary.name) / "repo with spaces"
+        root = Path(temporary.name).resolve() / "repo with spaces"
         script = root / "build_scripts" / BUILD_SCRIPT.name
         script.parent.mkdir(parents=True)
         shutil.copy2(BUILD_SCRIPT, script)
@@ -72,18 +72,21 @@ function global:python {
     def test_failed_build_preserves_existing_wheels(self):
         result, packages = self._run_build("failure")
         self.assertNotEqual(result.returncode, 0)
+        self.assertIn("query_cli wheel build failed (exit code 7)", result.stderr)
         self.assertEqual((packages / OLD_WHEEL).read_bytes(), b"existing delivery")
         self.assertEqual((packages / NEW_WHEEL).read_bytes(), b"previous same version")
 
     def test_missing_wheel_preserves_existing_delivery(self):
         result, packages = self._run_build("missing")
         self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Expected exactly one kbsearch_cli wheel", result.stderr)
         self.assertEqual((packages / OLD_WHEEL).read_bytes(), b"existing delivery")
         self.assertEqual((packages / NEW_WHEEL).read_bytes(), b"previous same version")
 
     def test_ambiguous_wheels_preserve_existing_delivery(self):
         result, packages = self._run_build("multiple")
         self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Expected exactly one kbsearch_cli wheel", result.stderr)
         self.assertEqual((packages / OLD_WHEEL).read_bytes(), b"existing delivery")
         self.assertEqual((packages / NEW_WHEEL).read_bytes(), b"previous same version")
 
